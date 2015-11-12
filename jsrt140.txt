@@ -1,0 +1,233 @@
+/Users/mac/Projects/data/jsrt-npy/JPCLN001.npy 1 409 173 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN002.npy 1 404 273 20 
+/Users/mac/Projects/data/jsrt-npy/JPCLN003.npy 1 326 112 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN004.npy 1 152 209 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN005.npy 1 360 173 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN006.npy 1 165 131 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN007.npy 1 115 213 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN008.npy 1 127 235 11 
+/Users/mac/Projects/data/jsrt-npy/JPCLN009.npy 1 398 233 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN010.npy 1 162 149 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN011.npy 1 162 100 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN012.npy 1 67 284 20 
+/Users/mac/Projects/data/jsrt-npy/JPCLN013.npy 1 345 94 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN014.npy 1 142 179 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN015.npy 1 137 249 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN016.npy 1 155 162 14 
+/Users/mac/Projects/data/jsrt-npy/JPCLN017.npy 1 133 190 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN018.npy 1 399 368 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN019.npy 1 98 223 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN020.npy 1 120 230 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN021.npy 1 394 187 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN022.npy 1 181 120 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN023.npy 1 138 285 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN024.npy 1 133 280 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN025.npy 1 113 335 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN026.npy 1 123 170 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN027.npy 1 114 173 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN028.npy 1 375 271 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN029.npy 1 161 217 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN030.npy 1 358 103 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN031.npy 1 352 125 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN032.npy 1 148 223 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN033.npy 1 149 178 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN034.npy 1 113 151 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN035.npy 1 387 242 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN036.npy 1 405 108 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN037.npy 1 170 97 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN038.npy 1 212 76 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN039.npy 1 113 233 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN040.npy 1 383 129 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN041.npy 1 409 157 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN042.npy 1 133 251 14 
+/Users/mac/Projects/data/jsrt-npy/JPCLN043.npy 1 150 253 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN044.npy 1 175 230 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN045.npy 1 170 67 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN046.npy 1 382 95 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN047.npy 1 103 348 20 
+/Users/mac/Projects/data/jsrt-npy/JPCLN048.npy 1 129 287 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN049.npy 1 121 173 14 
+/Users/mac/Projects/data/jsrt-npy/JPCLN050.npy 1 146 142 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN051.npy 1 131 147 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN052.npy 1 209 220 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN053.npy 1 143 130 20 
+/Users/mac/Projects/data/jsrt-npy/JPCLN054.npy 1 133 187 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN055.npy 1 365 99 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN056.npy 1 138 181 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN057.npy 1 131 176 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN058.npy 1 429 240 9 
+/Users/mac/Projects/data/jsrt-npy/JPCLN059.npy 1 141 94 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN061.npy 1 403 242 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN062.npy 1 405 234 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN063.npy 1 117 203 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN064.npy 1 404 381 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN066.npy 1 102 185 9 
+/Users/mac/Projects/data/jsrt-npy/JPCLN067.npy 1 416 216 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN068.npy 1 182 86 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN069.npy 1 103 260 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN070.npy 1 183 308 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN071.npy 1 375 139 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN072.npy 1 100 195 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN073.npy 1 427 251 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN074.npy 1 376 215 14 
+/Users/mac/Projects/data/jsrt-npy/JPCLN075.npy 1 411 177 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN076.npy 1 83 341 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN077.npy 1 127 256 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN078.npy 1 410 167 11 
+/Users/mac/Projects/data/jsrt-npy/JPCLN079.npy 1 397 216 7 
+/Users/mac/Projects/data/jsrt-npy/JPCLN080.npy 1 113 230 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN081.npy 1 362 208 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN082.npy 1 115 238 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN083.npy 1 433 377 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN084.npy 1 335 214 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN085.npy 1 151 172 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN086.npy 1 146 113 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN087.npy 1 158 294 11 
+/Users/mac/Projects/data/jsrt-npy/JPCLN088.npy 1 104 332 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN089.npy 1 385 113 11 
+/Users/mac/Projects/data/jsrt-npy/JPCLN090.npy 1 355 277 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN091.npy 1 127 345 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN092.npy 1 412 216 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN093.npy 1 190 78 20 
+/Users/mac/Projects/data/jsrt-npy/JPCLN094.npy 1 129 156 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN095.npy 1 169 114 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN096.npy 1 108 254 9 
+/Users/mac/Projects/data/jsrt-npy/JPCLN097.npy 1 445 287 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN098.npy 1 182 102 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN099.npy 1 131 126 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN100.npy 1 402 79 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN101.npy 1 423 130 9 
+/Users/mac/Projects/data/jsrt-npy/JPCLN102.npy 1 98 121 5 
+/Users/mac/Projects/data/jsrt-npy/JPCLN103.npy 1 172 60 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN104.npy 1 126 78 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN106.npy 1 62 308 5 
+/Users/mac/Projects/data/jsrt-npy/JPCLN107.npy 1 422 290 14 
+/Users/mac/Projects/data/jsrt-npy/JPCLN109.npy 1 126 249 20 
+/Users/mac/Projects/data/jsrt-npy/JPCLN110.npy 1 402 266 14 
+/Users/mac/Projects/data/jsrt-npy/JPCLN111.npy 1 95 328 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN114.npy 1 112 191 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN116.npy 1 374 61 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN117.npy 1 94 261 3 
+/Users/mac/Projects/data/jsrt-npy/JPCLN118.npy 1 148 87 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN119.npy 1 100 160 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN120.npy 1 433 345 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN121.npy 1 127 282 20 
+/Users/mac/Projects/data/jsrt-npy/JPCLN122.npy 1 413 209 14 
+/Users/mac/Projects/data/jsrt-npy/JPCLN123.npy 1 427 313 14 
+/Users/mac/Projects/data/jsrt-npy/JPCLN124.npy 1 110 353 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN125.npy 1 137 132 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN127.npy 1 126 256 15 
+/Users/mac/Projects/data/jsrt-npy/JPCLN128.npy 1 154 344 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN129.npy 1 430 266 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN131.npy 1 413 236 18 
+/Users/mac/Projects/data/jsrt-npy/JPCLN132.npy 1 157 133 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN134.npy 1 223 351 14 
+/Users/mac/Projects/data/jsrt-npy/JPCLN135.npy 1 157 264 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN137.npy 1 103 204 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN138.npy 1 377 151 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN139.npy 1 162 80 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN140.npy 1 382 335 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN141.npy 1 199 87 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN142.npy 1 147 161 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN143.npy 1 192 108 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN144.npy 1 370 127 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN145.npy 1 100 151 12 
+/Users/mac/Projects/data/jsrt-npy/JPCLN146.npy 1 127 134 14 
+/Users/mac/Projects/data/jsrt-npy/JPCLN147.npy 1 134 339 17 
+/Users/mac/Projects/data/jsrt-npy/JPCLN148.npy 1 398 318 19 
+/Users/mac/Projects/data/jsrt-npy/JPCLN150.npy 1 386 352 13 
+/Users/mac/Projects/data/jsrt-npy/JPCLN153.npy 1 427 281 16 
+/Users/mac/Projects/data/jsrt-npy/JPCLN154.npy 1 165 172 19 
+/Users/mac/Projects/data/jsrt-npy/JPCNN001.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN002.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN003.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN004.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN005.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN006.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN007.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN008.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN009.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN010.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN011.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN012.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN013.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN014.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN015.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN016.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN017.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN018.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN019.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN020.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN021.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN022.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN023.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN024.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN025.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN026.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN027.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN028.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN029.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN030.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN031.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN032.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN033.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN034.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN035.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN036.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN037.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN038.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN039.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN040.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN041.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN042.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN043.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN044.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN045.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN046.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN047.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN048.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN049.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN050.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN051.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN052.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN053.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN054.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN055.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN056.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN057.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN058.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN059.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN060.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN061.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN062.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN063.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN064.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN065.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN066.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN067.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN068.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN069.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN070.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN071.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN072.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN073.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN074.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN075.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN076.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN077.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN078.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN079.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN080.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN081.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN082.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN083.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN084.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN085.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN086.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN087.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN088.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN089.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN090.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN091.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN092.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN093.npy 0 

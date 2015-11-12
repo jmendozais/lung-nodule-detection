@@ -1,0 +1,233 @@
+/Users/mac/Projects/data/jsrt-npy/JPCLN001.npy 4 79 381 10 89 407 10 121 138 10 180 438 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN002.npy 1 174 354 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN003.npy 2 312 394 10 312 407 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN004.npy 4 74 342 10 85 343 10 95 196 10 145 343 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN005.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCLN006.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCLN007.npy 11 69 297 10 83 182 10 105 183 10 111 146 10 112 340 10 113 377 10 115 137 10 117 318 10 118 352 10 151 381 10 324 72 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN008.npy 10 52 163 10 60 332 10 66 201 10 88 317 10 104 377 10 106 180 10 162 163 10 225 86 10 225 311 10 359 195 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN009.npy 3 41 192 10 281 84 10 329 160 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN010.npy 5 300 162 10 300 399 10 319 417 10 361 399 10 379 419 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN011.npy 1 231 63 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN012.npy 1 48 145 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN013.npy 4 110 106 10 131 114 10 259 178 10 266 196 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN014.npy 3 128 403 10 196 95 10 387 419 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN015.npy 5 103 208 10 105 345 10 200 133 10 250 63 10 252 411 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN016.npy 4 118 327 10 138 369 10 159 120 10 168 108 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN017.npy 1 250 201 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN018.npy 4 57 378 10 64 208 10 74 375 10 135 70 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN019.npy 4 57 318 10 101 117 10 105 342 10 141 105 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN020.npy 7 60 324 10 70 297 10 77 133 10 84 349 10 99 373 10 177 333 10 207 395 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN021.npy 3 75 153 10 112 323 10 194 304 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN022.npy 6 99 304 10 104 206 10 197 99 10 263 101 10 356 155 10 365 125 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN023.npy 7 79 202 10 79 365 10 98 145 10 145 404 10 163 333 10 179 174 10 321 415 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN024.npy 5 47 312 10 59 182 10 59 196 10 84 327 10 356 70 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN025.npy 3 61 359 10 123 367 10 169 236 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN026.npy 3 144 170 10 196 95 10 208 393 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN027.npy 9 73 336 10 75 359 10 100 136 10 119 90 10 135 142 10 136 367 10 155 431 10 202 437 10 336 201 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN028.npy 8 100 334 10 101 346 10 103 107 10 109 375 10 112 386 10 141 96 10 175 90 10 248 182 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN029.npy 2 71 124 10 131 344 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN030.npy 3 130 161 10 224 165 10 311 85 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN031.npy 3 124 381 10 132 291 10 382 434 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN032.npy 3 72 334 10 122 433 10 428 73 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN033.npy 3 91 322 10 240 199 10 306 188 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN034.npy 2 93 389 10 286 103 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN035.npy 6 84 192 10 89 145 10 99 198 10 106 389 10 138 342 10 428 50 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN036.npy 6 120 137 10 129 152 10 198 159 10 237 68 10 255 66 10 381 454 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN037.npy 5 58 151 10 81 338 10 164 169 10 345 91 10 357 85 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN038.npy 6 46 181 10 87 154 10 142 190 10 160 132 10 190 138 10 263 154 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN039.npy 10 84 323 10 87 299 10 96 141 10 106 301 10 108 351 10 163 362 10 211 125 10 296 119 10 325 182 10 368 89 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN040.npy 6 70 318 10 92 167 10 94 371 10 96 135 10 142 413 10 153 407 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN041.npy 1 161 89 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN042.npy 5 205 95 10 211 435 10 257 123 10 279 120 10 302 86 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN043.npy 7 59 342 10 75 317 10 93 337 10 267 384 10 318 175 10 332 167 10 355 107 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN044.npy 13 72 212 10 72 222 10 81 364 10 102 397 10 112 228 10 134 401 10 154 401 10 182 405 10 217 124 10 305 150 10 363 404 10 365 190 10 398 119 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN045.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCLN046.npy 10 41 322 10 51 195 10 76 209 10 90 134 10 98 390 10 101 190 10 117 336 10 177 440 10 217 145 10 395 457 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN047.npy 8 73 190 10 111 231 10 125 361 10 168 407 10 176 419 10 189 123 10 196 115 10 302 104 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN048.npy 4 94 215 10 154 175 10 338 425 10 350 425 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN049.npy 2 66 331 10 78 362 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN050.npy 13 50 327 10 85 193 10 93 126 10 95 398 10 256 379 10 289 431 10 300 398 10 306 433 10 315 408 10 327 398 10 334 84 10 343 400 10 346 430 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN051.npy 6 112 164 10 123 153 10 123 205 10 218 93 10 302 393 10 334 395 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN052.npy 5 73 382 10 130 387 10 248 201 10 298 408 10 304 209 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN053.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCLN054.npy 1 333 96 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN055.npy 8 47 173 10 65 367 10 81 142 10 247 108 10 250 419 10 263 214 10 287 166 10 303 420 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN056.npy 3 121 147 10 224 362 10 312 395 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN057.npy 2 85 382 10 375 122 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN058.npy 4 79 338 10 112 436 10 117 78 10 309 458 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN059.npy 3 54 326 10 97 108 10 273 85 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN061.npy 1 107 110 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN062.npy 7 44 347 10 44 363 10 67 342 10 73 319 10 81 208 10 107 380 10 127 156 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN063.npy 3 86 312 10 302 62 10 379 452 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN064.npy 5 104 182 10 197 383 10 208 396 10 307 412 10 411 441 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN066.npy 8 67 169 10 70 339 10 73 356 10 85 363 10 147 224 10 221 207 10 312 161 10 436 73 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN067.npy 2 99 342 10 130 157 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN068.npy 3 68 336 10 97 222 10 143 233 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN069.npy 3 113 143 10 140 400 10 340 96 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN070.npy 2 94 386 10 264 86 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN071.npy 4 94 190 10 186 319 10 314 365 10 402 409 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN072.npy 3 85 127 10 113 401 10 360 55 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN073.npy 2 56 340 10 225 370 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN074.npy 1 185 451 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN075.npy 4 173 117 10 347 50 10 354 62 10 367 308 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN076.npy 6 87 176 10 100 298 10 104 142 10 109 346 10 113 368 10 191 87 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN077.npy 5 46 282 10 60 303 10 83 370 10 157 102 10 352 88 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN078.npy 2 90 161 10 107 110 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN079.npy 3 81 357 10 118 139 10 222 132 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN080.npy 6 97 218 10 130 131 10 134 98 10 140 118 10 309 101 10 408 443 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN081.npy 8 80 330 10 81 302 10 102 126 10 103 103 10 136 312 10 210 413 10 231 415 10 255 89 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN082.npy 4 65 353 10 75 218 10 104 321 10 300 104 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN083.npy 7 39 311 10 81 347 10 84 332 10 130 381 10 136 403 10 144 415 10 240 90 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN084.npy 8 87 303 10 88 361 10 111 120 10 125 118 10 142 86 10 295 98 10 323 370 10 352 95 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN085.npy 2 330 188 10 374 68 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN086.npy 2 35 186 10 162 154 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN087.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCLN088.npy 1 354 395 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN089.npy 5 145 444 10 225 458 10 239 460 10 308 474 10 379 171 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN090.npy 6 110 364 10 136 352 10 152 210 10 248 125 10 286 403 10 344 155 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN091.npy 3 138 159 10 360 457 10 368 460 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN092.npy 3 124 182 10 187 56 10 313 467 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN093.npy 6 56 204 10 56 339 10 57 218 10 76 334 10 337 165 10 416 462 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN094.npy 8 72 161 10 87 353 10 89 159 10 100 150 10 105 396 10 164 430 10 179 198 10 311 406 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN095.npy 2 216 421 10 324 438 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN096.npy 6 79 371 10 89 370 10 103 130 10 245 453 10 272 191 10 276 454 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN097.npy 7 47 159 10 69 180 10 86 288 10 112 189 10 120 197 10 211 391 10 254 171 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN098.npy 2 172 242 10 199 426 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN099.npy 2 340 432 10 349 438 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN100.npy 3 39 283 10 103 431 10 214 444 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN101.npy 1 123 151 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN102.npy 13 40 195 10 48 352 10 66 201 10 76 206 10 82 158 10 86 179 10 89 378 10 123 404 10 134 403 10 237 84 10 301 175 10 338 151 10 362 140 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN103.npy 6 84 132 10 105 358 10 122 407 10 134 422 10 143 402 10 154 425 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN104.npy 1 245 429 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN106.npy 1 390 50 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN107.npy 4 340 418 10 344 459 10 349 82 10 352 414 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN109.npy 4 116 367 10 155 339 10 231 160 10 325 421 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN110.npy 9 100 135 10 141 332 10 143 96 10 145 178 10 165 114 10 340 417 10 378 120 10 382 171 10 388 182 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN111.npy 4 80 329 10 90 138 10 101 137 10 243 398 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN114.npy 4 66 315 10 128 115 10 152 121 10 325 158 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN116.npy 4 98 380 10 117 395 10 137 111 10 311 387 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN117.npy 2 56 202 10 314 86 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN118.npy 3 92 167 10 107 128 10 148 451 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN119.npy 3 79 170 10 242 93 10 313 409 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN120.npy 1 87 206 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN121.npy 1 217 430 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN122.npy 9 41 198 10 44 349 10 48 294 10 81 153 10 108 309 10 154 136 10 286 407 10 351 117 10 361 422 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN123.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCLN124.npy 11 46 333 10 51 172 10 76 301 10 78 213 10 85 344 10 128 110 10 152 327 10 171 110 10 304 432 10 339 101 10 368 444 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN125.npy 7 39 232 10 54 206 10 84 213 10 113 154 10 129 389 10 321 380 10 387 426 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN127.npy 3 157 327 10 202 111 10 335 359 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN128.npy 15 102 338 10 112 177 10 117 363 10 132 387 10 147 394 10 151 169 10 171 326 10 179 132 10 263 110 10 290 171 10 294 364 10 341 371 10 343 404 10 358 142 10 363 382 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN129.npy 3 80 363 10 115 410 10 117 98 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN131.npy 4 68 232 10 76 356 10 101 351 10 111 352 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN132.npy 6 111 356 10 113 209 10 170 335 10 176 300 10 321 396 10 345 139 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN134.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCLN135.npy 6 68 198 10 82 192 10 111 329 10 159 320 10 161 413 10 350 450 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN137.npy 6 71 220 10 95 139 10 95 194 10 101 165 10 132 156 10 210 400 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN138.npy 9 61 341 10 74 295 10 94 117 10 145 178 10 242 136 10 244 343 10 274 357 10 275 182 10 280 377 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN139.npy 3 49 222 10 74 159 10 183 395 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN140.npy 5 244 132 10 259 151 10 262 129 10 281 152 10 283 134 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN141.npy 4 48 351 10 50 340 10 67 355 10 212 114 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN142.npy 4 103 180 10 194 416 10 278 216 10 333 214 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN143.npy 4 126 425 10 135 98 10 198 74 10 403 108 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN144.npy 1 269 112 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN145.npy 4 38 327 10 113 187 10 188 415 10 376 435 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN146.npy 3 80 349 10 91 150 10 394 116 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN147.npy 8 77 227 10 84 169 10 99 130 10 136 226 10 156 367 10 157 413 10 202 64 10 345 117 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN148.npy 2 375 413 10 395 413 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN150.npy 6 88 362 10 98 226 10 129 374 10 157 116 10 220 168 10 372 390 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN153.npy 3 49 198 10 144 417 10 191 314 10 
+/Users/mac/Projects/data/jsrt-npy/JPCLN154.npy 13 117 189 10 166 392 10 169 107 10 226 325 10 267 425 10 289 399 10 304 191 10 305 376 10 389 125 10 412 177 10 422 135 10 424 176 10 431 149 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN001.npy 2 111 401 10 122 305 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN002.npy 1 85 115 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN003.npy 2 324 396 10 352 381 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN004.npy 2 66 240 10 140 355 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN005.npy 4 83 218 10 91 333 10 118 139 10 204 463 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN006.npy 2 36 185 10 114 97 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN007.npy 2 96 136 10 258 220 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN008.npy 3 90 388 10 219 358 10 292 123 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN009.npy 3 59 363 10 78 243 10 114 98 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN010.npy 5 96 164 10 98 208 10 114 313 10 123 134 10 195 123 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN011.npy 1 344 81 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN012.npy 6 46 330 10 50 320 10 58 365 10 76 186 10 83 324 10 111 328 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN013.npy 6 67 181 10 70 196 10 80 124 10 127 345 10 131 312 10 238 406 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN014.npy 2 51 204 10 178 231 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN015.npy 4 114 127 10 145 121 10 184 103 10 305 164 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN016.npy 2 111 161 10 170 82 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN017.npy 5 73 164 10 95 329 10 113 170 10 132 121 10 200 95 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN018.npy 3 126 157 10 159 445 10 311 189 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN019.npy 6 53 376 10 87 363 10 112 386 10 116 188 10 134 359 10 206 128 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN020.npy 14 32 189 10 35 225 10 44 333 10 75 348 10 77 228 10 84 156 10 92 138 10 107 201 10 111 401 10 120 393 10 143 368 10 153 135 10 153 396 10 166 415 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN021.npy 9 58 325 10 72 322 10 82 361 10 130 188 10 163 390 10 205 307 10 272 156 10 354 382 10 372 100 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN022.npy 3 104 97 10 252 71 10 380 96 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN023.npy 13 61 402 10 67 372 10 72 201 10 75 321 10 106 394 10 122 138 10 131 124 10 145 103 10 153 418 10 179 114 10 215 100 10 236 98 10 277 465 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN024.npy 5 84 292 10 230 408 10 289 405 10 319 91 10 321 405 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN025.npy 2 50 305 10 178 423 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN026.npy 1 246 135 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN027.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN028.npy 9 83 311 10 87 337 10 89 167 10 95 133 10 124 130 10 159 384 10 193 381 10 278 105 10 352 114 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN029.npy 1 130 330 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN030.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN031.npy 5 92 434 10 107 416 10 121 222 10 278 478 10 282 59 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN032.npy 4 73 211 10 119 215 10 131 116 10 154 111 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN033.npy 6 130 81 10 134 381 10 156 432 10 169 437 10 218 201 10 231 448 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN034.npy 5 67 326 10 77 375 10 295 48 10 320 478 10 396 479 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN035.npy 3 67 347 10 137 381 10 396 75 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN036.npy 4 53 324 10 152 431 10 232 452 10 334 57 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN037.npy 3 85 344 10 183 183 10 187 391 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN038.npy 14 49 210 10 71 349 10 72 170 10 81 338 10 99 193 10 100 159 10 108 359 10 108 371 10 110 348 10 110 386 10 118 324 10 124 419 10 193 122 10 265 436 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN039.npy 1 225 360 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN040.npy 3 59 332 10 67 190 10 130 119 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN041.npy 3 68 184 10 177 403 10 406 74 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN042.npy 13 38 219 10 50 389 10 55 339 10 57 352 10 59 392 10 65 375 10 69 324 10 120 140 10 121 446 10 125 186 10 167 200 10 170 409 10 351 462 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN043.npy 2 75 122 10 127 407 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN044.npy 4 68 343 10 225 120 10 291 430 10 292 368 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN045.npy 2 37 369 10 47 307 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN046.npy 3 41 158 10 57 161 10 97 122 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN047.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN048.npy 4 109 105 10 119 177 10 165 94 10 173 351 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN049.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN050.npy 3 53 328 10 282 470 10 297 473 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN051.npy 2 161 115 10 210 102 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN052.npy 6 70 296 10 110 125 10 162 96 10 212 150 10 367 111 10 398 68 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN053.npy 2 59 161 10 108 105 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN054.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN055.npy 3 75 290 10 193 431 10 322 55 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN056.npy 3 82 337 10 239 472 10 289 475 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN057.npy 5 64 357 10 71 312 10 92 172 10 101 320 10 111 100 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN058.npy 3 53 211 10 91 389 10 92 379 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN059.npy 5 78 187 10 163 73 10 208 67 10 255 378 10 362 398 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN060.npy 2 43 208 10 130 317 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN061.npy 9 67 197 10 81 192 10 90 318 10 93 155 10 99 144 10 101 338 10 111 370 10 229 99 10 259 438 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN062.npy 4 99 129 10 139 223 10 241 114 10 294 400 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN063.npy 3 68 305 10 86 106 10 195 437 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN064.npy 4 86 198 10 89 210 10 96 188 10 167 353 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN065.npy 1 148 427 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN066.npy 5 90 239 10 294 426 10 310 417 10 328 122 10 331 410 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN067.npy 7 79 324 10 121 382 10 129 335 10 313 398 10 334 173 10 337 120 10 360 416 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN068.npy 6 74 328 10 78 149 10 81 342 10 91 138 10 148 109 10 153 135 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN069.npy 7 96 128 10 107 295 10 123 137 10 123 294 10 276 423 10 283 116 10 311 68 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN070.npy 8 35 348 10 36 142 10 50 304 10 50 367 10 72 120 10 78 130 10 91 214 10 93 151 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN071.npy 1 247 356 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN072.npy 4 86 345 10 133 391 10 190 429 10 355 447 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN073.npy 6 68 204 10 109 294 10 111 146 10 128 376 10 151 125 10 198 110 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN074.npy 1 138 331 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN075.npy 4 61 213 10 96 183 10 227 216 10 346 428 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN076.npy 3 102 160 10 148 115 10 281 472 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN077.npy 1 89 123 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN078.npy 8 67 363 10 84 167 10 103 340 10 132 400 10 160 164 10 203 173 10 315 421 10 392 435 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN079.npy 5 93 214 10 179 405 10 233 459 10 391 78 10 392 62 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN080.npy 2 177 406 10 320 412 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN081.npy 12 60 324 10 77 355 10 78 205 10 88 138 10 113 152 10 114 138 10 152 150 10 206 77 10 290 144 10 328 382 10 338 114 10 348 111 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN082.npy 4 66 208 10 105 211 10 130 431 10 207 58 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN083.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN084.npy 8 124 138 10 162 193 10 164 128 10 198 189 10 315 429 10 344 179 10 357 415 10 358 126 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN085.npy 5 53 326 10 174 221 10 317 417 10 330 122 10 361 102 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN086.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN087.npy 3 95 202 10 115 140 10 134 349 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN088.npy 3 118 395 10 120 407 10 230 188 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN089.npy 4 56 363 10 58 342 10 70 340 10 130 145 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN090.npy 0 
+/Users/mac/Projects/data/jsrt-npy/JPCNN091.npy 4 70 197 10 86 186 10 152 105 10 357 382 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN092.npy 2 130 220 10 199 98 10 
+/Users/mac/Projects/data/jsrt-npy/JPCNN093.npy 5 43 308 10 61 313 10 70 191 10 110 140 10 210 97 10 

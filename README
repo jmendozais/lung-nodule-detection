@@ -1,0 +1,37 @@
+
+1. Create a training set of nodule features for classification
+
+python create_trainset.py <out_file>
+ie. python create_trainset.py data/tr.npy
+
+2. Train classifier
+
+python train.py <training_set_file>
+ie. 
+python train.py data/tr.npy
+
+3. Execute for an sample chxr:
+
+python lnd.py <npy_image> <left_lung_mask> <right_lung_mask>
+ie. 
+python lnd.py data/JPCLN001.npy data/JPCLN001-left.bmp data/JPCLN001-right.bmp
+
+4. Evaluate on all dataset
+
+python eval.py <real_list> <predicted_list>
+ie.
+python eval.py jsrt140.txt out
+
+python lnd.py /Users/mac/Projects/data/jsrt-npy/JPCLN097.npy /Users/mac/Projects/data/scr/masks/left-lung/JPCLN097.bmp /Users/mac/Projects/data/scr/masks/right-lung/JPCLN097.bmp
+
+RESULTS:
+
+a. LDA training
+
+acc(uniform): 0.910714285714
+             precision    recall  f1-score   support
+
+          0       0.99      0.88      0.93        78
+          1       0.79      0.97      0.87        34
+
+avg / total       0.92      0.91      0.91       112
