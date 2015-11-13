@@ -80,7 +80,7 @@ def filter_by_margin(blobs, mask, margin=30):
 	return np.array(ans)
 
 # Common blob detectors	
-def log(img, mask):
+def log_(img, mask):
 	blobs_log = blob_log(img, min_sigma=4,  max_sigma=32, num_sigma=10, log_scale=True, threshold=0.001, overlap=0.5)
 	if len(blobs_log) > 0:
 		blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)

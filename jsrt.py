@@ -166,8 +166,8 @@ def jsrt(set=None):
         continue
     npaths.append(paths[i])
     if count > 0:
-      nloc.append([int(round(loc[i][0] * xfactor)), int(round(loc[i][1] * yfactor))])
-      rads.append(int(round(xfactor * max(siz[i][0], siz[i][1]))))
+      nloc.append([int(round(loc[i][1] * xfactor)), int(round(loc[i][0] * yfactor))])
+      rads.append(int(round(xfactor * max(siz[i][1], siz[i][0]))))
     else:
       nloc.append([-1, -1])
       rads.append(-1)

@@ -67,7 +67,3 @@ if __name__ == '__main__':
 		print "feats: " + str(np.array(X[-1]))
 
 	np.save(out_file, [X, Y])
-
-
-
-

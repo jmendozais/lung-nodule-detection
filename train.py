@@ -33,7 +33,8 @@ if __name__ == "__main__":
 	tr = folds[0][0]
 	te = folds[0][1]
 
-	clf = svm.SVC()
+	#clf = svm.SVC()
+	clf = LDA()
 
 	scaler = preprocessing.StandardScaler().fit(X[tr])
 	#scaler = preprocessing.MinMaxScaler(feature_range=(-1, 1)).fit(X[tr])
@@ -50,6 +51,6 @@ if __name__ == "__main__":
 	np.savetxt("data/ytr", Y[tr])
 	np.savetxt("data/yte", Y[te])
 	
-	# save lda
+	# save classifier
 	joblib.dump(clf, 'data/clf.pkl') 
 	joblib.dump(scaler, 'data/scaler.pkl')

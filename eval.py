@@ -82,16 +82,14 @@ def _get_paths(results_path):
 
 def _show_real_predicted(path, res1, res2):
 	img = np.load(path, 0)
+	resized_img = cv2.resize(img, (512, 512), interpolation=cv2.INTER_CUBIC)
+	color_img = cv2.cvtColor(resized_img.copy(), cv2.COLOR_GRAY2BGR) 
+	print color_img.shape
 	for res in res1:
-		img = util.label_blob(img, res, (255, 0, 0))
+		color_img = util.label_blob(color_img, res, (255, 0, 0))
 	for res in res2:
-		img = util.label_blob(img, res, (0, 255, 0))
-
-	factor = 640.0/len(img)
-	resized_img = cv2.resize(img, (640, 640), interpolation=cv2.INTER_CUBIC)
-	print path
-	#cv2.imshow('real vs predicted', resized_img)
-	#cv2.waitKey()
+		color_img = util.label_blob(color_img, res, (0, 255, 255))
+	#util.imshow('real vs predicted', color_img)
 
 
 def evaluate(real_path, predicted_path):
@@ -107,7 +105,7 @@ def evaluate(real_path, predicted_path):
 	iou_pos = []
 	tp = 0
 	p = 0
-	MAX_DIST = 35 # 25 mm
+	MAX_DIST = 35.7142 # 25 mm
 
 	for i in range(num_imgs):
 		found = False

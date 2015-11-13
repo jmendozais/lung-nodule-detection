@@ -28,6 +28,8 @@ def input(img_path, ll_path, lr_path):
 def detect_blobs(img, lung_mask):
 	sampled, lce, norm = preprocess(img)
 	blobs, ci = wmci(lce, lung_mask)
+	#ci = lce
+	#blobs = log_(lce, lung_mask)
 
 	return blobs, norm, lce, ci
 
@@ -46,13 +48,14 @@ def classify(img, blobs, feature_vectors):
 	results = clf.predict(scaler.transform(feature_vectors))
 	blobs = np.array(blobs)
 	blobs = blobs[results>0]
-
 	return blobs
 
 # pipelines 
 def pipeline_blobs(img_path, ll_path, lr_path):
 	img, lung_mask = input(img_path, ll_path, lr_path)
 	blobs, norm, lce, ci = detect_blobs(img, lung_mask)
+
+  #show_blobs("result", lce, blobs)
 
 	return blobs
 
