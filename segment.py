@@ -1,5 +1,9 @@
 import numpy as np
 from itertools import *
+from math import *
+import cv2
+import util
+
 def circunference(img, blobs):
 	masks = []
 	for blob in blobs:
@@ -11,7 +15,6 @@ def circunference(img, blobs):
 		masks.append(mask)
 		
 	return blobs, np.array(masks)
-
 
 # ADT by ARG segmentation
 def cos_angle(a, b):
@@ -31,79 +34,100 @@ def cos_angle(a, b):
 	# cos(acos(tmp)
 	return tmp
 
-def distance_thold(img, point, grad, lung_mask, t0=0, nod_mask=None):
+def distance_thold(img, point, grad, dx, dy, t0=0,):
 	point = (int(point[0]), int(point[1]))
 	size = img.shape
 	rmax = 25
 	diam = 2 * rmax + 1
 	tdelta = 1.7
-	mask = np.full((diam, diam), 0)
+	mask = np.full((diam, diam), 0, dtype=np.uint8)
 
-	cors = [[1e10, 1e10], [-1e10, -1e10]]
-	# Segment and calculate the ARG of t0
+	rx = np.linspace(-1 * rmax, rmax, 2 * rmax + 1)
+	ry = np.linspace(-1 * rmax, rmax, 2 * rmax + 1)
+	ry, rx = np.meshgrid(rx, ry)
+	dist = rx ** 2 + ry ** 2
+	dist = dist.astype(np.float64)
+	ndist = dist / (rmax ** 2)
+	ratio = (1.0 - np.exp(-1 * ndist)) / ( 1.0 - exp(-1))
+	T = t0 + tdelta * ratio
 
-	area = 1
-	arg = 0.0
-	for i in range(diam):
-		for j in range(diam):
-			x = point[0] - rmax + i
-			y = point[1] - rmax + j
-			if x < 0 or y < 0 or x >= size[0] or y >= size[1]:
-				continue
+	mask = dist < rmax ** 2
+	mask = mask.astype(np.uint8)
+	T = T * mask
+	T[T == 0] = 1e10
 
-			dist = (i - rmax) * (i - rmax) + (j - rmax) * (j - rmax)
-			tvalue = 1e10
-			if dist < (rmax * rmax):
-				tvalue = t0 + tdelta * (1 - exp(- dist * 1.0 / (rmax * rmax))) / (1 - exp(-1))
-
-			#print("{} {} -> tvalue {}, lce value {}, dist {}, dist ratio {}".format(i - rmax, j - rmax, tvalue, img[point[0] - rmax + i, point[1] - rmax + j], dist, dist / (rmax * rmax)))	
-			if img[x, y] > tvalue:
-				mask[i, j] = 1
-
+	roi = img[point[0] - rmax:point[0] + rmax + 1, point[1] - rmax:point[1] + rmax + 1]
+	s = roi > T
+	s = s.astype(np.uint8)
 
 	kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 1))
-	mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+	# TODO:  Hole filling via morphological op
+	s = cv2.morphologyEx(s, cv2.MORPH_OPEN, kernel)
+
+	smask = np.full((s.shape[0] + 2, s.shape[1] + 2), dtype=np.uint8, fill_value=0)
+	cv2.floodFill(s, smask, (rmax, rmax), 255)
+	s = smask[1:s.shape[0] + 1, 1:s.shape[1] + 1]
 	
-	for i in range(diam):
-		for j in range(diam):
-			x = point[0] - rmax + i
-			y = point[1] - rmax + j
-			if x < 0 or y < 0 or x >= size[0] or y >= size[1]:
-				continue
+	# Calculate the ARG of t0
+	rx = -1 * np.linspace(-1 * rmax, rmax, 2 * rmax + 1)
+	ry = -1 * np.linspace(-1 * rmax, rmax, 2 * rmax + 1)
+	ry, rx = np.meshgrid(rx, ry)
+	rmag = (rx ** 2 + ry ** 2) ** 0.5
 
-			if mask[i, j] == 1:
-				cors[0][0] = min(cors[0][0], point[0] - rmax + i)
-				cors[0][1] = min(cors[0][1], point[1] - rmax + j)
-				cors[1][0] = max(cors[1][0], point[0] - rmax + i)
-				cors[1][1] = max(cors[1][1], point[1] - rmax + j)
+	rdx = dx[point[0] - rmax:point[0] + rmax + 1, point[1] - rmax:point[1] + rmax + 1]
+	rdy = dy[point[0] - rmax:point[0] + rmax + 1, point[1] - rmax:point[1] + rmax + 1]
+	rgrad = grad[point[0] - rmax:point[0] + rmax + 1, point[1] - rmax:point[1] + rmax + 1]
 
-				if nod_mask != None:
-					nod_mask[x, y] = 255
-					mask[i, j] =  255
+	rphase = (rx * rdx + ry * rdy) / ( rmag * rgrad + util.EPS)
+	rarg = rgrad * rphase
 
-				area += 1
-				arg += grad[x, y] * ( - cos_angle((rmax - i, rmax - j), (dx[x, y], dy[x, y])) )
-	arg /= area
-	'''
-	if nod_mask != None:
-		a, b, _, _ = cv2.minMaxLoc(mask)
-		mask = (mask - a) / (b - a) 
-		cv2.imshow('mask', mask)
-		cv2.waitKey()
-	'''
-	return arg, cors[0], cors[1]
+	rarg = rarg * s
+	rgrad = rgrad * s
+	a = np.sum(rarg)
+	b = np.sum(s)
 
-def adaptive_thold(img, point, dx, dy, grad, lung_mask, nod_mask):
+	if b == 0: 
+		return -1e10, s
+	else:
+		return (a * 1.0 / (b + util.EPS)), s
+
+def _adaptive_thold(img, point, grad, dx, dy):
 	coorners = [[1e10, 1e10], [-1e10, -1e10]]
 	best_arg = -1e10
 	best_t = 0
-	for t in np.arange(0.45,-0.25,-0.025):
-		arg, _, _ = distance_thold(img, point, grad, lung_mask, t)
-		#print("{} {}".format(t, arg))
+	for t in np.arange(0, -4,-1):
+		arg, _ = distance_thold(img, point, grad, dx, dy, t)
+		#print("{} {}".format(t, arg))		
+		#util.imshow('mask', _)
+
 		if best_arg < arg:
 			best_arg = arg
 			best_t = t
-	#print("best {} {}".format(best_t, best_arg))
-	_, tl, br = distance_thold(img, point, grad, lung_mask, best_t, nod_mask=nod_mask)
 
-	return tl, br
+	_, mask = distance_thold(img, point, grad, dx, dy, best_t)
+
+	return np.array(mask)
+
+def finite_derivatives(img):
+	size = img.shape
+	dx = img.copy()
+	dy = img.copy()
+
+	for i, j in product(range(1, size[0] - 1), range(1, size[1] - 1)):
+		dy[i, j] = (img[i, j + 1] - img[i, j - 1]) / 2.0
+		dx[i, j] = (img[i + 1, j] - img[i - 1, j]) / 2.0
+	mag = (dx ** 2 + dy ** 2) ** 0.5
+
+	return mag, dx, dy
+
+def adaptive_distance_thold(img, blobs):
+	masks = []
+	mag, dx, dy = finite_derivatives(img)
+
+	for blob in blobs:
+		x, y, r = blob
+		mask = _adaptive_thold(img, (x, y), mag, dx, dy)
+		masks.append(mask)
+
+	return blobs, np.array(masks)

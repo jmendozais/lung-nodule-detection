@@ -6,21 +6,14 @@ from sklearn.metrics import classification_report
 import sklearn.cross_validation as cross_val
 from sklearn.externals import joblib
 from sklearn import preprocessing
+from sklearn.metrics import confusion_matrix
 
 
-if __name__ == "__main__":
-	fname = sys.argv[1]
-	print "fname {}".format(fname)
+def train(X, Y, clf, scaler):
 	iters = 1
 	tr_prop = 0.7
 	te_prop = 1 - tr_prop
 	seed = 113
-
-	data = np.load(fname)
-	X = data[0]
-
-
-	Y = data[1]
 
 	# hardcoded
 	NX = []
@@ -33,24 +26,29 @@ if __name__ == "__main__":
 	tr = folds[0][0]
 	te = folds[0][1]
 
-	#clf = svm.SVC()
-	clf = LDA()
 
-	scaler = preprocessing.StandardScaler().fit(X[tr])
-	#scaler = preprocessing.MinMaxScaler(feature_range=(-1, 1)).fit(X[tr])
+	scaler.fit(X[tr])
 	clf.fit(scaler.transform(X[tr]), Y[tr])
 
 	# pred
 	pred = clf.predict(scaler.transform(X[te]))
-	print "acc(uniform): " + str(np.mean(pred == Y[te]))
-	print classification_report(pred.astype(int), Y[te].astype(int))
 
-	# check sets
-	np.savetxt("data/xtr", X[tr])
-	np.savetxt("data/xte", X[te])
-	np.savetxt("data/ytr", Y[tr])
-	np.savetxt("data/yte", Y[te])
+	print "Evaluate performance on patches: "
+	print "classification report: "
+	print classification_report(Y[te].astype(int), pred.astype(int))
+	print "confusion matrix: "
+	print confusion_matrix(Y[te].astype(int), pred.astype(int))
 	
-	# save classifier
-	joblib.dump(clf, 'data/clf.pkl') 
-	joblib.dump(scaler, 'data/scaler.pkl')
+	return clf, scaler
+
+if __name__ == "__main__":
+	fname = sys.argv[1]
+	data = np.load(fname)
+	print "fname {}".format(fname)
+
+	X = data[0]
+	Y = data[1]
+	clf = LDA()
+	scaler = preprocessing.StandardScaler()
+	train(X, Y, clf, scaler):
+

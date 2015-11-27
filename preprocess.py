@@ -25,16 +25,22 @@ def lce(img):
 	res = (img - mu) / pow(ro2, 0.5)
 	return res
 
-def normalize(img):
-	mean, std = cv2.meanStdDev(img)
-	normalized = (img - mean)/std
+def normalize(img, lung_mask):	
+	'''
+	ins = np.ma.array(data=img, mask=1-lung_mask, fill_value=0)
+	mean, std = ins.mean(), ins.std()
+	normalized = (img - mean) / std
+	'''
+	masked_img = img * lung_mask
+	mean, std = cv2.meanStdDev(img)	
+	normalized = (img - mean) / std
 	
 	return normalized
 
-def preprocess(img):
+def preprocess(img, lung_mask):
 	resized = downsample(img)
 	enhanced = lce(resized)
-	normalized = normalize(resized)
+	normalized = normalize(resized, lung_mask)
 
 	return resized, enhanced, normalized
 

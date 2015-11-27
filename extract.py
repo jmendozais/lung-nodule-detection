@@ -46,9 +46,11 @@ def _mean_std_maxin_with_extended_mask(img, blob, mask):
 	nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
 
 	roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-	ext_mask = np.full(roi.shape, dtype=np.uint8, fill_value=0)
-
+	ext_mask = np.full(roi.shape, dtype=np.uint8, fill_value=0)	
 	ext_mask[(tl[0] + shift - ntl[0]):(tl[0] + shift + 2 * r + 1 - ntl[0]), (tl[1] + shift - ntl[1]):(tl[1] + shift + 2 * r + 1 - ntl[1])] = mask
+
+	#util.imshow('mask', mask)
+	#util.show_nodule(roi, ext_mask)
 
 	ins = np.ma.array(data=roi, mask=1-ext_mask, fill_value=0)
 	out = np.ma.array(data=roi, mask=ext_mask, fill_value=0)
@@ -89,7 +91,11 @@ def _mean_std_maxin_with_extended_mask_phase_rgrad(mag, dx, dy, blob, mask):
 	ext_mask = np.full(roi.shape, dtype=np.uint8, fill_value=0)
 	ext_mask[(tl[0] + shift - ntl[0]):(tl[0] + shift + 2 * r + 1 - ntl[0]), (tl[1] + shift - ntl[1]):(tl[1] + shift + 2 * r + 1 - ntl[1])] = mask
 
+	#util.imshow('rmask', mask)
+	#util.show_nodule(roi, ext_mask)
+
 	# TODO: validate the order is correct on angle2 (1)
+	# TODO: fix meshgrid
 	ry, rx = np.meshgrid(rx, ry)
 	rx = rx[(ntl[0]-tl[0]):side - (br[0] - nbr[0]), ntl[1]-tl[1]:side - (br[1] - nbr[1])]
 	ry = ry[(ntl[0]-tl[0]):side - (br[0] - nbr[0]), ntl[1]-tl[1]:side - (br[1] - nbr[1])]
@@ -106,12 +112,13 @@ def _mean_std_maxin_with_extended_mask_phase_rgrad(mag, dx, dy, blob, mask):
 
 	return phase_result, rgrad_result
 
-
 def geometric(img, blob, mask, xrange, yrange, dt_img):
 	results = {}
 	contours, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-	center, radius = cv2.minEnclosingCircle(contours[0])
-
+	if len(contours) > 0:
+		center, radius = cv2.minEnclosingCircle(contours[0])
+	else :
+		radius = 13.0
 	# 1. Size
 	# TODO: implemented double dfs exact max diameter
 	results[_ge[0]] = radius
@@ -136,7 +143,6 @@ def intensity(img, blob, mask):
 
 	roi = roi.flatten()
 	grays_in = np.trim_zeros(roi)
-
 
 	# max in
 	result[_in[0]] = max_in
@@ -206,6 +212,7 @@ def hardie_blob(img, blob, mask, xrange, yrange, dt_mask, mag, dx, dy):
 	grad = gradient(img, blob, mask, mag, dx, dy)
 
 	feats = np.hstack((geom.values(), inte.values(), grad.values()))
+	#feats = np.hstack((geom.values(),))
 
 	return np.array(feats)
 
@@ -225,7 +232,6 @@ def hardie_blob_selected(img, blob, mask, xrange, yrange, dt_mask, mag, dx, dy, 
 	return np.array(feats)
 
 def hardie(norm, lce, wmci, lung_mask, blobs, masks):
-	
 	# Ranges for geometric features
 	xsum = np.sum(lung_mask, axis=0)
 	ysum = np.sum(lung_mask, axis=1)
@@ -249,8 +255,10 @@ def hardie(norm, lce, wmci, lung_mask, blobs, masks):
 
 	# FLD selected features
 	adt_geom = ['x_fract', 'dist_perim']
+	
 	norm_inte = ['mean_sep', 'skew_in', 
 	   'moment_4_in', 'moment_5_in', 'moment_7_in']
+
 	norm_grad = ['rd_mean_in', 'rd_std_in',
 	   'rd_std_out', 'rd_std_sep', 'rgrad_mean_in',
 	   'rgrad_mean_sep', 'rgrad_std_in',
@@ -282,8 +290,14 @@ def hardie(norm, lce, wmci, lung_mask, blobs, masks):
 		nf = hardie_blob_selected(norm, blobs[i], masks[i], xrange, yrange, dt_img, mag_norm, dx_norm, dy_norm, adt_geom, norm_inte, norm_grad)
 		lf = hardie_blob_selected(lce, blobs[i], masks[i], xrange, yrange, dt_img, mag_lce, dx_lce, dy_lce, [], lce_inte, lce_grad)
 		wf = hardie_blob_selected(wmci, blobs[i], masks[i], xrange, yrange, dt_img, mag_wmci, dx_wmci, dy_wmci, [], wmci_inte, wmci_grad)
+		#feats = np.hstack((nf,))
 		feats = np.hstack((nf, lf, wf))
 		feature_vectors.append(np.array(feats))
 
 	return np.array(feature_vectors)
+
+# Feature learning
+#def descomposition(norm, lce, wmci, lung_mask, blobs, masks):
+
+
 

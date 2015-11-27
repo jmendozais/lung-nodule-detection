@@ -20,18 +20,16 @@ python lnd.py data/JPCLN001.npy data/JPCLN001-left.bmp data/JPCLN001-right.bmp
 
 python eval.py <real_list> <predicted_list>
 ie.
-python eval.py jsrt140.txt out
+python eval.py jsrt140.txt lda.txt
 
-python lnd.py /Users/mac/Projects/data/jsrt-npy/JPCLN097.npy /Users/mac/Projects/data/scr/masks/left-lung/JPCLN097.bmp /Users/mac/Projects/data/scr/masks/right-lung/JPCLN097.bmp
+
+
+
+python lnd.py /Users/mac/Projects/data/jsrt-npy/JPCLN029.npy /Users/mac/Projects/data/scr/masks/left-lung/JPCLN029.bmp /Users/mac/Projects/data/scr/masks/right-lung/JPCLN029.bmp
+
+
+
 
 RESULTS:
 
 a. LDA training
-
-acc(uniform): 0.910714285714
-             precision    recall  f1-score   support
-
-          0       0.99      0.88      0.93        78
-          1       0.79      0.97      0.87        34
-
-avg / total       0.92      0.91      0.91       112

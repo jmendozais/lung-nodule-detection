@@ -59,7 +59,7 @@ def split_index(Y, train_percent, n_iter=1, seed=113):
       labels.append(0)
     else:
       labels.append(1)
-  return list(cross_val.StratifiedShuffleSplit(labels, n_iter, train_size=train_percent, random_state=seed))
+  return list(cross_val.StratifiedShuffleSplit(labels, n_iter, train_size=train_percent, shuffle=True, random_state=seed))
 
 def load_data():
   paths = get_paths(PATH)
@@ -122,7 +122,6 @@ def split_data(prop=0.7, seed=113):
   if len(i2) > 0:
     Y[i2] = 1
 
-  print sum(Y)
   lim1 = int(NUM_POSITIVES * prop)
   lim2 = int(93*prop)
 
@@ -139,8 +138,6 @@ def split_data(prop=0.7, seed=113):
   np.random.shuffle(Y_train)
 
   return (X_train, np.array([Y_train]).T), (X_test, np.array([Y_test]).T)
-
-
 
 # Method to get lists
 overlapped = ['LN060','LN065','LN105','LN108','LN112','LN113','LN115','LN126','LN130','LN133','LN136','LN149','LN151','LN152']
@@ -172,7 +169,7 @@ def jsrt(set=None):
       nloc.append([-1, -1])
       rads.append(-1)
   
-  return npaths, nloc, rads
+  return np.array(npaths), np.array(nloc), np.array(rads)
 
 def left_lung(set=None):
   lpath = '/Users/mac/Projects/data/scr/masks/left_masks.txt'
@@ -188,7 +185,7 @@ def left_lung(set=None):
       if not valid:
         continue
     paths.append(line.rstrip())
-  return paths
+  return np.array(paths)
 
 def right_lung(set=None):
   lpath = '/Users/mac/Projects/data/scr/masks/right_masks.txt'
@@ -204,4 +201,4 @@ def right_lung(set=None):
       if not valid:
         continue
     paths.append(line.rstrip())
-  return paths
+  return np.array(paths)

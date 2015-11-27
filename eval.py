@@ -43,7 +43,6 @@ def _iou_circle(res1, res2):
 	return p1.intersection(p2).area / p1.union(p2).area
 
 def _dist(blob1, blob2):
-	print blob1, blob2
 	return (blob1[0] - blob2[0]) ** 2 + (blob1[1] - blob2[1]) ** 2
 
 
@@ -80,24 +79,8 @@ def _get_paths(results_path):
 
 	return paths
 
-def _show_real_predicted(path, res1, res2):
-	img = np.load(path, 0)
-	resized_img = cv2.resize(img, (512, 512), interpolation=cv2.INTER_CUBIC)
-	color_img = cv2.cvtColor(resized_img.copy(), cv2.COLOR_GRAY2BGR) 
-	print color_img.shape
-	for res in res1:
-		color_img = util.label_blob(color_img, res, (255, 0, 0))
-	for res in res2:
-		color_img = util.label_blob(color_img, res, (0, 255, 255))
-	#util.imshow('real vs predicted', color_img)
-
-
-def evaluate(real_path, predicted_path):
-	paths, real = util.load_list(real_path)
-	_, predicted = util.load_list(predicted_path)
-
+def evaluate(real, predicted, paths = None):
 	assert len(real) == len(predicted)
-
 	num_imgs = len(real)
 	sensitivity = 0
 	fppi = []
@@ -127,25 +110,28 @@ def evaluate(real_path, predicted_path):
 
 		if found:
 			tp += 1
-
-		print "found: {}".format(found)
-		print "overlap: {}".format(overlap)
-		_show_real_predicted(paths[i], real[i], predicted[i])
-		print "\n"
-
+		
+		print "found {}, overlap {}".format(found, overlap)
+		
+		#if paths != None:
+		#	util.show_blobs_real_predicted(paths[i], [real[i]], predicted[i])
+		
 	fppi = np.array(fppi)
 	iou = np.array(iou)
 	iou_pos = np.array(iou_pos)
 
 	sensitivity = tp * 1.0 / p
-
 	#return sensitivity, np.mean(fppi), np.std(fppi), np.mean(iou), np.std(iou), np.mean(iou_pos), np.std(iou_pos)
-	return sensitivity, np.mean(fppi), np.std(fppi), 0, 0, 0, 0
+	return sensitivity, np.mean(fppi), np.std(fppi)
 
 
 if __name__ == "__main__":
 	real_path = sys.argv[1]
 	predicted_path = sys.argv[2]
 
-	mea = evaluate(real_path, predicted_path)
-	print "sensitivity {:.2f}, \nfppi mean {:.2f}, fppi std {:.2f} \niou mean {:.2f} iou std {:.2f}, iou+ mean {:.2f}, iou+ std {:.2f}".format(mea[0], mea[1], mea[2], mea[3], mea[4], mea[5], mea[6])
+	paths, real = util.load_list(real_path)
+	_, predicted = util.load_list(predicted_path)
+
+	mea = evaluate(real, predicted, paths)
+	print "Sensitivity {:.2f}, \nfppi mean {:.2f}, fppi std {:.2f} \n".format(mea[0], mea[1], mea[2])
+	#print "Sensitivity {:.2f}, \nfppi mean {:.2f}, fppi std {:.2f} \niou mean {:.2f} iou std {:.2f}, iou+ mean {:.2f}, iou+ std {:.2f}".format(mea[0], mea[1], mea[2], mea[3], mea[4], mea[5], mea[6])

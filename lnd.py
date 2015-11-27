@@ -1,103 +1,81 @@
-import cv2
-import sys
-from sklearn.externals import joblib
+import numpy as np
+from sklearn.cross_validation import StratifiedKFold
 
-from classify import *
-from detect import *
-from extract import * 
-from preprocess import *
-from segment import *
-from util import *
+from data import DataProvider
+import model
+import eval
+import util
+
 import jsrt
-import skimage.io as io
-#TODO: up classifier
 
-def input(img_path, ll_path, lr_path):
-	img = np.load(img_path)
-	img = img.astype(np.float)
-	ll_mask = cv2.imread(ll_path)
-	lr_mask = cv2.imread(lr_path)
-	lung_mask = ll_mask + lr_mask
-	dsize = (512, 512)
-	lung_mask = cv2.resize(lung_mask, dsize, interpolation=cv2.INTER_CUBIC)
-	lung_mask = cv2.cvtColor(lung_mask, cv2.COLOR_BGR2GRAY)
- 	lung_mask.astype(np.uint8)
+def run_individual(): 
+	model.pipeline(sys.argv[1], sys.argv[2], sys.argv[3])
 
- 	return img, lung_mask
-
-def detect_blobs(img, lung_mask):
-	sampled, lce, norm = preprocess(img)
-	blobs, ci = wmci(lce, lung_mask)
-	#ci = lce
-	#blobs = log_(lce, lung_mask)
-
-	return blobs, norm, lce, ci
-
-def segment(img, blobs):
-	blobs, nod_masks = circunference(lce, blobs)
-
-	return blobs, nod_masks
-
-def extract(norm, lce, wmci, lung_mask, blobs, nod_masks):
-
-	return hardie(norm, lce, wmci, lung_mask, blobs, nod_masks)
-
-def classify(img, blobs, feature_vectors):
-	clf = joblib.load('data/clf.pkl') 
-	scaler = joblib.load('data/scaler.pkl')
-	results = clf.predict(scaler.transform(feature_vectors))
-	blobs = np.array(blobs)
-	blobs = blobs[results>0]
-	return blobs
-
-# pipelines 
-def pipeline_blobs(img_path, ll_path, lr_path):
-	img, lung_mask = input(img_path, ll_path, lr_path)
-	blobs, norm, lce, ci = detect_blobs(img, lung_mask)
-
-  #show_blobs("result", lce, blobs)
-
-	return blobs
-
-def pipeline_features(img_path, blobs, ll_path, lr_path):
-	img, lung_mask = input(img_path, ll_path, lr_path)
-	_, norm, lce, ci = detect_blobs(img, lung_mask)
-	blobs, nod_masks = segment(img, blobs)
-	feats = extract(norm, lce, ci, lung_mask, blobs, nod_masks)
-
-	return feats
-'''
-def pipeline_blobs_features(img_path, ll_path, lr_path):
-	img, lung_mask = input(img_path, ll_path, lr_path)
-	blobs, norm, lce, ci = detect_blobs(img, lung_mask)
-	blobs, nod_masks = segment(img, blobs)
-	feats = extract(norm, lce, ci, lung_mask, blobs, nod_masks)
-
-	return blobs, feats
-'''
-def pipeline(img_path, ll_path, lr_path):
-	img, lung_mask = input(img_path, ll_path, lr_path)
-	blobs, norm, lce, ci = detect_blobs(img, lung_mask)
-	blobs, nod_masks = segment(img, blobs)
-	feats = extract(norm, lce, ci, lung_mask, blobs, nod_masks)
-	blobs = classify(img, blobs, feats)
-
-	#show_blobs("result", lce, blobs)
-
-	return img, blobs
-
-def all():
+def run_on_dataset():
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
 	left_masks = jsrt.left_lung(set='jsrt140')
 	right_masks = jsrt.right_lung(set='jsrt140')
 
 	blobs_ = []
 	for i in range(len(paths)):
-		img, blobs = pipeline(paths[i], left_masks[i], right_masks[i])
+		img, blobs = model.pipeline(paths[i], left_masks[i], right_masks[i])
+		#img, blobs = model.pipeline_features(paths[i], [(locs[i][0], locs[i][1], 25)], left_masks[i], right_masks[i])
 		blobs_.append(blobs)
 		print_detection(paths[i], blobs)
 		sys.stdout.flush()
 
+def protocol():
+	paths, locs, rads = jsrt.jsrt(set='jsrt140')
+	left_masks = jsrt.left_lung(set='jsrt140')
+	right_masks = jsrt.right_lung(set='jsrt140')
+	size = len(paths)
+
+	blobs = []
+	imgs = []
+	for i in range(size):
+		blobs.append([locs[i][0], locs[i][1], rads[i]])
+	blobs = np.array(blobs)
+
+	Y = (140 > np.array(range(size))).astype(np.uint8)
+	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+	
+	fold = 0
+
+	sens = []
+	fppi_mean = []
+	fppi_std = []
+	for tr_idx, te_idx in skf:
+		fold += 1
+		print "Fold {}".format(fold)
+
+		xtr = DataProvider(paths[tr_idx], left_masks[tr_idx], right_masks[tr_idx])
+		model.train(xtr, blobs[tr_idx])
+
+		xte = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+		blobs_te_pred = model.predict(xte)
+
+		paths_te = paths[te_idx]
+		for i in range(len(blobs_te_pred)):
+			util.print_detection(paths_te[i], blobs_te_pred[i])
+
+		blobs_te = []
+		for bl in blobs[te_idx]:
+			blobs_te.append([bl])
+		blobs_te = np.array(blobs_te)
+
+		s, fm, fs = eval.evaluate(blobs_te, blobs_te_pred, paths[te_idx])
+		print "Result: sens {}, fppi mean {}, fppi std {}".format(s, fm, fs)
+
+		sens.append(s)
+		fppi_mean.append(fm)
+		fppi_std.append(fs)
+
+	sens = np.array(sens)
+	fppi_mean = np.array(fppi_mean)
+	fppi_std = np.array(fppi_std)
+
+	print "Final: sens_mean {}, sens_std {}, fppi_mean {}, fppi_stds_mean {}".format(sens.mean(), sens.std(), fppi_mean.mean(), fppi_std.mean())
+
+
 if __name__=="__main__":
-	all()
-	#pipeline(sys.argv[1], sys.argv[2], sys.argv[3])
+	protocol()

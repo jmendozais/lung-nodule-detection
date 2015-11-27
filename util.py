@@ -1,12 +1,12 @@
 import math
-
+from random import *
 import numpy as np
 import numpy.linalg as la
 from skimage import draw
 import cv2
 
 # Data utils
-
+EPS = 1e-9
 def load_list(path, blob_type='rad'):
   detect_f = open(path, 'r+') 
   paths = []
@@ -57,7 +57,7 @@ def imshow(windowName,  _img):
 	img = np.array(_img).astype(np.float64)
 	a = np.min(img)
 	b = np.max(img)
-	img = (img - a) / (b - a);
+	img = (img - a) / (b - a + EPS);
 	print np.min(img), np.max(img)
 
 	cv2.imshow(windowName, img)
@@ -82,7 +82,7 @@ def label_blob(img, blob, color=(255, 0, 0), margin=0):
 	ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+3+margin)
 	img[ex, ey] = color 
 	'''
-
+  
 	return img
 
 def show_blobs(windowName, img, blobs):
@@ -93,10 +93,42 @@ def show_blobs(windowName, img, blobs):
 
 	imshow(windowName, labeled)
 
+def show_blobs_real_predicted(path, res1, res2):
+  img = np.load(path, 0)
+  resized_img = cv2.resize(img, (512, 512), interpolation=cv2.INTER_CUBIC)
+  color_img = cv2.cvtColor(resized_img.copy(), cv2.COLOR_GRAY2BGR) 
+  
+  print "Real vs predicted .."
+  print 'real',
+  for res in res1:
+    print res,
+    if res[0] == -1:
+      continue
+    color_img = label_blob(color_img, res, (255, 0, 0))
+  print ''
+  print 'predicted',
+  for res in res2:
+    print res,
+    if res[0] == -1:
+      continue
+    color_img = util.label_blob(color_img, res, (0, 255, 255))
+  print ''
+  util.imshow('real vs predicted', color_img)
+  
+def show_nodule(roi, mask, scale=4):
+  dsize = (mask.shape[0] * scale, mask.shape[0] * scale)
+  roi = cv2.resize(roi, dsize)
+  mask = cv2.resize(mask, dsize)
+  _max = np.max(roi)
+  drawing = cv2.cvtColor(roi.copy().astype(np.float32), cv2.COLOR_GRAY2BGR)
+  color = (uniform(0, _max), uniform(0, _max), uniform(0, _max))
+  contours, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+  cv2.drawContours(drawing, contours, -1, color, 1)
+  imshow("nodule", drawing)
+
 def print_detection(path, blobs):
   print path,
   print len(blobs),
-
   if len(blobs) > 0:
     blob_dim = len(blobs[0])
     for i in range(len(blobs)):
