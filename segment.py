@@ -96,7 +96,7 @@ def _adaptive_thold(img, point, grad, dx, dy):
 	coorners = [[1e10, 1e10], [-1e10, -1e10]]
 	best_arg = -1e10
 	best_t = 0
-	for t in np.arange(0, -4,-1):
+	for t in np.arange(0, -4, -0.1):
 		arg, _ = distance_thold(img, point, grad, dx, dy, t)
 		#print("{} {}".format(t, arg))		
 		#util.imshow('mask', _)
