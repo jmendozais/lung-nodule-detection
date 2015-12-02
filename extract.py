@@ -39,7 +39,7 @@ def _mean_std_maxin_with_extended_mask(img, blob, mask):
 	shift = 35 
 	side = 2 * (shift + r) + 1
 
-	# Vectorize ROI operations
+	# Vectorize ROI 	operations
 	tl = (x - shift - r, y - shift - r)
 	ntl = (max(0, tl[0]), max(0, tl[1]))
 	br = (x + shift + r + 1, y + shift + r + 1)
@@ -127,7 +127,7 @@ def geometric(img, blob, mask, xrange, yrange, dt_img):
 	xfraction = (blob[0] - xrange[0]) * 1.0 / (xrange[1] - xrange[0])
 	results[_ge[1]] = xfraction
 
-	# 3. Distance to lung perimeter
+	# 3. Distance to lung perimeter ( normalized )
 	results[_ge[2]] = dt_img[blob[0], blob[1]]
 	return results
 
@@ -177,9 +177,14 @@ def gradient(img, blob, mask, mag, dx, dy):
 
 	mag_mean_in, _, mag_std_in, _, _ = _mean_std_maxin_with_extended_mask(mag, blob, mask)
 	phase_ans, rgrad_ans = _mean_std_maxin_with_extended_mask_phase_rgrad(mag, dx, dy, blob, mask)
-
 	rd_mean_in, rd_mean_out, rd_std_in, rd_std_out = phase_ans
 	rgrad_mean_in, rgrad_mean_out, rgrad_std_in, rgrad_std_out = rgrad_ans
+
+	per_mask = np.full(mask.shape, dtype=mask.dtype, fill_value=0)
+	contours, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+  	cv2.drawContours(per_mask, contours, -1, 1, 1)
+	_, rgrad_per = _mean_std_maxin_with_extended_mask_phase_rgrad(mag, dx, dy, blob, per_mask)
+	rgrad_mean_per, _, rgrad_std_per, _ = rgrad_per
 
 	result[_gr[0]] = mag_mean_in
 	result[_gr[1]] = mag_std_in
@@ -203,6 +208,9 @@ def gradient(img, blob, mask, mag, dx, dy):
 	result[_gr[12]] = rgrad_std_out
 	sep = (rgrad_std_in - rgrad_std_out) * 1.0 / (1e-9 + rgrad_std_in + rgrad_std_out)
 	result[_gr[13]] = sep
+
+	result[_gr[14]] = rgrad_mean_per
+	result[_gr[15]] = rgrad_std_per
 
 	return result
  
@@ -287,9 +295,15 @@ def hardie(norm, lce, wmci, lung_mask, blobs, masks):
 	# Feature vectors
 	feature_vectors = []
 	for i in range(len(blobs)):
+		'''
 		nf = hardie_blob_selected(norm, blobs[i], masks[i], xrange, yrange, dt_img, mag_norm, dx_norm, dy_norm, adt_geom, norm_inte, norm_grad)
 		lf = hardie_blob_selected(lce, blobs[i], masks[i], xrange, yrange, dt_img, mag_lce, dx_lce, dy_lce, [], lce_inte, lce_grad)
 		wf = hardie_blob_selected(wmci, blobs[i], masks[i], xrange, yrange, dt_img, mag_wmci, dx_wmci, dy_wmci, [], wmci_inte, wmci_grad)
+		'''
+		nf = hardie_blob_selected(norm, blobs[i], masks[i], xrange, yrange, dt_img, mag_norm, dx_norm, dy_norm, _ge, _in, _gr)
+		lf = hardie_blob_selected(lce, blobs[i], masks[i], xrange, yrange, dt_img, mag_lce, dx_lce, dy_lce, _ge, _in, _gr)
+		wf = hardie_blob_selected(wmci, blobs[i], masks[i], xrange, yrange, dt_img, mag_wmci, dx_wmci, dy_wmci, _ge, _in, _gr)
+		
 		#feats = np.hstack((nf,))
 		feats = np.hstack((nf, lf, wf))
 		feature_vectors.append(np.array(feats))

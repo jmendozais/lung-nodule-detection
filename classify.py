@@ -139,7 +139,56 @@ def create_training_set(data, y_blobs):
 	Y = np.array(Y)
 	return X, Y
 
-def train(X, Y, clf, scaler):
+def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs):
+	MAX_DIST = 35
+
+	size = len(real_blobs)
+
+	X = []
+	Y = []
+
+	# create positives
+	print "Creating positives ..."
+	for i in range(size):
+		if real_blobs[i][2] == -1:
+			continue
+		nb = []
+		tmp = []
+		for j in range(len(pred_blobs[i])):
+			x, y, z = pred_blobs[i][j]#
+			dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
+			if dst < MAX_DIST:
+				nb.append((dst, j))
+				tmp.append(pred_blobs[i][j])
+
+		nb = sorted(nb)
+		if len(nb) == 0:
+			continue
+
+		X.append(feature_set[i][nb[0][1]])
+		Y.append(1)
+	
+	# create negatives
+	print "Creating negatives ..."
+	for i in range(size):
+
+		neg_idx = []
+		for j in range(len(pred_blobs[i])):
+			x, y, z = pred_blobs[i][j]
+			dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
+			if dst > MAX_DIST:
+				neg_idx.append(j)
+
+		for idx in neg_idx:
+			X.append(feature_set[i][idx])
+			Y.append(0)
+
+	X = np.array(X)
+	Y = np.array(Y)
+	return X, Y
+
+
+def train(X, Y, clf, scaler, selector):
 	iters = 1
 	tr_prop = 0.7
 	te_prop = 1 - tr_prop
@@ -157,21 +206,25 @@ def train(X, Y, clf, scaler):
 	te = folds[0][1]
 
 	eval_scaler = clone(scaler)
+	eval_selector = clone(selector)
 	eval_clf = clone(clf)
 
-	eval_scaler.fit(X[tr])
-	eval_clf.fit(eval_scaler.transform(X[tr]), Y[tr])
-	pred = eval_clf.predict(eval_scaler.transform(X[te]))
+	Xt_tr = eval_scaler.fit_transform(X[tr])
+	Xt_tr = eval_selector.fit_transform(Xt_tr, Y[tr])
+	eval_clf.fit(Xt_tr, Y[tr])
+
+	Xt_te = eval_scaler.transform(X[te])
+	Xt_te = eval_selector.transform(Xt_te)
+	pred = eval_clf.predict(Xt_te)
 
 	print "Evaluate performance on patches"
 	print "classification report: "	
 	print classification_report(Y[te].astype(int), pred.astype(int))
-	print "confusion matrix: "
-	print confusion_matrix(Y[te].astype(int), pred.astype(int))
 
-	scaler.fit(X)
-	clf.fit(scaler.transform(X), Y)
-	return clf, scaler
+	Xt = scaler.fit_transform(X)
+	Xt = selector.fit_transform(Xt, Y)
+	clf.fit(Xt, Y)
+	return clf, scaler, selector
 
 if __name__ == '__main__':
 	fname = sys.argv[1]

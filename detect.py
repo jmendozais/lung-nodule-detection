@@ -168,7 +168,8 @@ def wmci(img, mask):
 	coords = peak_local_max(ans, min_distance)
 	blobs = []
 	for coord in coords:
-		blobs.append((coord[0], coord[1], 25))
+		if ans[coord[0], coord[1]] >= 0.5:
+			blobs.append((coord[0], coord[1], 25))
 
 	blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
 	#show_blobs("wci", ans, blobs)

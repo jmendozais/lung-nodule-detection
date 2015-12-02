@@ -8,16 +8,15 @@ class DataProvider:
 
 	def __len__(self):
 		return len(self.img_paths)
-		
+
 	def get(self, i):
-		img = np.load(self.img_paths[i])
-		img = img.astype(np.float)
+		img = np.load(self.img_paths[i]).astype(np.float)
 		ll_mask = cv2.imread(self.ll_paths[i])
 		lr_mask = cv2.imread(self.lr_paths[i])
 		lung_mask = ll_mask + lr_mask
 		dsize = (512, 512)
 		lung_mask = cv2.resize(lung_mask, dsize, interpolation=cv2.INTER_CUBIC)
 		lung_mask = cv2.cvtColor(lung_mask, cv2.COLOR_BGR2GRAY)
-	 	lung_mask.astype(np.uint8)
+		lung_mask = (lung_mask > 0).astype(np.uint8)
 
  		return img, lung_mask

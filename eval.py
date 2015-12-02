@@ -93,8 +93,10 @@ def evaluate(real, predicted, paths = None):
 	for i in range(num_imgs):
 		found = False
 		overlap = -1e10
-		p += len(real[i])
 		for j in range(len(real[i])):
+			if real[i][j][0] == -1:
+				continue
+			p += 1
 			for k in range(len(predicted[i])):
 				#overlap = _iou_circle(real[i][j], predicted[i][k])
 				dist = _dist(real[i][j], predicted[i][k])

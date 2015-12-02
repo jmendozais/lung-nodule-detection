@@ -32,4 +32,6 @@ python lnd.py /Users/mac/Projects/data/jsrt-npy/JPCLN029.npy /Users/mac/Projects
 
 RESULTS:
 
-a. LDA training
+10 kfold, lda thold = 0.015
+Final: sens_mean 0.757142857143, sens_std 0.106904496765, fppi_mean 6.98115942029, fppi_stds_mean 3.41710544849
+

@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import util
-
+import time
 EPS = 1e-9
 
 def downsample(img):
@@ -25,16 +25,12 @@ def lce(img):
 	res = (img - mu) / pow(ro2, 0.5)
 	return res
 
-def normalize(img, lung_mask):	
-	'''
-	ins = np.ma.array(data=img, mask=1-lung_mask, fill_value=0)
-	mean, std = ins.mean(), ins.std()
+def normalize(img, lung_mask):
+	count = np.count_nonzero(lung_mask)
+	mean = np.sum(img * lung_mask) * 1.0 / count
+	std = (np.sum(lung_mask * ((img - mean) ** 2)) * 1.0 / (count-1)) ** 0.5
 	normalized = (img - mean) / std
-	'''
-	masked_img = img * lung_mask
-	mean, std = cv2.meanStdDev(img)	
-	normalized = (img - mean) / std
-	
+
 	return normalized
 
 def preprocess(img, lung_mask):
