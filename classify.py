@@ -187,11 +187,72 @@ def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs):
 	Y = np.array(Y)
 	return X, Y
 
+def create_training_set_from_blob_set(img_set, pred_blobs, real_blobs, transform):
+	MAX_DIST = 35
+
+	size = len(real_blobs)
+
+	# train transformer
+	flat_imgs = []
+	for i in range(size):
+		for j in range(len(img_set[i])):
+			flat_imgs.append(img_set[i][j].flatten())
+	transform.fit(flat_imgs)
+
+	# transform features
+	feature_set = []
+	for i in range(size):
+		feature_set.append([])
+		for j in range(len(img_set[i])):
+			feature_set[i].append(transform.transform([img_set[i][j].flatten()])[0])
+	X = []
+	Y = []
+
+	# create positives
+	print "Creating positives ..."
+	for i in range(size):
+		if real_blobs[i][2] == -1:
+			continue
+		nb = []
+		tmp = []
+		for j in range(len(pred_blobs[i])):
+			x, y, z = pred_blobs[i][j]#
+			dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
+			if dst < MAX_DIST:
+				nb.append((dst, j))
+				tmp.append(pred_blobs[i][j])
+
+		nb = sorted(nb)
+		if len(nb) == 0:
+			continue
+
+		X.append(feature_set[i][nb[0][1]])
+		Y.append(1)
+	
+	# create negatives
+	print "Creating negatives ..."
+	for i in range(size):
+
+		neg_idx = []
+		for j in range(len(pred_blobs[i])):
+			x, y, z = pred_blobs[i][j]
+			dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
+			if dst > MAX_DIST:
+				neg_idx.append(j)
+
+		for idx in neg_idx:
+			X.append(feature_set[i][idx])
+			Y.append(0)
+
+	X = np.array(X)
+	Y = np.array(Y)
+	return X, Y
+
 
 def train(X, Y, clf, scaler, selector):
 	iters = 1
-	tr_prop = 0.7
-	te_prop = 1 - tr_prop
+	tr_prop = int(0.7 * len(Y))
+	te_prop = int(len(Y) - tr_prop)
 	seed = 113
 
 	# hardcoded
