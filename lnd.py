@@ -255,7 +255,7 @@ def protocol_froc_fl():
 
 	skf = StratifiedKFold(Y, n_folds=5, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0, 0.02, 0.004)))#, np.arange(0.02, 0.1, 0.02), np.arange(0.1, 0.5, 0.1)))
+	tholds = np.hstack((np.arange(0, 0.02, 0.004), np.arange(0.02, 0.1, 0.02), np.arange(0.1, 0.5, 0.1)))
 	op_points=[]
 
 	#RBM params
