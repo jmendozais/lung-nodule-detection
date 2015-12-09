@@ -7,6 +7,7 @@ from sklearn import preprocessing
 from sklearn.externals import joblib
 from sklearn.feature_selection import RFE
 from sklearn.neural_network import BernoulliRBM
+from sklearn.linear_model import LogisticRegression
 from time import *
 
 import classify
@@ -154,7 +155,7 @@ def train_with_feature_set(feature_set, pred_blobs, real_blobs):
 
 	return clf, scaler, selector
 
-def train_with_blob_set(img_set, pred_blobs, real_blobs):
+def train_with_blob_set(img_set, pred_blobs, real_blobs, transform=BernoulliRBM(n_components=200, random_state=0, verbose=True)):
 	dsize = (32, 32)
 	pred_rois = []
 
@@ -169,14 +170,14 @@ def train_with_blob_set(img_set, pred_blobs, real_blobs):
 
 		pred_rois.append(roi_v)
 
-	transform = BernoulliRBM(n_components=512, random_state=0, verbose=True)
 	X, Y = classify.create_training_set_from_blob_set(pred_rois, pred_blobs, real_blobs, transform)
 
 	#scaler = preprocessing.MinMaxScaler()
 	scaler = preprocessing.StandardScaler()
-	selector = RFE(estimator=SVM(), n_features_to_select=len(X[0]), step=1)
+	selector = RFE(estimator=LogisticRegression(), n_features_to_select=len(X[0]), step=1)
+	
 	#clf = svm.SVC()
-	clf = SVM()
+	clf = LogisticRegression()
 	clf, scaler, selector = classify.train(X, Y, clf, scaler, selector)
 
 	joblib.dump(clf, 'data/clf.pkl')

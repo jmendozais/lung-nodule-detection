@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 from sklearn.cross_validation import StratifiedKFold
+from sklearn.neural_network import BernoulliRBM
 import matplotlib.pyplot as plt
 
 from data import DataProvider
@@ -11,6 +12,7 @@ import eval
 import util
 
 import jsrt
+from itertools import product
 
 def run_individual(): 
 	model.pipeline(sys.argv[1], sys.argv[2], sys.argv[3])
@@ -251,65 +253,77 @@ def protocol_froc_fl():
 	print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 
-	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+	skf = StratifiedKFold(Y, n_folds=5, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0, 0.02, 0.001)))
+	tholds = np.hstack((np.arange(0, 0.02, 0.004)))#, np.arange(0.02, 0.1, 0.02), np.arange(0.1, 0.5, 0.1)))
 	op_points=[]
-	for thold in tholds:
-		fold = 0
-		sens = []
-		fppi_mean = []
-		fppi_std = []
-		for tr_idx, te_idx in skf:
-			fold += 1
-			print "Fold {}".format(fold),
 
-			model.train_with_blob_set(data.lce_imgs[tr_idx], pred_blobs[tr_idx], blobs[tr_idx])
-			blobs_te_pred = model.predict_from_blob_set(data.lce_imgs[te_idx], pred_blobs[te_idx], thold)
+	#RBM params
+	ncs = [128, 254, 512]
+	lrs = [0.1, 0.01, 0.001]
 
-			paths_te = paths[te_idx]
-			for i in range(len(blobs_te_pred)):
-				util.print_detection(paths_te[i], blobs_te_pred[i])
+	for nc, lr in product(ncs, lrs):
+		transform = BernoulliRBM(n_components=nc, learning_rate=lr, n_iter=20, random_state=0, verbose=True)
+		for thold in tholds:
+			fold = 0
+			sens = []
+			fppi_mean = []
+			fppi_std = []
+			for tr_idx, te_idx in skf:
+				fold += 1
+				print "Fold {}".format(fold),
 
-			blobs_te = []
-			for bl in blobs[te_idx]:
-				blobs_te.append([bl])
-			blobs_te = np.array(blobs_te)
+				model.train_with_blob_set(data.lce_imgs[tr_idx], pred_blobs[tr_idx], blobs[tr_idx], transform=transform)
+				blobs_te_pred = model.predict_from_blob_set(data.lce_imgs[te_idx], pred_blobs[te_idx], thold)
 
-			s, fm, fs = eval.evaluate(blobs_te, blobs_te_pred, paths[te_idx])
+				paths_te = paths[te_idx]
+				for i in range(len(blobs_te_pred)):
+					util.print_detection(paths_te[i], blobs_te_pred[i])
 
-			print ">> sens {}, fppi mean {}, fppi std {}".format(s, fm, fs)
+				blobs_te = []
+				for bl in blobs[te_idx]:
+					blobs_te.append([bl])
+				blobs_te = np.array(blobs_te)
+
+				s, fm, fs = eval.evaluate(blobs_te, blobs_te_pred, paths[te_idx])
+
+				print ">> sens {}, fppi mean {}, fppi std {}".format(s, fm, fs)
+				sys.stdout.flush()
+
+				sens.append(s)
+				fppi_mean.append(fm)
+				fppi_std.append(fs)
+
+			sens = np.array(sens)
+			fppi_mean = np.array(fppi_mean)
+			fppi_std = np.array(fppi_std)
+
+			print "THOLD {}: sens_mean {}, sens_std {}, fppi_mean {}, fppi_stds_mean {}".format(thold, sens.mean(), sens.std(), fppi_mean.mean(), fppi_std.mean())
+			print ""
+
 			sys.stdout.flush()
+			op_points.append([sens.mean(), fppi_mean.mean()])
 
-			sens.append(s)
-			fppi_mean.append(fm)
-			fppi_std.append(fs)
+		x1 = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+		y1 = [0.0, 0.57, 0.72, 0.78, 0.79, 0.81, 0.82, 0.85, 0.86, 0.895, 0.93]
 
-		sens = np.array(sens)
-		fppi_mean = np.array(fppi_mean)
-		fppi_std = np.array(fppi_std)
+		x2 = []
+		y2 = []
+		for i in range(len(op_points)):
+			if op_points[i][1] <= 10:
+				x2.append(op_points[i][1])
+				y2.append(op_points[i][0])
 
-		print "THOLD {}: sens_mean {}, sens_std {}, fppi_mean {}, fppi_stds_mean {}".format(thold, sens.mean(), sens.std(), fppi_mean.mean(), fppi_std.mean())
-		print ""
-		sys.stdout.flush()
-		op_points.append([sens.mean(), fppi_mean.mean()])
+		plt.plot(x1, y1, 'yo-')
+		plt.plot(x2, y2, 'bo-')
+		plt.title('FROC')
+		plt.ylabel('Sensitivity')
+		plt.xlabel('Average FPPI')
 
-	x1 = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
-	y1 = [0.0, 0.57, 0.72, 0.78, 0.79, 0.81, 0.82, 0.85, 0.86, 0.895, 0.93]
+		name='froc_nc_{}_cl_{}__{}'.format(nc, lr, time.clock())
+		np.savetxt('{}.txt'.format(name), [x2, y2])
+		plt.savefig('{}.jpg'.format(name))
 
-	x2 = []
-	y2 = []
-	for i in range(len(op_points)):
-		if op_points[i][1] <= 10:
-			x2.append(op_points[i][1])
-			y2.append(op_points[i][0])
-
-	plt.plot(x1, y1, 'yo-')
-	plt.plot(x2, y2, 'bo-')
-	plt.title('FROC')
-	plt.ylabel('Sensitivity')
-	plt.xlabel('Average FPPI')
-	plt.savefig('froc_{}.jpg'.format(time.clock()))
 	return np.array(op_points)
 
 if __name__=="__main__":
