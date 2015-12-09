@@ -4,8 +4,8 @@ import numpy as np
 import cv2
 import sys
 import scipy.stats as stats
-from shapely.geometry import Polygon
-from shapely.geometry import Point
+#from shapely.geometry import Polygon
+#from shapely.geometry import Point
 
 import util
 
@@ -26,6 +26,7 @@ def _iou(res1, res2):
 
 	return overlap
 
+''' TOOD: Set up shapely on liv comp
 def _iou_circle(res1, res2):
 	r1 = max(res1[2], res1[3])/2
 	r2 = max(res2[2], res2[3])/2
@@ -33,14 +34,7 @@ def _iou_circle(res1, res2):
 	p2 = Point(res2[0] + r2, res2[1] + r2).buffer(r2)
 
 	return p1.intersection(p2).area / p1.union(p2).area
-
-def _iou_circle(res1, res2):
-	r1 = max(res1[2], res1[3])/2
-	r2 = max(res2[2], res2[3])/2
-	p1 = Point(res1[0] + r1, res1[1] + r1).buffer(r1)
-	p2 = Point(res2[0] + r2, res2[1] + r2).buffer(r2)
-
-	return p1.intersection(p2).area / p1.union(p2).area
+'''
 
 def _dist(blob1, blob2):
 	return (blob1[0] - blob2[0]) ** 2 + (blob1[1] - blob2[1]) ** 2

@@ -169,7 +169,7 @@ def wmci(img, mask):
 	blobs = []
 	for coord in coords:
 		if ans[coord[0], coord[1]] >= 0.5:
-			blobs.append((coord[0], coord[1], 25))
+			blobs.append([coord[0], coord[1], 25])
 
 	blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
 	#show_blobs("wci", ans, blobs)

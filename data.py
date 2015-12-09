@@ -5,6 +5,7 @@ class DataProvider:
 		self.img_paths = img_paths
 		self.ll_paths = lm_paths
 		self.lr_paths = rm_paths
+		self.lce_imgs = []
 
 	def __len__(self):
 		return len(self.img_paths)
@@ -18,5 +19,4 @@ class DataProvider:
 		lung_mask = cv2.resize(lung_mask, dsize, interpolation=cv2.INTER_CUBIC)
 		lung_mask = cv2.cvtColor(lung_mask, cv2.COLOR_BGR2GRAY)
 		lung_mask = (lung_mask > 0).astype(np.uint8)
-
  		return img, lung_mask
