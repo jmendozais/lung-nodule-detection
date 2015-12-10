@@ -143,7 +143,7 @@ def protocol_froc(_model):
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
 	left_masks = jsrt.left_lung(set='jsrt140')
 	right_masks = jsrt.right_lung(set='jsrt140')
-	size = 10#len(paths)
+	size = len(paths)
 
 	# blobs detection
 	print "Detecting blobs ..."

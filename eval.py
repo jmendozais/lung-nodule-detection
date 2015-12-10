@@ -4,8 +4,10 @@ import numpy as np
 import cv2
 import sys
 import scipy.stats as stats
+'''
 from shapely.geometry import Polygon
 from shapely.geometry import Point
+'''
 
 import util
 
