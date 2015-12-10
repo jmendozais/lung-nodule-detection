@@ -251,8 +251,8 @@ def create_training_set_from_blob_set(img_set, pred_blobs, real_blobs, transform
 
 def train(X, Y, clf, scaler, selector):
 	iters = 1
-	tr_prop = int(0.7 * len(Y))
-	te_prop = int(len(Y) - tr_prop)
+	trs = int(0.7 * len(Y))
+	tes = int(len(Y) - trs)
 	seed = 113
 
 	# hardcoded
@@ -261,7 +261,7 @@ def train(X, Y, clf, scaler, selector):
 		NX.append(np.array(xi))
 	X = np.array(NX)
 
-	folds = np.array(list(cross_val.StratifiedShuffleSplit(Y, iters, train_size=tr_prop, test_size=te_prop, random_state=seed)))
+	folds = np.array(list(cross_val.StratifiedShuffleSplit(Y, iters, train_size=trs, test_size=tes, random_state=seed)))
 
 	tr = folds[0][0]
 	te = folds[0][1]

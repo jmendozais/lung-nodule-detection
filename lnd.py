@@ -167,7 +167,7 @@ def protocol_froc():
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0, 0.001, 0.0001), np.arange(0.001, 0.015, 0.001)))
+	tholds = np.hstack((np.arange(0.0, 0.1, 0.005)))
 	op_points=[]
 	for thold in tholds:
 		fold = 0

@@ -4,9 +4,12 @@ import cv2
 import sklearn.cross_validation as cross_val
 import numpy as np
 
-PATH = '/Users/mac/Projects/data/jsrt-npy'
-NNINFO = '/Users/mac/Projects/data/jsrt-info/CNNDAT_EN.TXT'
-LNINFO = '/Users/mac/Projects/data/jsrt-info/CLNDAT_EN.txt'
+PATH = '../dbs/jsrt-npy'
+NNINFO = '../dbs/jsrt-info/CNNDAT_EN.TXT'
+LNINFO = '../dbs/jsrt-info/CLNDAT_EN.txt'
+LMPATH = '../dbs/scr/masks/left_masks.txt'
+RMPATH = '../dbs/scr/masks/right_masks.txt'
+
 DATASET_LEN = 257
 NUM_POSITIVES = 154
 
@@ -172,8 +175,7 @@ def jsrt(set=None):
   return np.array(npaths), np.array(nloc), np.array(rads)
 
 def left_lung(set=None):
-  lpath = '/Users/mac/Projects/data/scr/masks/left_masks.txt'
-  f = open(lpath)
+  f = open(LMPATH)
   paths = []
   for line in f:
     if set=='jsrt140':
@@ -188,8 +190,7 @@ def left_lung(set=None):
   return np.array(paths)
 
 def right_lung(set=None):
-  lpath = '/Users/mac/Projects/data/scr/masks/right_masks.txt'
-  f = open(lpath)
+  f = open(RMPATH)
   paths = []
   for line in f:
     if set=='jsrt140':
