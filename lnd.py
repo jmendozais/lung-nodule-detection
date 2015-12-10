@@ -258,7 +258,7 @@ def protocol_froc_fl():
 	tholds = np.hstack((np.arange(0, 0.02, 0.004), np.arange(0.02, 0.1, 0.02), np.arange(0.1, 0.5, 0.1)))
 	op_points=[]
 
-	#RBM params
+	#RBM params		
 	ncs = [128, 254, 512]
 	lrs = [0.1, 0.01, 0.001]
 
