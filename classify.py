@@ -206,15 +206,19 @@ def train(X, Y, clf, scaler, selector):
 	te = folds[0][1]
 
 	eval_scaler = clone(scaler)
-	eval_selector = clone(selector)
+	if selector != None:
+		eval_selector = clone(selector)
 	eval_clf = clone(clf)
 
 	Xt_tr = eval_scaler.fit_transform(X[tr])
-	Xt_tr = eval_selector.fit_transform(Xt_tr, Y[tr])
+	if selector != None:
+		Xt_tr = eval_selector.fit_transform(Xt_tr, Y[tr])
 	eval_clf.fit(Xt_tr, Y[tr])
 
 	Xt_te = eval_scaler.transform(X[te])
-	Xt_te = eval_selector.transform(Xt_te)
+	if selector != None:
+		Xt_te = eval_selector.transform(Xt_te)
+
 	pred = eval_clf.predict(Xt_te)
 
 	print "Evaluate performance on patches"
@@ -222,8 +226,10 @@ def train(X, Y, clf, scaler, selector):
 	print classification_report(Y[te].astype(int), pred.astype(int))
 
 	Xt = scaler.fit_transform(X)
-	Xt = selector.fit_transform(Xt, Y)
+	if selector != None:
+		Xt = selector.fit_transform(Xt, Y)
 	clf.fit(Xt, Y)
+
 	return clf, scaler, selector
 
 if __name__ == '__main__':

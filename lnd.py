@@ -9,6 +9,7 @@ from data import DataProvider
 import model
 import eval
 import util
+import sys
 
 import jsrt
 
@@ -138,11 +139,11 @@ def protocol_two_stages():
 	print "Final: sens_mean {}, sens_std {}, fppi_mean {}, fppi_stds_mean {}".format(sens.mean(), sens.std(), fppi_mean.mean(), fppi_std.mean())
 
 
-def protocol_froc():
+def protocol_froc(_model):
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
 	left_masks = jsrt.left_lung(set='jsrt140')
 	right_masks = jsrt.right_lung(set='jsrt140')
-	size = len(paths)
+	size = 10#len(paths)
 
 	# blobs detection
 	print "Detecting blobs ..."
@@ -165,66 +166,86 @@ def protocol_froc():
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0.0, 0.1, 0.005)))
-	op_points=[]
-	for thold in tholds:
-		fold = 0
-		sens = []
-		fppi_mean = []
-		fppi_std = []
-		for tr_idx, te_idx in skf:
+	tholds = np.hstack((np.arange(0.0, 0.02, 0.002), np.arange(0.02, 0.06, 0.005), np.arange(0.06, 0.36, 0.02), np.arange(0.36, 0.66, 0.1)))
+	
+	ops = []
+	sen_set = []
+	fppim_set = []
+	fppis_set = []
 
-			fold += 1
-			print "Fold {}".format(fold),
+	fold = 0
+	for tr_idx, te_idx in skf:	
+		print "Fold {}".format(fold + 1),
+		sys.stdout.flush()
 
-			model.train_with_feature_set(feats[tr_idx], pred_blobs[tr_idx], blobs[tr_idx])
-			blobs_te_pred = model.predict_from_feature_set(feats[te_idx], pred_blobs[te_idx], thold)
+		paths_te = paths[te_idx]
+		blobs_te = []
 
-			paths_te = paths[te_idx]
-			for i in range(len(blobs_te_pred)):
-				util.print_detection(paths_te[i], blobs_te_pred[i])
+		for bl in blobs[te_idx]:
+			blobs_te.append([bl])
+		blobs_te = np.array(blobs_te)
 
-			blobs_te = []
-			for bl in blobs[te_idx]:
-				blobs_te.append([bl])
-			blobs_te = np.array(blobs_te)
+		_model.train_with_feature_set(feats[tr_idx], pred_blobs[tr_idx], blobs[tr_idx])
+		blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set(feats[te_idx], pred_blobs[te_idx])
+		
+		'''
+		for i in range(len(blobs_te_pred)):
+			util.print_detection(paths_te[i], blobs_te_pred[i])
+		'''
 
-			s, fm, fs = eval.evaluate(blobs_te, blobs_te_pred, paths[te_idx])
+		sen_set.append([])
+		fppim_set.append([])
+		fppis_set.append([])
+		for thold in tholds:
+			fblobs_te_pred, fprobs_te_pred = _model.filter_by_proba(blobs_te_pred, probs_te_pred, thold)
 
-			print ": sens {}, fppi mean {}, fppi std {}".format(s, fm, fs)
+			s, fm, fs = eval.evaluate(blobs_te, fblobs_te_pred, paths_te)
+
+			print "thold {}, sens {}, fppi mean {}, fppi std {}".format(thold, s, fm, fs)
 			sys.stdout.flush()
 
-			sens.append(s)
-			fppi_mean.append(fm)
-			fppi_std.append(fs)
+			sys.stdout.flush()
+			sen_set[-1].append(s)
+			fppim_set[-1].append(fm)
+			fppis_set[-1].append(fs)
 
-		sens = np.array(sens)
-		fppi_mean = np.array(fppi_mean)
-		fppi_std = np.array(fppi_std)
+		fold += 1
 
-		print "THOLD {}: sens_mean {}, sens_std {}, fppi_mean {}, fppi_stds_mean {}".format(thold, sens.mean(), sens.std(), fppi_mean.mean(), fppi_std.mean())
-		print ""
-		sys.stdout.flush()
-		op_points.append([sens.mean(), fppi_mean.mean()])
+	sen_set = np.array(sen_set).T
+	fppim_set = np.array(fppim_set).T
+	fppis_set = np.array(fppis_set).T
+
+	for i in range(fold):
+		ops.append([sen_set[i].mean(), fppim_set[i].mean()])
+
+
 	x1 = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
 	y1 = [0.0, 0.57, 0.72, 0.78, 0.79, 0.81, 0.82, 0.85, 0.86, 0.895, 0.93]
 
 	x2 = []
 	y2 = []
-	for i in range(len(op_points)):
-		if op_points[i][1] <= 10:
-			x2.append(op_points[i][1])
-			y2.append(op_points[i][0])
+	for i in range(len(ops)):
+		if ops[i][1] <= 10:
+			x2.append(ops[i][1])
+			y2.append(ops[i][0])
 
 	plt.plot(x1, y1, 'yo-')
-	plt.plot(x2, y2, 'bo-')
+	plt.plot(x2, y2, 'bo-')	
 	plt.title('FROC')
 	plt.ylabel('Sensitivity')
 	plt.xlabel('Average FPPI')
 	plt.savefig('froc_{}.jpg'.format(time.clock()))
-	return np.array(op_points)
+	return np.array(ops)
 
 
 
 if __name__=="__main__":
-	protocol_froc()
+	model_type = sys.argv[1]
+	_model = None
+
+	if model_type == 'hardie':
+		_model = model.BaselineModel("data/hardie")
+	elif model_type == 'hog':
+		_model = model.HogModel("data/hog")
+
+	protocol_froc(_model)

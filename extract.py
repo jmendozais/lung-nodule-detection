@@ -5,6 +5,7 @@ from time import *
 
 import cv2
 from scipy.stats import skew, kurtosis
+import skimage.feature as feature
 import util
 
 _ge = ['max_diam', 'x_fract', 'dist_perim']
@@ -295,7 +296,6 @@ def hardie(norm, lce, wmci, lung_mask, blobs, masks):
 	# Feature vectors
 	feature_vectors = []
 	for i in range(len(blobs)):
-		'''
 		nf = hardie_blob_selected(norm, blobs[i], masks[i], xrange, yrange, dt_img, mag_norm, dx_norm, dy_norm, adt_geom, norm_inte, norm_grad)
 		lf = hardie_blob_selected(lce, blobs[i], masks[i], xrange, yrange, dt_img, mag_lce, dx_lce, dy_lce, [], lce_inte, lce_grad)
 		wf = hardie_blob_selected(wmci, blobs[i], masks[i], xrange, yrange, dt_img, mag_wmci, dx_wmci, dy_wmci, [], wmci_inte, wmci_grad)
@@ -303,15 +303,30 @@ def hardie(norm, lce, wmci, lung_mask, blobs, masks):
 		nf = hardie_blob_selected(norm, blobs[i], masks[i], xrange, yrange, dt_img, mag_norm, dx_norm, dy_norm, _ge, _in, _gr)
 		lf = hardie_blob_selected(lce, blobs[i], masks[i], xrange, yrange, dt_img, mag_lce, dx_lce, dy_lce, _ge, _in, _gr)
 		wf = hardie_blob_selected(wmci, blobs[i], masks[i], xrange, yrange, dt_img, mag_wmci, dx_wmci, dy_wmci, _ge, _in, _gr)
-		
+		'''
 		#feats = np.hstack((nf,))
 		feats = np.hstack((nf, lf, wf))
 		feature_vectors.append(np.array(feats))
 
 	return np.array(feature_vectors)
 
-# Feature learning
-#def descomposition(norm, lce, wmci, lung_mask, blobs, masks):
+def hog(norm, lce, wmci, lung_mask, blobs, masks):
+	feature_vectors = []
+	for i in range(len(blobs)):
+		x, y, r = blobs[i]
+		shift = 0 
+		side = 2 * shift + 2 * r + 1
+		dsize = (32, 32)
 
+		tl = (x - shift - r, y - shift - r)
+		ntl = (max(0, tl[0]), max(0, tl[1]))
+		br = (x + shift + r + 1, y + shift + r + 1)
+		nbr = (min(mag.shape[0], br[0]), min(mag.shape[1], br[1]))
 
+		lce_roi = lce[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+		lce_roi = cv2.resize(lce_roi, dsize, interpolation=cv2.INTER_CUBIC)
 
+		feats, _ = feature.hog(lce_roi, orientations=9, pixels_per_cell=(8, 8), cells_per_block=(3, 3), visualise=False, normalise=False)
+		feature_vectors.append(np.array(feats))
+
+	return np.array(feature_vectors)
