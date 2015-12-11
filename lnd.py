@@ -166,7 +166,7 @@ def protocol_froc(_model):
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0.0, 0.02, 0.002), np.arange(0.02, 0.06, 0.005), np.arange(0.06, 0.36, 0.02), np.arange(0.36, 0.66, 0.1)))
+	tholds = np.hstack((np.arange(0.0, 0.02, 0.001), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.36, 0.01), np.arange(0.36, 0.66, 0.05)))
 	
 	ops = []
 	sen_set = []
@@ -215,9 +215,9 @@ def protocol_froc(_model):
 	fppim_set = np.array(fppim_set).T
 	fppis_set = np.array(fppis_set).T
 
-	for i in range(fold):
+	for i in range(len(tholds)):
+		print "thold {}: sen mean {}, fppi mean {}, fppi std {}".format(tholds[i], sen_set[i].mean(), fppim_set[i].mean(), fppim_set[i].std())
 		ops.append([sen_set[i].mean(), fppim_set[i].mean()])
-
 
 	x1 = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
 	y1 = [0.0, 0.57, 0.72, 0.78, 0.79, 0.81, 0.82, 0.85, 0.86, 0.895, 0.93]
@@ -230,14 +230,16 @@ def protocol_froc(_model):
 			y2.append(ops[i][0])
 
 	plt.plot(x1, y1, 'yo-')
-	plt.plot(x2, y2, 'bo-')	
+	plt.plot(x2, y2, 'bo-')
 	plt.title('FROC')
 	plt.ylabel('Sensitivity')
 	plt.xlabel('Average FPPI')
-	plt.savefig('froc_{}.jpg'.format(time.clock()))
+
+	name='froc_{}'.format(nc, lr, time.clock())
+	np.savetxt('{}.txt'.format(name), [x2, y2])
+	plt.savefig('{}.jpg'.format(name))
+
 	return np.array(ops)
-
-
 
 if __name__=="__main__":
 	model_type = sys.argv[1]
@@ -245,7 +247,7 @@ if __name__=="__main__":
 
 	if model_type == 'hardie':
 		_model = model.BaselineModel("data/hardie")
-	elif model_type == 'hog':
+	elif model_type == 'hog':	
 		_model = model.HogModel("data/hog")
 
 	protocol_froc(_model)
