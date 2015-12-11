@@ -3,6 +3,8 @@ import time
 
 import numpy as np
 from sklearn.cross_validation import StratifiedKFold
+from sklearn import svm
+
 import matplotlib.pyplot as plt
 
 from data import DataProvider
@@ -143,7 +145,7 @@ def protocol_froc(_model):
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
 	left_masks = jsrt.left_lung(set='jsrt140')
 	right_masks = jsrt.right_lung(set='jsrt140')
-	size = len(paths)
+	size = 10#len(paths)
 
 	# blobs detection
 	print "Detecting blobs ..."
@@ -156,7 +158,7 @@ def protocol_froc(_model):
 	# feature extraction
 	print "Extracting blobs & features ..."
 	data = DataProvider(paths, left_masks, right_masks)
-	feats, pred_blobs = model.extract_feature_set(data)
+	feats, pred_blobs = _model.extract_feature_set(data)
 
 	av_cpi = 0
 	for tmp in pred_blobs:
@@ -166,7 +168,7 @@ def protocol_froc(_model):
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0.0, 0.02, 0.001), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.36, 0.01), np.arange(0.36, 0.66, 0.05)))
+	tholds = np.hstack((np.arange(0.0, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
 	
 	ops = []
 	sen_set = []
@@ -235,19 +237,22 @@ def protocol_froc(_model):
 	plt.ylabel('Sensitivity')
 	plt.xlabel('Average FPPI')
 
-	name='froc_{}'.format(nc, lr, time.clock())
-	np.savetxt('{}.txt'.format(name), [x2, y2])
-	plt.savefig('{}.jpg'.format(name))
+	name='{}_{}'.format(_model.name, time.clock())
+	np.savetxt('{}_ops.txt'.format(name), [x2, y2])
+	plt.savefig('{}_froc.jpg'.format(name))
 
 	return np.array(ops)
 
-if __name__=="__main__":
+if __name__=="__main__":	
 	model_type = sys.argv[1]
-	_model = None
+	_model = model.BaselineModel("data/default")
 
 	if model_type == 'hardie':
-		_model = model.BaselineModel("data/hardie")
+		_model.extractor = model.HardieExtractor()
+		_model.name = 'data/hardie'
 	elif model_type == 'hog':	
-		_model = model.HogModel("data/hog")
+		_model.extractor = model.HogExtractor()
+		_model.clf = svm.SVC(probability=True)
+		_model.name = 'data/hog'
 
 	protocol_froc(_model)

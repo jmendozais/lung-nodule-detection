@@ -195,11 +195,13 @@ class BaselineModel:
 		self.scaler = preprocessing.StandardScaler()
 		self.selector = None
 		self.transform = None
-
+		self.extractor = HardieExtractor()
 		self.feature_set = None
 
 	def load(self, name):
 		# Model
+		if path.isfile('{}_extractor.pkl'.format(name)):
+			self.extractor = joblib.load('{}_extractor.pkl'.format(name))
 		if path.isfile('{}_clf.pkl'.format(name)):
 			self.clf = joblib.load('{}_clf.pkl'.format(name))
 		if path.isfile('{}_scaler.pkl'.format(name)):
@@ -214,6 +216,8 @@ class BaselineModel:
 			self.feature_set = np.load('{}_fs.npy'.format(name))
 
 	def save(self, name):
+		if self.extractor != None:
+			joblib.dump(self.extractor, '{}_extractor.pkl'.format(name))
 		if self.clf != None:
 			joblib.dump(self.clf, '{}_clf.pkl'.format(name))
 		if self.scaler != None:
@@ -238,8 +242,7 @@ class BaselineModel:
 		return blobs, nod_masks
 
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-
-		return hardie(norm, lce, wmci, lung_mask, blobs, nod_masks)
+		return self.extractor.extract(norm, lce, wmci, lung_mask, blobs, nod_masks)
 
 	def extract_feature_set(self, data):
 		feature_set = []
@@ -438,9 +441,13 @@ class BaselineModel:
 
 		return np.array(data_blobs), np.array(data_probs)
 
-class HogModel(BaselineModel):
-	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
 
+class HardieExtractor:
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		return hardie(norm, lce, wmci, lung_mask, blobs, nod_masks)
+
+class HogExtractor:
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
 		return hog(norm, lce, wmci, lung_mask, blobs, nod_masks)
 
 

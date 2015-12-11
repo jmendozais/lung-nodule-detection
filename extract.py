@@ -321,12 +321,14 @@ def hog(norm, lce, wmci, lung_mask, blobs, masks):
 		tl = (x - shift - r, y - shift - r)
 		ntl = (max(0, tl[0]), max(0, tl[1]))
 		br = (x + shift + r + 1, y + shift + r + 1)
-		nbr = (min(mag.shape[0], br[0]), min(mag.shape[1], br[1]))
+		nbr = (min(lce.shape[0], br[0]), min(lce.shape[1], br[1]))
 
 		lce_roi = lce[ntl[0]:nbr[0], ntl[1]:nbr[1]]
 		lce_roi = cv2.resize(lce_roi, dsize, interpolation=cv2.INTER_CUBIC)
 
-		feats, _ = feature.hog(lce_roi, orientations=9, pixels_per_cell=(8, 8), cells_per_block=(3, 3), visualise=False, normalise=False)
+		#util.imshow('hog lce roi', lce_roi)
+
+		feats = feature.hog(lce_roi, orientations=9, pixels_per_cell=(8, 8), cells_per_block=(2, 2), visualise=False, normalise=False)
 		feature_vectors.append(np.array(feats))
 
 	return np.array(feature_vectors)
