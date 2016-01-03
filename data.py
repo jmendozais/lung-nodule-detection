@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+
 class DataProvider:
 	def __init__(self, img_paths, lm_paths, rm_paths):
 		self.img_paths = img_paths
@@ -7,7 +8,7 @@ class DataProvider:
 		self.lr_paths = rm_paths
 
 	def __len__(self):
-		return 10#len(self.img_paths)
+		return 40#len(self.img_paths)
 
 	def get(self, i):
 		img = np.load(self.img_paths[i]).astype(np.float)

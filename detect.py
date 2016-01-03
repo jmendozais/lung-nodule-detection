@@ -156,7 +156,7 @@ def wci(img, filter):
 	ay = cv2.filter2D(ny, -1, fy)
 	return ax + ay
 
-def wmci(img, mask):
+def wmci(img, mask, threshold=0.5):
 	filters = hardie_filters()
 	min_distance = 7
 
@@ -168,12 +168,37 @@ def wmci(img, mask):
 	coords = peak_local_max(ans, min_distance)
 	blobs = []
 	for coord in coords:
-		if ans[coord[0], coord[1]] >= 0.5:
+		if ans[coord[0], coord[1]] >= threshold:
 			blobs.append((coord[0], coord[1], 25))
 
 	blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
 	#show_blobs("wci", ans, blobs)
 
 	return blobs, ans
+
+def wmci_proba(img, mask, threshold=0.5):
+	filters = hardie_filters()
+	min_distance = 7
+
+	ans = wci(img, filters[0])
+
+	for i in range(1, len(filters)):
+		tmp = wci(img, filters[i])
+		ans = np.maximum(tmp, ans)
+
+	coords = peak_local_max(ans, min_distance)
+	blobs = []
+	proba = []
+
+	for coord in coords:
+		if ans[coord[0], coord[1]] >= threshold:
+			blobs.append((coord[0], coord[1], 25))
+
+	blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
+
+	for blob in blobs:
+		proba.append(ans[blob[0], blob[1]])
+
+	return blobs, ans, np.array(proba)
 
 

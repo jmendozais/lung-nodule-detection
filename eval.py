@@ -54,7 +54,6 @@ def _load_results(results_path, factor=1.0):
 	for line in fin:
 		toks = line.split(' ')
 		name = toks[0]
-		print name
 
 		if len(toks) == 1:
 			num_rois = 0
@@ -81,7 +80,7 @@ def _get_paths(results_path):
 
 	return paths
 
-def evaluate(real, predicted, paths = None):
+def evaluate(real, predicted, data=None, sample=False):
 	assert len(real) == len(predicted)
 	num_imgs = len(real)
 	sensitivity = 0
@@ -93,11 +92,18 @@ def evaluate(real, predicted, paths = None):
 	MAX_DIST = 35.7142 # 25 mm
 
 	for i in range(num_imgs):
+		if sample: 
+			img, mask = data.get(i)
 		found = False
+		found_blob = None
 		overlap = -1e10
 		for j in range(len(real[i])):
 			if real[i][j][0] == -1:
+				if sample:
+					for k in range(len(predicted[i])):
+						util.save_blob('data/fp/{}_{}_{}.jpg'.format(i, k, data.img_paths[i].split('/')[-1]), img, predicted[i][k])
 				continue
+
 			p += 1
 			for k in range(len(predicted[i])):
 				#overlap = _iou_circle(real[i][j], predicted[i][k])
@@ -106,20 +112,30 @@ def evaluate(real, predicted, paths = None):
 				if dist < MAX_DIST * MAX_DIST:
 					iou_pos.append(overlap)	
 					found = True
+					found_blob = predicted[i][k]
 					break
 			if found:
 				break
 
 		fppi.append(len(predicted[i]))
 
+		#print "real blob {}".format(real[i][0])
+
 		if found:
 			tp += 1
+			if sample:
+				util.save_blob('data/tp/{}_{}.jpg'.format(i, data.img_paths[i].split('/')[-1]), img, found_blob)
+		else:
+			if sample:
+				util.save_blob('data/fn/{}_{}.jpg'.format(i, data.img_paths[i].split('/')[-1]), img, real[i][0])
+				for k in range(len(predicted[i])):
+					util.save_blob('data/fp/{}_{}_{}.jpg'.format(i, k, data.img_paths[i].split('/')[-1]), img, predicted[i][k])
 		
-		print "found {}, overlap {}".format(found, overlap)
+		#print "found {}, overlap {}".format(found, overlap)
 		
 		#if paths != None:
 		#	util.show_blobs_real_predicted(paths[i], [real[i]], predicted[i])
-		
+
 	fppi = np.array(fppi)
 	iou = np.array(iou)
 	iou_pos = np.array(iou_pos)

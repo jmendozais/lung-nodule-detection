@@ -22,14 +22,18 @@ _gr = ['mag_mean_in', 'mag_std_in', 'rd_mean_in',
 
 def finite_derivatives(img):
 	size = img.shape
-	dx = img.copy()
-	dy = img.copy()
 
-	for i, j in product(range(1, size[0] - 1), range(1, size[1] - 1)):
-		dy[i, j] = (img[i, j + 1] - img[i, j - 1]) / 2.0
-		dx[i, j] = (img[i + 1, j] - img[i - 1, j]) / 2.0
+	dx = np.empty(img.shape, dtype=np.double)
+	dx[0, :] = 0
+	dx[-1, :] = 0
+	dx[1:-1, :] = (img[2:, :] - img[:-2, :]) / 2.0
+
+	dy = np.empty(img.shape, dtype=np.double)
+	dy[:, 0] = 0
+	dy[:, -1] = 0
+	dy[:, 1:-1] = (img[:, 2:] - img[:, :-2]) / 2.0
+
 	mag = (dx ** 2 + dy ** 2) ** 0.5
-
 	return mag, dx, dy
 
 def _mean_std_maxin_with_extended_mask(img, blob, mask):
@@ -310,6 +314,70 @@ def hardie(norm, lce, wmci, lung_mask, blobs, masks):
 
 	return np.array(feature_vectors)
 
+def _hog(img, mask, orientations=9, cell=(8,8)):
+	mag, dx, dy = finite_derivatives(img)
+	phase = np.arctan2(dy, dx)
+	phase = phase.astype(np.float64)	
+	#phase = np.abs(phase)
+
+	size = img.shape
+	size = (size[0] / cell[0], size[1] / cell[1])
+	w = mask.astype(np.float64)
+	w *= mag
+
+	if np.sum(w) > util.EPS:
+		w /= np.sum(w)
+
+	ans = np.array([])
+	for i, j in product(range(size[0]), range(size[1])):
+		tl = (i * cell[0], j * cell[1])
+		br = ((i + 1) * cell[0], (j + 1) * cell[1])
+		roi = phase[tl[0]:br[0], tl[1]:br[1]]
+		wroi = w[tl[0]:br[0], tl[1]:br[1]]
+		hist, _ = np.histogram(roi, bins=orientations, range=(-np.pi, np.pi), weights=wroi, density=True)
+		#hist /= (np.sum(hist) + util.EPS)
+
+		if np.sum(wroi) < util.EPS:
+			hist = np.zeros(hist.shape, dtype=hist.dtype)
+		
+		ans = np.hstack((ans, hist))
+	ans /= (np.sum(ans) + util.EPS)
+	return ans
+
+import matplotlib.pyplot as plt
+def hog_inner(norm, lce, wmci, lung_mask, blobs, masks):
+	feature_vectors = []
+	for i in range(len(blobs)):
+		x, y, r = blobs[i]
+		shift = 0 
+		side = 2 * shift + 2 * r + 1
+		dsize = (32, 32)
+
+		tl = (x - shift - r, y - shift - r)
+		ntl = (max(0, tl[0]), max(0, tl[1]))
+		br = (x + shift + r + 1, y + shift + r + 1)
+		nbr = (min(lce.shape[0], br[0]), min(lce.shape[1], br[1]))
+
+		lce_roi = lce[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+		lce_roi = cv2.resize(lce_roi, dsize, interpolation=cv2.INTER_CUBIC)
+		mask = cv2.resize(masks[i], dsize, interpolation=cv2.INTER_CUBIC)
+		#mask = np.ones(mask.shape, dtype=mask.dtype)
+		
+		feats = _hog(lce_roi, mask, orientations=9, cell=(32, 32))
+		feats_outer = _hog(lce_roi, 1-mask, orientations=9, cell=(32, 32))
+		feats = np.hstack((feats, feats_outer))
+		feats /= 2
+		'''
+		print len(feats), max(feats), min(feats), np.mean(feats), np.sum(feats)
+		plt.bar(range(len(feats)), feats)
+		plt.show()
+		util.imshow('roi', lce_roi)
+		'''
+		feature_vectors.append(np.array(feats))
+
+	return np.array(feature_vectors)
+
+
 def hog(norm, lce, wmci, lung_mask, blobs, masks):
 	feature_vectors = []
 	for i in range(len(blobs)):
@@ -328,7 +396,98 @@ def hog(norm, lce, wmci, lung_mask, blobs, masks):
 
 		#util.imshow('hog lce roi', lce_roi)
 
-		feats = feature.hog(lce_roi, orientations=9, pixels_per_cell=(8, 8), cells_per_block=(2, 2), visualise=False, normalise=False)
+		feats = feature.hog(lce_roi, orientations=9, pixels_per_cell=(32, 32), cells_per_block=(1, 1), visualise=False, normalise=False)
+		'''
+		print feats
+		print len(feats), max(feats), min(feats), np.mean(feats), np.sum(feats)
+		plt.bar(range(len(feats)), feats)
+		plt.show()
+		util.imshow('roi', lce_roi)
+		'''
 		feature_vectors.append(np.array(feats))
 
 	return np.array(feature_vectors)
+
+def lbpio(img, lung_mask, blobs, masks):
+	P = 9
+	R = 1
+	feature_vectors = []
+	for i in range(len(blobs)):
+		x, y, r = blobs[i]
+		shift = 0 
+		side = 2 * shift + 2 * r + 1
+
+		tl = (x - shift - r, y - shift - r)
+		ntl = (max(0, tl[0]), max(0, tl[1]))
+		br = (x + shift + r + 1, y + shift + r + 1)
+		nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+		img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+		#util.imshow('hog lce roi', lce_roi)
+		lbp = feature.local_binary_pattern(img_roi, P, R, method='uniform')
+
+		mask = masks[i].astype(np.float64)
+		imask = 1 - mask
+
+		#print "mask shape {} {}".format(mask.shape, mask.ravel().shape)
+		#print "roi shape {} {}".format(lbp.shape, lbp.ravel().shape)
+		bins = lbp.max() + 1
+		hi, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=mask.ravel(), density=True)
+		ho, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=imask.ravel(), density=True)
+		
+		#print "hi shape {} sum {}".format(hi.shape, util.EPS)
+		hi /= (np.sum(hi) + util.EPS)
+		ho /= (np.sum(hi) + util.EPS)
+		hist = np.hstack((hi, ho))
+		hist /= (np.sum(hist) + util.EPS)
+
+		feature_vectors.append(np.array(hist))
+
+	return np.array(feature_vectors)
+
+class HardieExtractor:
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		return hardie(norm, lce, wmci, lung_mask, blobs, nod_masks)
+
+class HogExtractor:
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		return hog(norm, lce, wmci, lung_mask, blobs, nod_masks)
+
+class HogInnerExtractor:
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		return hog_inner(norm, lce, wmci, lung_mask, blobs, nod_masks)
+
+class LBPExtractor:
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		fv_lce = lbpio(lce, lung_mask, blobs, nod_masks)
+		fv_wmci = lbpio(wmci, lung_mask, blobs, nod_masks)
+		hist = np.hstack((fv_lce, fv_wmci))
+		hist /= 2.0
+
+		return hist
+
+class AllExtractor:
+	def __init__(self):
+		self.extractors = []
+		self.extractors.append(LBPExtractor())
+		self.extractors.append(HogInnerExtractor())
+		self.extractors.append(HardieExtractor())
+
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		fv_set = []
+
+		for extractor in self.extractors:
+			fv_set.append(extractor.extract(norm, lce, wmci, lung_mask, blobs, nod_masks))
+		fv = np.hstack(fv_set)
+		
+		return fv
+
+# TODO:
+class ZernikeExtractor:
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		return (norm, lce, wmci, lung_mask, blobs, nod_masks)
+
+class CENTRISTExtractor:
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		return (norm, lce, wmci, lung_mask, blobs, nod_masks)
+

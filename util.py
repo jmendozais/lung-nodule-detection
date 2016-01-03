@@ -4,6 +4,9 @@ import numpy as np
 import numpy.linalg as la
 from skimage import draw
 import cv2
+import matplotlib.pyplot as plt
+import time
+import csv
 
 # Data utils
 EPS = 1e-9
@@ -59,9 +62,17 @@ def imshow(windowName,  _img):
 	b = np.max(img)
 	img = (img - a) / (b - a + EPS);
 	print np.min(img), np.max(img)
-
+  
 	cv2.imshow(windowName, img)
 	cv2.waitKey()
+
+def imwrite(fname, _img):
+  img = np.array(_img).astype(np.float64)
+  a = np.min(img)
+  b = np.max(img)
+  img = (img - a) / (b - a + EPS);
+
+  cv2.imwrite(fname, 255 * img)
 
 def label_blob(img, blob, color=(255, 0, 0), margin=0):
 	if len(img.shape) == 2:
@@ -141,3 +152,56 @@ def print_list(paths, blobs):
   blob_dim = len(blobs[0][0])
   for i in range(size):
     print_detection(paths[i], blobs[i])
+
+def save_blob(path, img, blob):
+  x, y, r = blob
+  shift = 0
+  side = 2 * shift + 2 * r + 1
+  dsize = (128, 128)
+
+  tl = (x - shift - r, y - shift - r)
+  ntl = (max(0, tl[0]), max(0, tl[1]))
+  br = (x + shift + r + 1, y + shift + r + 1)
+  nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+  img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+  img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
+
+  imwrite(path, img_roi)
+
+def show_blob(path, img, blob):
+  x, y, r = blob
+  shift = 0
+  side = 2 * shift + 2 * r + 1
+  dsize = (128, 128)
+
+  tl = (x - shift - r, y - shift - r)
+  ntl = (max(0, tl[0]), max(0, tl[1]))
+  br = (x + shift + r + 1, y + shift + r + 1)
+  nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+  img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+  img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
+
+  imshow(path, img_roi)
+
+def save_froc(op_set, name, legend=None):
+  op_set = np.array(op_set)
+  for i in range(len(op_set)):
+    ops = np.array(op_set[i]).T
+    plt.plot(ops[0], ops[1], 'x-')
+
+  plt.title(name)
+  plt.ylabel('Sensitivity')
+  plt.xlabel('Average FPPI')
+  if legend != None:
+    assert len(legend) == len(op_set)
+    plt.legend(legend, loc=4)
+
+  name='{}_{}'.format(name, time.clock())
+  plt.savefig('{}_froc.jpg'.format(name))
+
+  file = open('{}_ops.txt'.format(name), "wb")
+  writer = csv.writer(file, delimiter=",")
+  writer.writerows(op_set)
+

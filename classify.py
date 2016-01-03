@@ -11,6 +11,7 @@ from sklearn import preprocessing
 from sklearn.metrics import confusion_matrix
 from sklearn.base import clone
 
+import matplotlib.pyplot as plt
 
 import model
 import util
@@ -71,7 +72,7 @@ def create_uniform_trset(out_file):
 		print "feats: " + str(np.array(X[-1]))
 	np.save(out_file, [X, Y])
 
-
+'''
 def create_training_set(data, y_blobs):
 	MAX_DIST = 35
 
@@ -138,7 +139,7 @@ def create_training_set(data, y_blobs):
 	X = np.array(X)
 	Y = np.array(Y)
 	return X, Y
-
+'''
 def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs):
 	MAX_DIST = 35
 
@@ -224,10 +225,11 @@ def train(X, Y, clf, scaler, selector):
 	print "Evaluate performance on patches"
 	print "classification report: "	
 	print classification_report(Y[te].astype(int), pred.astype(int))
-
+	
 	Xt = scaler.fit_transform(X)
 	if selector != None:
 		Xt = selector.fit_transform(Xt, Y)
+
 	clf.fit(Xt, Y)
 
 	return clf, scaler, selector

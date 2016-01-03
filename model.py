@@ -19,7 +19,7 @@ from util import *
 import jsrt
 
 #TODO: up classifier
-
+'''
 def input(img_path, ll_path, lr_path):
 	img = np.load(img_path)
 	img = img.astype(np.float)
@@ -83,11 +83,11 @@ def _classify(blobs, feature_vectors, thold=0.012):
 
 	return blobs, probs[probs>thold]
 
-''' 	
+
 	Input: images & masks (data provider), blobs
 	Returns: classifier, scaler
-'''
-def train(data, blobs):
+
+def deprecated_train(data, blobs):
 	X, Y = classify.create_training_set(data, blobs)
 	#clf = svm.SVC()
 	clf = LDA()
@@ -101,7 +101,7 @@ def train(data, blobs):
 
 	return clf, scaler
 
-def train_with_feature_set(feature_set, pred_blobs, real_blobs):
+def deprecated_train_with_feature_set(feature_set, pred_blobs, real_blobs):
 	X, Y = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
 
 	#scaler = preprocessing.MinMaxScaler()
@@ -117,10 +117,10 @@ def train_with_feature_set(feature_set, pred_blobs, real_blobs):
 
 	return clf, scaler, selector
 
-'''
+
 	Input: data provider
 	Returns: blobs
-'''
+
 def predict(data):
 	data_blobs = []
 	for i in range(len(data)):
@@ -185,7 +185,7 @@ def pipeline(img_path, ll_path, lr_path):
 	blobs = predict(img, lung_mask)
 
 	return img, blobs
-
+'''
 # Baseline Model
 class BaselineModel:
 	def __init__(self, name='default'):
@@ -230,11 +230,17 @@ class BaselineModel:
 		if self.feature_set != None:
 			np.save(self.feature_set, '{}_fs.npy'.format(name))
 
-	def detect_blobs(self, img, lung_mask):
+	def detect_blobs(self, img, lung_mask, threshold=0.5):
 		sampled, lce, norm = preprocess(img, lung_mask)
-		blobs, ci = wmci(lce, lung_mask)
+		blobs, ci = wmci(lce, lung_mask, threshold)
 
 		return blobs, norm, lce, ci
+
+	def detect_blobs_proba(self, img, lung_mask, threshold=0.5):
+		sampled, lce, norm = preprocess(img, lung_mask)
+		blobs, ci, proba = wmci_proba(lce, lung_mask, threshold)
+
+		return blobs, norm, lce, ci, proba
 
 	def segment(self, img, blobs):
 		blobs, nod_masks = adaptive_distance_thold(img, blobs)
@@ -262,6 +268,26 @@ class BaselineModel:
 		print ']'
 		return np.array(feature_set), np.array(blob_set)
 
+	def extract_feature_set_proba(self, data, detecting_proba=0.3):
+		feature_set = []
+		blob_set = []
+		proba_set = []
+		print '[',
+		for i in range(len(data)):
+			if i % (len(data)/10) == 0:
+				print ".",
+				sys.stdout.flush()
+
+			img, lung_mask = data.get(i)
+			blobs, norm, lce, ci, proba = self.detect_blobs_proba(img, lung_mask, detecting_proba)
+			blobs, nod_masks = self.segment(lce, blobs)
+			feats = self.extract(norm, lce, ci, lung_mask, blobs, nod_masks)
+			feature_set.append(feats)
+			blob_set.append(blobs)
+			proba_set.append(proba)
+		print ']'
+		return np.array(feature_set), np.array(blob_set), proba_set
+
 	def predict_proba_one(self, blobs, feature_vectors):
 		self.load(self.name)
 
@@ -285,7 +311,7 @@ class BaselineModel:
 	''' 	
 		Input: images & masks (data provider), blobs
 		Returns: classifier, scaler
-	'''
+
 	def train(self, data, blobs):
 		X, Y = classify.create_training_set(data, blobs)
 		
@@ -294,16 +320,16 @@ class BaselineModel:
 		self.save(self.name)
 
 		return self.clf, self.scaler
+	'''
 
 	def train_with_feature_set(self, feature_set, pred_blobs, real_blobs):
 		X, Y = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
 
 		#scaler = preprocessing.MinMaxScaler()
 		scaler = preprocessing.StandardScaler()
-		selector = RFE(estimator=LDA(), n_features_to_select=len(X[0]), step=1)
+		selector = RFE(estimator=self.clf, n_features_to_select=len(X[0]), step=1)
 		#clf = svm.SVC()
 		clf, scaler, selector = classify.train(X, Y, self.clf, self.scaler, self.selector)
-
 		self.save(self.name)
 
 		return clf, scaler, selector
@@ -441,14 +467,6 @@ class BaselineModel:
 
 		return np.array(data_blobs), np.array(data_probs)
 
-
-class HardieExtractor:
-	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-		return hardie(norm, lce, wmci, lung_mask, blobs, nod_masks)
-
-class HogExtractor:
-	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-		return hog(norm, lce, wmci, lung_mask, blobs, nod_masks)
 
 
 
