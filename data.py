@@ -8,7 +8,7 @@ class DataProvider:
 		self.lr_paths = rm_paths
 
 	def __len__(self):
-		return 40#len(self.img_paths)
+		return len(self.img_paths)
 
 	def get(self, i):
 		img = np.load(self.img_paths[i]).astype(np.float)

@@ -214,6 +214,7 @@ def train(X, Y, clf, scaler, selector):
 	Xt_tr = eval_scaler.fit_transform(X[tr])
 	if selector != None:
 		Xt_tr = eval_selector.fit_transform(Xt_tr, Y[tr])
+
 	eval_clf.fit(Xt_tr, Y[tr])
 
 	Xt_te = eval_scaler.transform(X[te])
@@ -228,10 +229,14 @@ def train(X, Y, clf, scaler, selector):
 	
 	Xt = scaler.fit_transform(X)
 	if selector != None:
+		print "selecting ..."
+		print "before n_feats = {}".format(len(Xt[0]))
 		Xt = selector.fit_transform(Xt, Y)
+		
+		#print "variance ratio sum: {}".format(selector.explained_variance_ratio_.sum())
+		print "after n_feats = {}".format(len(Xt[0]))
 
 	clf.fit(Xt, Y)
-
 	return clf, scaler, selector
 
 if __name__ == '__main__':

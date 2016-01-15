@@ -1,1 +1,23 @@
 python lnd.py
+
+TODO: 
+# Generic commands
+python lnd.py -d wmci -f hog -c svm
+python lnd.py fts -f hog
+python lnd.py clf -f hog -c svm
+python lnd.py clf -f hog -r pca -c svm
+python lnd.py run -f hog -r pca -c svm <img path> <left mask> <right mask>
+
+# Hyperparameter search
+python lnd.py hyp -s wmci -c lda
+python lnd.py hyp -f hog -s pca -c svm
+python lnd.py hyp -f hog -r pca -s svm
+
+# Utilities
+python lnd.py view <img path> <left mask> <right mask>
+
+# Reference
+-d --candidate-detector: candidate detection. Options: wmci(default)
+-f --feature-extractor: feature extraction method. Options: hardie(default), hog, hogio, lbpio, zernike, shape, all
+-s --selector: feature selection / reduction : none(default), pca, lda, rfe
+-c --classifier: lda(default), svm

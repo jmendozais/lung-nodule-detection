@@ -6,7 +6,10 @@ from time import *
 import cv2
 from scipy.stats import skew, kurtosis
 import skimage.feature as feature
+import mahotas
+
 import util
+
 
 _ge = ['max_diam', 'x_fract', 'dist_perim']
 _in = ['max_value_in', 'mean_sep', 'contrast_1', 
@@ -345,7 +348,7 @@ def _hog(img, mask, orientations=9, cell=(8,8)):
 	return ans
 
 import matplotlib.pyplot as plt
-def hog_inner(norm, lce, wmci, lung_mask, blobs, masks):
+def hog_io(norm, lce, wmci, lung_mask, blobs, masks):
 	feature_vectors = []
 	for i in range(len(blobs)):
 		x, y, r = blobs[i]
@@ -453,9 +456,9 @@ class HogExtractor:
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
 		return hog(norm, lce, wmci, lung_mask, blobs, nod_masks)
 
-class HogInnerExtractor:
+class HogIOExtractor:
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-		return hog_inner(norm, lce, wmci, lung_mask, blobs, nod_masks)
+		return hog_io(norm, lce, wmci, lung_mask, blobs, nod_masks)
 
 class LBPExtractor:
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
@@ -466,12 +469,179 @@ class LBPExtractor:
 
 		return hist
 
+class ZernikeExtractor:
+	def __init__(self):
+		self.radius = int(32 * 0.4)
+
+	def extract_whole(self, img, blobs, masks):
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			mask = masks[i].astype(np.float64)
+			imask = 1 - mask
+
+			feats = mahotas.features.zernike_moments(img_roi, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
+			#feats /= (np.sum(feats) + util.EPS)
+			feature_vectors.append(np.array(feats))
+
+		return np.array(feature_vectors)
+
+	def extract_inner(self, img, blobs, masks):
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			mask = masks[i].astype(np.float64)
+
+			feats = mahotas.features.zernike_moments(mask * img_roi, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
+			#util.imshow('inner', mask * img_roi)
+			#feats /= (np.sum(feats) + util.EPS)
+			feature_vectors.append(np.array(feats))
+
+		return np.array(feature_vectors)
+
+	def extract_contour(self, img, blobs, masks):
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			mask = masks[i].astype(np.float64)
+			imask = 1 - mask
+			per_mask = np.full(mask.shape, dtype=mask.dtype, fill_value=0)
+			contours, _ = cv2.findContours(mask.astype(np.uint8).copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		  	cv2.drawContours(per_mask, contours, -1, 1, 1)
+
+			feats = mahotas.features.zernike_moments(per_mask, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
+			#feats /= (np.sum(feats) + util.EPS)
+			feature_vectors.append(np.array(feats))
+
+		return np.array(feature_vectors)
+
+	def extract_mask(self, img, blobs, masks):
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			mask = masks[i].astype(np.float64)
+			feats = mahotas.features.zernike_moments(mask, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
+			#feats /= (np.sum(feats) + util.EPS)
+			feature_vectors.append(np.array(feats))
+
+		return np.array(feature_vectors)
+
+
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		return self.extract_mask(lce, blobs, nod_masks)
+
+class ShapeExtractor:
+	def finite_derivative(self, v):
+		dv = np.empty(v.shape, dtype=np.double)
+
+		dv[0] = [0, 0]
+		dv[-1] = [0, 0]
+		dv[1:-1, :] = (v[2:, :] - v[:-2, :]) / 2.0
+
+		return dv
+
+	def extract_(self, img, blobs, masks):
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			mask = masks[i].astype(np.float64)
+			per_mask = np.full(mask.shape, dtype=mask.dtype, fill_value=0)
+			contours, _ = cv2.findContours(mask.astype(np.uint8).copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		  	
+		  	cv2.drawContours(per_mask, contours, -1, 1, 1)
+
+		  	if len(contours) > 0 and len(contours[0]) > 0:
+		  		np.append(contours[0], [contours[0][0]])
+
+		  	contours = np.array(contours[0])
+		  	dv = self.finite_derivative(contours)
+		  	d2v = self.finite_derivative(dv)
+		  	dv = dv.T
+		  	d2v = d2v.T
+		  	L = len(contours)
+
+		  	k = (dv[0] * d2v[1] - dv[1] * d2v[0]) / ((dv[0] ** 2 + dv[1] ** 2) ** 1.5 + util.EPS)
+		  	k /= (np.mean(np.absolute(k)) + util.EPS)
+
+		  	curvature = np.sum(np.absolute(k)) / (float(L) + util.EPS)
+
+		  	deformation_energy = np.mean(k ** 2)
+
+		  	perimeter = cv2.arcLength(contours, True)
+		  	area = np.sum(mask)
+		  	compactness = perimeter ** 2 / (float(area) + util.EPS)
+
+		  	hull = cv2.convexHull(contours)
+		  	hull_perimeter = cv2.arcLength(hull, True)
+		  	convexity = hull_perimeter / (perimeter + util.EPS)
+
+		  	hull_area = cv2.contourArea(hull)
+		  	solidity = hull_area / (float(area) + util.EPS)
+
+			feats = [curvature, deformation_energy, compactness, convexity, solidity]
+
+			feature_vectors.append(np.array(feats))
+
+		return np.array(feature_vectors)
+
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		return self.extract_(lce, blobs, nod_masks)
+
+
+# TODO: centrist
 class AllExtractor:
 	def __init__(self):
 		self.extractors = []
 		self.extractors.append(LBPExtractor())
-		self.extractors.append(HogInnerExtractor())
+		self.extractors.append(HogIOExtractor())
 		self.extractors.append(HardieExtractor())
+		self.extractors.append(ZernikeExtractor())
+		self.extractors.append(ShapeExtractor())
 
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
 		fv_set = []
@@ -481,13 +651,8 @@ class AllExtractor:
 		fv = np.hstack(fv_set)
 		
 		return fv
+# Register extractors
 
-# TODO:
-class ZernikeExtractor:
-	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-		return (norm, lce, wmci, lung_mask, blobs, nod_masks)
-
-class CENTRISTExtractor:
-	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-		return (norm, lce, wmci, lung_mask, blobs, nod_masks)
-
+extractors = {'hardie':HardieExtractor, 'hog':HogExtractor, 'hogio':HogIOExtractor, \
+				'lbpio':LBPExtractor, 'znk':ZernikeExtractor, 'shape':ShapeExtractor, \
+				'all':AllExtractor}

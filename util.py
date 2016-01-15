@@ -186,17 +186,25 @@ def show_blob(path, img, blob):
   imshow(path, img_roi)
 
 def save_froc(op_set, name, legend=None):
+  ax = plt.gca()
+  ax.grid(True)
+
   op_set = np.array(op_set)
+
+  line_format = ['b.-', 'g.-', 'r.-', 'c.-', 'm.-', 'y.-', 'k.-', 
+                 'b.--', 'g.--', 'r.--', 'c.--', 'm.--', 'y.--', 'k.--',
+                 'b.-.', 'g.-.', 'r.-.', 'c.-.', 'm.-.', 'y.-.', 'k.-.']
+                 
   for i in range(len(op_set)):
     ops = np.array(op_set[i]).T
-    plt.plot(ops[0], ops[1], 'x-')
+    plt.plot(ops[0], ops[1], line_format[i%14])
 
   plt.title(name)
   plt.ylabel('Sensitivity')
   plt.xlabel('Average FPPI')
   if legend != None:
     assert len(legend) == len(op_set)
-    plt.legend(legend, loc=4)
+    plt.legend(legend, loc=4, fontsize='small')
 
   name='{}_{}'.format(name, time.clock())
   plt.savefig('{}_froc.jpg'.format(name))

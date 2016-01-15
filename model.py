@@ -324,11 +324,6 @@ class BaselineModel:
 
 	def train_with_feature_set(self, feature_set, pred_blobs, real_blobs):
 		X, Y = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
-
-		#scaler = preprocessing.MinMaxScaler()
-		scaler = preprocessing.StandardScaler()
-		selector = RFE(estimator=self.clf, n_features_to_select=len(X[0]), step=1)
-		#clf = svm.SVC()
 		clf, scaler, selector = classify.train(X, Y, self.clf, self.scaler, self.selector)
 		self.save(self.name)
 
