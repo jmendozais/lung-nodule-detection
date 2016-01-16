@@ -13,6 +13,7 @@ from os import path
 
 from keras.datasets import mnist
 from keras.models import Sequential
+from keras.models import model_from_json
 from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.utils import np_utils
@@ -245,7 +246,7 @@ class BaselineModel:
 			self.clf = joblib.load('{}_clf.pkl'.format(name))
 		if path.isfile('{}_scaler.pkl'.format(name)):
 			self.scaler = joblib.load('{}_scaler.pkl'.format(name))
-		if path.isfile('{}_selector.pkl'.format(name)):
+		if path.isfile('{}self.keras__selector.pkl'.format(name)):
 			self.selector = joblib.load('{}_selector.pkl'.format(name))
 		if path.isfile('{}_transform.pkl'.format(name)):
 			self.transform = joblib.load('{}_transform.pkl'.format(name))
@@ -272,7 +273,7 @@ class BaselineModel:
 		if self.keras_model != None:
 			json_string = self.keras_model.to_json()
 			open('{}_arch.json'.format(name), 'w').write(json_string)
-			model.save_weights('{}_weights.h5'.format(name))
+			self.keras_model.save_weights('{}_weights.h5'.format(name))
 
 		if self.feature_set != None:
 			np.save(self.feature_set, '{}_fs.npy'.format(name))
@@ -351,8 +352,12 @@ class BaselineModel:
 
 	def predict_proba_one_keras(self, blobs, rois):
 		self.load(self.name)
+		
+		img_rows, img_cols = rois[0].shape
+		X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
+		X = X.astype('float32')
 
-		probs = self.keras_model.predict_proba(rois)
+		probs = self.keras_model.predict_proba(X)
 		probs = probs.T[1]
 		blobs = np.array(blobs)
 
