@@ -75,6 +75,55 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 
 	return ops
 
+def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, tholds):
+	ops = []
+	sen_set = []
+	fppim_set = []
+	fppis_set = []
+	fold = 0
+
+	for tr_idx, te_idx in folds:	
+		print "Fold {}".format(fold + 1),
+		sys.stdout.flush()
+
+		data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+		paths_te = paths[te_idx]
+		blobs_te = []
+
+		for bl in blobs[te_idx]:
+			blobs_te.append([bl])
+		blobs_te = np.array(blobs_te)
+
+		_model.train_with_feature_set_keras(rois[tr_idx], pred_blobs[tr_idx], blobs[tr_idx])
+		blobs_te_pred, probs_te_pred = _model.predict_proba_from_roi_set_keras(rois[te_idx], pred_blobs[te_idx])
+
+		sen_set.append([])
+		fppim_set.append([])
+		fppis_set.append([])
+		for thold in tholds:
+			fblobs_te_pred, fprobs_te_pred = _model.filter_by_proba(blobs_te_pred, probs_te_pred, thold)
+			s, fm, fs = eval.evaluate(blobs_te, fblobs_te_pred, data_te)
+
+			print "thold {}, sens {}, fppi mean {}, fppi std {}".format(thold, s, fm, fs)
+			sys.stdout.flush()
+
+			sys.stdout.flush()
+			sen_set[-1].append(s)
+			fppim_set[-1].append(fm)
+			fppis_set[-1].append(fs)
+
+		fold += 1
+
+	sen_set = np.array(sen_set).T
+	fppim_set = np.array(fppim_set).T
+	fppis_set = np.array(fppis_set).T
+
+	for i in range(len(tholds)):
+		if fppim_set[i].mean() < 10 + util.EPS:
+			print "thold {}: sen mean {}, fppi mean {}, fppi std {}".format(tholds[i], sen_set[i].mean(), fppim_set[i].mean(), fppim_set[i].std())
+			ops.append([fppim_set[i].mean(), sen_set[i].mean()])
+
+	return ops
 
 def protocol():
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
@@ -276,9 +325,6 @@ def protocol_froc_2(_model, fname):
 
 	print "Loading blobs & features ..."
 	data = DataProvider(paths, left_masks, right_masks)
-	for i in range(len(data)):
-		img, _= data.get(i)
-
 	feats = np.load('{}.fts.npy'.format(fname))
 	pred_blobs = np.load('{}_pred.blb.npy'.format(fname))
 
@@ -320,9 +366,6 @@ def protocol_wmci_froc(_model, fname):
 
 	print "Loading	 blobs & features ..."
 	data = DataProvider(paths, left_masks, right_masks)
-	for i in range(len(data)):
-		img, _= data.get(i)
-
 	feats, pred_blobs, proba = _model.extract_feature_set_proba(data)
 
 	'''
@@ -513,6 +556,49 @@ def protocol_rfe_froc(_model, fname):
 
 	protocol_selector_froc(_model, fname, selectors, labels)
 
+def protocol_cnn_froc(_model, fname):
+	paths, locs, rads = jsrt.jsrt(set='jsrt140')
+	left_masks = jsrt.left_lung(set='jsrt140')
+	right_masks = jsrt.right_lung(set='jsrt140')
+
+	#size = DATA_LEN
+	size = len(paths)
+
+	blobs = []
+	for i in range(size):
+		blobs.append([locs[i][0], locs[i][1], rads[i]])
+	blobs = np.array(blobs)
+
+	print "Loading dataset ..."
+	data = DataProvider(paths, left_masks, right_masks)
+	pred_blobs = np.load('{}_pred.blb.npy'.format(fname))
+	rois = model.create_rois(data, pred_blobs)
+
+	av_cpi = 0
+	for tmp in pred_blobs:
+		av_cpi += len(tmp)
+	print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
+
+	Y = (140 > np.array(range(size))).astype(np.uint8)
+	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+
+	tholds = np.hstack((np.arange(0.0, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
+	
+	ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, tholds)
+
+	base_line = [[0.0, 0.0], [1.0, 0.57], [2.0, 0.72], [3.0, 0.78], [4.0, 0.79], [5.0, 0.81], [6.0, 0.82], [7.0, 0.85], [8.0, 0.86], [9.0, 0.895], [10.0, 0.93]]
+	op_set = []
+	legend = []
+
+	op_set.append(base_line)
+	legend.append('baseline')
+	op_set.append(ops)
+	legend.append('current')
+
+	util.save_froc(op_set, _model.name, legend)
+
+	return np.array(ops)
+
 if __name__=="__main__":	
 	model_type = sys.argv[1]
 	stage = sys.argv[2]
@@ -554,6 +640,8 @@ if __name__=="__main__":
 		method = protocol_rlr_froc
 	if stage == 'clf-rfe':
 		method = protocol_rfe_froc
+	if stage == 'cnn':
+		method = protocol_cnn_froc
 	_model.name += stage
 	method(_model, '{}'.format(model_type))
 

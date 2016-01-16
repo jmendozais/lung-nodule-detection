@@ -9,6 +9,14 @@ from sklearn.feature_selection import RFE
 from time import *
 from os import path
 
+#from __future__ import print_function as print_f
+
+from keras.datasets import mnist
+from keras.models import Sequential
+from keras.layers.core import Dense, Dropout, Activation, Flatten
+from keras.layers.convolutional import Convolution2D, MaxPooling2D
+from keras.utils import np_utils
+
 import classify
 from detect import *
 from extract import * 
@@ -186,6 +194,36 @@ def pipeline(img_path, ll_path, lr_path):
 
 	return img, blobs
 '''
+
+def create_rois(data, blob_set, dsize=(28, 28)):
+	# Create image set
+	img_set = []
+	for i in range(len(data)):
+		img, lung_mask = data.get(i)
+		sampled, lce, norm = preprocess(img, lung_mask)
+		img_set.append(lce)
+
+	# Create roi set
+	roi_set = []
+	for i in range(len(img_set)):
+		img = img_set[i]
+		rois = []
+		for j in range(len(blob_set[i])):
+			x, y, r = blob_set[i][j]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			roi = cv2.resize(roi, dsize, interpolation=cv2.INTER_CUBIC)
+			rois.append(roi)
+		roi_set.append(np.array(rois))
+	return np.array(roi_set)
+
 # Baseline Model
 class BaselineModel:
 	def __init__(self, name='default'):
@@ -197,6 +235,7 @@ class BaselineModel:
 		self.transform = None
 		self.extractor = HardieExtractor()
 		self.feature_set = None
+		self.keras_model = None
 
 	def load(self, name):
 		# Model
@@ -210,6 +249,10 @@ class BaselineModel:
 			self.selector = joblib.load('{}_selector.pkl'.format(name))
 		if path.isfile('{}_transform.pkl'.format(name)):
 			self.transform = joblib.load('{}_transform.pkl'.format(name))
+		if path.isfile('{}_arch.json'.format(name)):
+			self.keras_model = model_from_json(open('{}_arch.json'.format(name)).read())
+			self.keras_model.load_weights('{}_weights.h5'.format(name))
+
 
 		# Data
 		if path.isfile('{}_fs.npy'.format(name)):
@@ -226,6 +269,10 @@ class BaselineModel:
 			joblib.dump(self.selector, '{}_selector.pkl'.format(name))
 		if self.transform != None:
 			joblib.dump(self.transform, '{}_transform.pkl'.format(name))
+		if self.keras_model != None:
+			json_string = self.keras_model.to_json()
+			open('{}_arch.json'.format(name), 'w').write(json_string)
+			model.save_weights('{}_weights.h5'.format(name))
 
 		if self.feature_set != None:
 			np.save(self.feature_set, '{}_fs.npy'.format(name))
@@ -302,6 +349,15 @@ class BaselineModel:
 
 		return blobs, probs
 
+	def predict_proba_one_keras(self, blobs, rois):
+		self.load(self.name)
+
+		probs = self.keras_model.predict_proba(rois)
+		probs = probs.T[1]
+		blobs = np.array(blobs)
+
+		return blobs, probs
+
 	def _classify(self, blobs, feature_vectors, thold=0.012):
 		blobs, probs = self.predict_proba_one(blobs, feature_vectors)
 		blobs = blobs[probs>thold]
@@ -328,6 +384,57 @@ class BaselineModel:
 		self.save(self.name)
 
 		return clf, scaler, selector
+
+	def train_with_feature_set_keras(self, feature_set, pred_blobs, real_blobs):
+		X_train, y_train = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
+		#clf, scaler, selector = classify.train(X, Y, self.clf)
+		np.random.seed(1337)  # for reproducibility
+		batch_size = 128
+		nb_classes = 2#10
+		nb_epoch = 12
+		# input image dimensions
+		img_rows, img_cols = 28, 28
+		# number of convolutional filters to use
+		nb_filters = 32
+		# size of pooling area for max pooling
+		nb_pool = 2
+		# convolution kernel size
+		nb_conv = 3
+
+		X_train = X_train.reshape(X_train.shape[0], 1, img_rows, img_cols)
+		X_train = X_train.astype('float32')
+
+		#print('X_train shape:', X_train.shape)
+		#print(X_train.shape[0], 'train samples')
+
+		# convert class vectors to binary class matrices
+		Y_train = np_utils.to_categorical(y_train, nb_classes)
+
+		self.keras_model = Sequential()
+
+		self.keras_model.add(Convolution2D(nb_filters, nb_conv, nb_conv,
+		                        border_mode='valid',
+		                        input_shape=(1, img_rows, img_cols)))
+		self.keras_model.add(Activation('relu'))
+		self.keras_model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
+		self.keras_model.add(Activation('relu'))
+		self.keras_model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
+		self.keras_model.add(Dropout(0.25))
+
+		self.keras_model.add(Flatten())
+		self.keras_model.add(Dense(128))
+		self.keras_model.add(Activation('relu'))
+		self.keras_model.add(Dropout(0.5))
+		self.keras_model.add(Dense(nb_classes))
+		self.keras_model.add(Activation('softmax'))
+
+		# TODO: validation
+		self.keras_model.compile(loss='categorical_crossentropy', optimizer='adadelta')
+		self.keras_model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch,
+          show_accuracy=True, verbose=1) # , validation_data=(X_test, Y_test))
+
+		self.save(self.name)
+		return self.keras_model
 
 	def predict_proba(self, data):
 		data_blobs = []
@@ -419,6 +526,33 @@ class BaselineModel:
 		data_probs = []
 		for i in range(len(feature_set)):
 			blobs, probs = self.predict_proba_one(blob_set[i], feature_set[i])
+
+			## candidate cue adjacency rule: 22 mm
+			filtered_blobs = []
+			filtered_probs = []
+			for j in range(len(blobs)):
+				valid = True
+				for k in range(len(blobs)):
+					dist2 = (blobs[j][0] - blobs[k][0]) ** 2 + (blobs[j][1] - blobs[k][1]) ** 2
+					if dist2 < 988 and probs[j] + EPS < probs[k]:
+						valid = False
+						break
+
+				if valid:
+					filtered_blobs.append(blobs[j])
+					filtered_probs.append(probs[j])
+
+			#show_blobs("Predict result ...", lce, filtered_blob)
+			data_blobs.append(np.array(filtered_blobs))	
+			data_probs.append(np.array(filtered_probs))
+
+		return np.array(data_blobs), np.array(data_probs)
+
+	def predict_proba_from_feature_set_keras(self, feature_set, blob_set):
+		data_blobs = []
+		data_probs = []
+		for i in range(len(feature_set)):
+			blobs, probs = self.predict_proba_one_keras(blob_set[i], feature_set[i])
 
 			## candidate cue adjacency rule: 22 mm
 			filtered_blobs = []
