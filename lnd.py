@@ -582,7 +582,7 @@ def protocol_cnn_froc(_model, fname):
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0.0, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
+	tholds = np.hstack((np.arange(0.0, 0.007, 0.00005), np.arange(0.007, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
 	
 	ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, tholds)
 
