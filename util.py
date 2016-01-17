@@ -4,7 +4,9 @@ import numpy as np
 import numpy.linalg as la
 from skimage import draw
 import cv2
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
+plt.switch_backend('agg')
+plt.ioff()
 import time
 import csv
 

@@ -95,7 +95,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 		blobs_te = np.array(blobs_te)
 
 		_model.train_with_feature_set_keras(rois[tr_idx], pred_blobs[tr_idx], blobs[tr_idx])
-		blobs_te_pred, probs_te_pred = _model.predict_proba_from_roi_set_keras(rois[te_idx], pred_blobs[te_idx])
+		blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois[te_idx], pred_blobs[te_idx])
 
 		sen_set.append([])
 		fppim_set.append([])
