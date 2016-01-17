@@ -11,12 +11,14 @@ from os import path
 
 #from __future__ import print_function as print_f
 
-from keras.datasets import mnist
 from keras.models import Sequential
 from keras.models import model_from_json
 from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
-from keras.utils import np_utils
+from keras.preprocessing.image import ImageDataGenerator
+from keras.optimizers import SGD, Adadelta, Adagrad
+from keras.utils import np_utils, generic_utils
+from six.moves import range
 
 import classify
 from detect import *
@@ -196,7 +198,7 @@ def pipeline(img_path, ll_path, lr_path):
 	return img, blobs
 '''
 
-def create_rois(data, blob_set, dsize=(28, 28)):
+def create_rois(data, blob_set, dsize=(32, 32)):
 	# Create image set
 	img_set = []
 	for i in range(len(data)):
@@ -273,7 +275,7 @@ class BaselineModel:
 		if self.keras_model != None:
 			json_string = self.keras_model.to_json()
 			open('{}_arch.json'.format(name), 'w').write(json_string)
-			self.keras_model.save_weights('{}_weights.h5'.format(name))
+			self.keras_model.save_weights('{}_weights.h5'.format(name), overwrite=True)
 
 		if self.feature_set != None:
 			np.save(self.feature_set, '{}_fs.npy'.format(name))
@@ -354,6 +356,7 @@ class BaselineModel:
 		self.load(self.name)
 		
 		img_rows, img_cols = rois[0].shape
+		print 'img shape',img_rows, img_cols
 		X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
 		X = X.astype('float32')
 
@@ -390,9 +393,7 @@ class BaselineModel:
 
 		return clf, scaler, selector
 
-	def train_with_feature_set_keras(self, feature_set, pred_blobs, real_blobs):
-		X_train, y_train = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
-		#clf, scaler, selector = classify.train(X, Y, self.clf)
+	def fit_mnist_model(X_train, Y_train, batch_size=128, nb_epoch=12):
 		np.random.seed(1337)  # for reproducibility
 		batch_size = 128
 		nb_classes = 2#10
@@ -406,14 +407,8 @@ class BaselineModel:
 		# convolution kernel size
 		nb_conv = 3
 
-		X_train = X_train.reshape(X_train.shape[0], 1, img_rows, img_cols)
-		X_train = X_train.astype('float32')
-
 		#print('X_train shape:', X_train.shape)
 		#print(X_train.shape[0], 'train samples')
-
-		# convert class vectors to binary class matrices
-		Y_train = np_utils.to_categorical(y_train, nb_classes)
 
 		self.keras_model = Sequential()
 
@@ -435,8 +430,100 @@ class BaselineModel:
 
 		# TODO: validation
 		self.keras_model.compile(loss='categorical_crossentropy', optimizer='adadelta')
-		self.keras_model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch,
-          show_accuracy=True, verbose=1) # , validation_data=(X_test, Y_test))
+		self.keras_model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, show_accuracy=True, verbose=1) # , validation_data=(X_test, Y_test))
+
+	def fit_cifar(self, X_train, Y_train):
+		np.random.seed(1337)  # for reproducibility
+		batch_size = 32
+		nb_classes = 2
+		nb_epoch = 200
+		data_augmentation = True
+
+		# input image dimensions
+		img_rows, img_cols = 32, 32
+		# the CIFAR10 images are RGB
+		img_channels = 1
+
+		#print('X_train shape:', X_train.shape)
+		#print(X_train.shape[0], 'train samples')
+
+		model = Sequential()
+
+		model.add(Convolution2D(32, 3, 3, border_mode='same',
+					input_shape=(img_channels, img_rows, img_cols)))
+		model.add(Activation('relu'))
+		model.add(Convolution2D(32, 3, 3))
+		model.add(Activation('relu'))
+		model.add(MaxPooling2D(pool_size=(2, 2)))
+		model.add(Dropout(0.25))
+
+		model.add(Convolution2D(64, 3, 3, border_mode='same'))
+		model.add(Activation('relu'))
+		model.add(Convolution2D(64, 3, 3))
+		model.add(Activation('relu'))
+		model.add(MaxPooling2D(pool_size=(2, 2)))
+		model.add(Dropout(0.25))
+
+		model.add(Flatten())
+		model.add(Dense(512))
+		model.add(Activation('relu'))
+		model.add(Dropout(0.5))
+		model.add(Dense(nb_classes))
+		model.add(Activation('softmax'))
+
+		# let's train the model using SGD + momentum (how original).
+		sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
+		model.compile(loss='categorical_crossentropy', optimizer=sgd)
+
+		if not data_augmentation:
+			print('Not using data augmentation or normalization')
+			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch)
+			#score = model.evaluate(X_test, Y_test, batch_size=batch_size)
+			#print('Test score:', score)
+
+		else:
+			print('Using real time data augmentation')
+
+			# this will do preprocessing and realtime data augmentation
+			datagen = ImageDataGenerator(
+				featurewise_center=True,  # set input mean to 0 over the dataset
+				samplewise_center=False,  # set each sample mean to 0
+				featurewise_std_normalization=True,  # divide inputs by std of the dataset
+				samplewise_std_normalization=False,  # divide each input by its std
+				zca_whitening=False,  # apply ZCA whitening
+				rotation_range=20,  # randomly rotate images in the range (degrees, 0 to 180)
+				width_shift_range=0.2,  # randomly shift images horizontally (fraction of total width)
+				height_shift_range=0.2,  # randomly shift images vertically (fraction of total height)
+				horizontal_flip=True,  # randomly flip images
+				vertical_flip=False)  # randomly flip images
+
+			# compute quantities required for featurewise normalization
+			# (std, mean, and principal components if ZCA whitening is applied)
+			datagen.fit(X_train)
+
+			for e in range(nb_epoch):
+				print('-'*40)
+				print('Epoch', e)
+				print('-'*40)
+				print('Training...')
+				# batch train with realtime data augmentation
+				progbar = generic_utils.Progbar(X_train.shape[0])
+				for X_batch, Y_batch in datagen.flow(X_train, Y_train):
+					loss = model.train_on_batch(X_batch, Y_batch)
+					progbar.add(X_batch.shape[0], values=[('train loss', loss[0])])
+		self.keras_model = model
+
+	def train_with_feature_set_keras(self, feature_set, pred_blobs, real_blobs):
+		X_train, y_train = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
+		
+		img_rows, img_cols = feature_set[0][0].shape
+		nb_classes = 2
+		X_train = X_train.reshape(X_train.shape[0], 1, img_rows, img_cols)
+		X_train = X_train.astype('float32')
+		# convert class vectors to binary class matrices
+		Y_train = np_utils.to_categorical(y_train, nb_classes)
+		
+		self.fit_cifar(X_train, Y_train)
 
 		self.save(self.name)
 		return self.keras_model
