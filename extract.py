@@ -672,4 +672,4 @@ class Set1Extractor:
 
 extractors = {'hardie':HardieExtractor, 'hog':HogExtractor, 'hogio':HogIOExtractor, \
 				'lbpio':LBPExtractor, 'znk':ZernikeExtractor, 'shape':ShapeExtractor, \
-				'all':AllExtractor}
+				'all':AllExtractor, 'set1': Set1Extractor}
