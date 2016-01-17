@@ -21,6 +21,7 @@ def get_paths(root = PATH, suffix = 'npy'):
             name_len = len(file_path)
             if isfile(file_path) and (file_path[name_len - len(suffix):name_len] == suffix):
                 paths.append(join(root, doc))
+    paths = sorted(paths)
     return np.array(paths)
 
 def get_metadata():

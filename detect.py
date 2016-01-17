@@ -180,8 +180,8 @@ def wmci(img, mask, threshold=0.5):
 
 	blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
 	#show_blobs("wci", ans, blobs)
-	imwrite_with_blobs("wci.jpg", ans, blobs)
-	sys.exit()
+	#imwrite_with_blobs("wci.jpg", ans, blobs)
+	#sys.exit()
 	return blobs, ans
 
 def wmci_proba(img, mask, threshold=0.5):
