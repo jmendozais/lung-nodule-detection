@@ -100,9 +100,17 @@ def show_blobs(windowName, img, blobs):
 	labeled = np.array(img).astype(np.float32)
 	maxima = np.max(labeled)
 	for blob in blobs:
-		labeled = label_blob(labeled, blob, color=(maxima, 0, 0))
+		labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=-5)
 
 	imshow(windowName, labeled)
+
+def imwrite_with_blobs(fname, img, blobs):
+  labeled = np.array(img).astype(np.float32)
+  maxima = np.max(labeled)
+  for blob in blobs:
+    labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=-5)
+
+  imwrite(fname, labeled)
 
 def show_blobs_real_predicted(path, res1, res2):
   img = np.load(path, 0)
@@ -194,7 +202,7 @@ def save_froc(op_set, name, legend=None):
   line_format = ['b.-', 'g.-', 'r.-', 'c.-', 'm.-', 'y.-', 'k.-', 
                  'b.--', 'g.--', 'r.--', 'c.--', 'm.--', 'y.--', 'k.--',
                  'b.-.', 'g.-.', 'r.-.', 'c.-.', 'm.-.', 'y.-.', 'k.-.']
-                 
+
   for i in range(len(op_set)):
     ops = np.array(op_set[i]).T
     plt.plot(ops[0], ops[1], line_format[i%14])

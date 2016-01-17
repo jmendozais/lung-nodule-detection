@@ -542,9 +542,9 @@ def protocol_rlr_froc(_model, fname):
 
 def protocol_rfe_froc(_model, fname):
 	nfeats = 136
-	var_set = 2 ** np.arange(2, 8, 1)
-	var_set = nfeats - var_set
-
+	#var_set = 2 ** np.arange(2, 8, 1)
+	#var_set = nfeats - var_set
+	var_set = np.arange(70, 131, 5)
 	selectors = []
 	labels = []
 
