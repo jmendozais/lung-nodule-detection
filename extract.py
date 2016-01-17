@@ -651,6 +651,23 @@ class AllExtractor:
 		fv = np.hstack(fv_set)
 		
 		return fv
+
+class Set1Extractor:
+	def __init__(self):
+		self.extractors = []
+		self.extractors.append(LBPExtractor())
+		self.extractors.append(HogIOExtractor())
+		self.extractors.append(ZernikeExtractor())
+		self.extractors.append(ShapeExtractor())
+
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		fv_set = []
+
+		for extractor in self.extractors:
+			fv_set.append(extractor.extract(norm, lce, wmci, lung_mask, blobs, nod_masks))
+		fv = np.hstack(fv_set)
+		
+		return fv
 # Register extractors
 
 extractors = {'hardie':HardieExtractor, 'hog':HogExtractor, 'hogio':HogIOExtractor, \
