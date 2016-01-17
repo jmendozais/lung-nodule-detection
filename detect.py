@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 from math import sqrt
 from skimage.feature import blob_dog, blob_log, blob_doh, peak_local_max
@@ -6,6 +7,7 @@ import cv2
 from util import *
 #TODO: add detection thinning
 import skimage.io as io
+
 # Detection thining
 def dst(a, b):
 	return sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]))
@@ -99,12 +101,17 @@ def doh(img, mask):
 # wmci detector
 def finite_derivatives(img):
 	size = img.shape
-	dx = img.copy()
-	dy = img.copy()
 
-	for i, j in product(range(1, size[0] - 1), range(1, size[1] - 1)):
-		dy[i, j] = (img[i, j + 1] - img[i, j - 1]) / 2.0
-		dx[i, j] = (img[i + 1, j] - img[i - 1, j]) / 2.0
+	dx = np.empty(img.shape, dtype=np.double)
+	dx[0, :] = 0
+	dx[-1, :] = 0
+	dx[1:-1, :] = (img[2:, :] - img[:-2, :]) / 2.0
+
+	dy = np.empty(img.shape, dtype=np.double)
+	dy[:, 0] = 0
+	dy[:, -1] = 0
+	dy[:, 1:-1] = (img[:, 2:] - img[:, :-2]) / 2.0
+
 	mag = (dx ** 2 + dy ** 2) ** 0.5 + 1e-9
 	return mag, dx, dy
 
@@ -173,7 +180,8 @@ def wmci(img, mask, threshold=0.5):
 
 	blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
 	#show_blobs("wci", ans, blobs)
-
+	imwrite_with_blobs("wci.jpg", ans, blobs)
+	sys.exit()
 	return blobs, ans
 
 def wmci_proba(img, mask, threshold=0.5):
