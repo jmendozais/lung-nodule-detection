@@ -14,8 +14,9 @@ from os import path
 from keras.models import Sequential
 from keras.models import model_from_json
 from keras.layers.core import Dense, Dropout, Activation, Flatten
+from keras.layers.advanced_activations import LeakyReLU, PReLU
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
-from keras.preprocessing.image import ImageDataGenerator
+from augment import ImageDataGenerator
 from keras.optimizers import SGD, Adadelta, Adagrad
 from keras.utils import np_utils, generic_utils
 from six.moves import range
@@ -227,6 +228,51 @@ def create_rois(data, blob_set, dsize=(32, 32)):
 		roi_set.append(np.array(rois))
 	return np.array(roi_set)
 
+import keras
+
+class PlateauScheduler(keras.callbacks.Callback):
+	def __init__(self):
+		self.prev_loss = 0
+		self.grads = np.full((4,), dtype=np.float32, fill_value=0.0)
+		self.grads[0] = -1
+	
+	def on_batch_begin(self, batch, logs={}):
+		self.losses = []
+
+	def on_batch_end(self, batch, logs={}):
+		self.losses.append(logs['loss'])
+
+	def on_epoch_end(self, epoch, logs={}):
+		loss = np.sum(self.losses)
+		if epoch > 0:
+			self.grads[epoch % len(self.grads)] = loss - self.prev_loss
+		self.prev_loss = loss
+		print loss
+		print self.grads
+		print np.mean(self.grads)
+		assert hasattr(self.model.optimizer, 'lr'), \
+		    'Optimizer must have a "lr" attribute.'
+		lr = self.model.optimizer.lr.get_value()
+		if np.mean(self.grads) > (0 - util.EPS) and lr > 1e-4:
+			print 'Updating lr {} ...'.format(lr / 10.0)
+			self.model.optimizer.lr.set_value(float(lr / 10.0))
+
+class StageScheduler(keras.callbacks.Callback):
+	def __init__(self, stages=[], decay=0.1):
+		sorted(stages)
+		self.stages = stages
+		self.idx = 0
+		self.decay = decay
+	
+	def on_epoch_end(self, epoch, logs={}):
+		if self.idx < len(self.stages):
+			if epoch + 1 == self.stages[self.idx]:
+				lr = self.model.optimizer.lr.get_value()
+				self.model.optimizer.lr.set_value(float(lr * self.decay))
+				self.idx += 1
+		print 'lr {}'.format(self.model.optimizer.lr.get_value())
+				
+#
 # Baseline Model
 class BaselineModel:
 	def __init__(self, name='default'):
@@ -339,8 +385,6 @@ class BaselineModel:
 		return np.array(feature_set), np.array(blob_set), proba_set
 
 	def predict_proba_one(self, blobs, feature_vectors):
-		self.load(self.name)
-
 		feature_vectors = self.scaler.transform(feature_vectors)
 
 		if self.selector != None:
@@ -353,8 +397,6 @@ class BaselineModel:
 		return blobs, probs
 
 	def predict_proba_one_keras(self, blobs, rois):
-		self.load(self.name)
-		
 		img_rows, img_cols = rois[0].shape
 		print 'img shape',img_rows, img_cols
 		X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
@@ -393,11 +435,11 @@ class BaselineModel:
 
 		return clf, scaler, selector
 
-	def fit_mnist_model(X_train, Y_train, batch_size=128, nb_epoch=12):
+	def fit_mnist_model(self, X_train, Y_train, batch_size=128, nb_epoch=12):
 		np.random.seed(1337)  # for reproducibility
 		batch_size = 128
 		nb_classes = 2#10
-		nb_epoch = 12
+		nb_epoch = 50
 		# input image dimensions
 		img_rows, img_cols = 28, 28
 		# number of convolutional filters to use
@@ -410,13 +452,14 @@ class BaselineModel:
 		#print('X_train shape:', X_train.shape)
 		#print(X_train.shape[0], 'train samples')
 
+		_init = 'orthogonal'
 		self.keras_model = Sequential()
 
 		self.keras_model.add(Convolution2D(nb_filters, nb_conv, nb_conv,
 		                        border_mode='valid',
-		                        input_shape=(1, img_rows, img_cols)))
+		                        input_shape=(1, img_rows, img_cols), init=_init))
 		self.keras_model.add(Activation('relu'))
-		self.keras_model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
+		self.keras_model.add(Convolution2D(nb_filters, nb_conv, nb_conv, init=_init))
 		self.keras_model.add(Activation('relu'))
 		self.keras_model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
 		self.keras_model.add(Dropout(0.25))
@@ -436,7 +479,7 @@ class BaselineModel:
 		np.random.seed(1337)  # for reproducibility
 		batch_size = 32
 		nb_classes = 2
-		nb_epoch = 200
+		nb_epoch = 20
 		data_augmentation = True
 
 		# input image dimensions
@@ -447,19 +490,20 @@ class BaselineModel:
 		#print('X_train shape:', X_train.shape)
 		#print(X_train.shape[0], 'train samples')
 
+		_init = 'he_normal'
 		model = Sequential()
 
 		model.add(Convolution2D(32, 3, 3, border_mode='same',
-					input_shape=(img_channels, img_rows, img_cols)))
+					input_shape=(img_channels, img_rows, img_cols), init=_init))
 		model.add(Activation('relu'))
-		model.add(Convolution2D(32, 3, 3))
+		model.add(Convolution2D(32, 3, 3, init=_init))
 		model.add(Activation('relu'))
 		model.add(MaxPooling2D(pool_size=(2, 2)))
 		model.add(Dropout(0.25))
 
-		model.add(Convolution2D(64, 3, 3, border_mode='same'))
+		model.add(Convolution2D(64, 3, 3, border_mode='same', init=_init))
 		model.add(Activation('relu'))
-		model.add(Convolution2D(64, 3, 3))
+		model.add(Convolution2D(64, 3, 3, init=_init))
 		model.add(Activation('relu'))
 		model.add(MaxPooling2D(pool_size=(2, 2)))
 		model.add(Dropout(0.25))
@@ -472,12 +516,13 @@ class BaselineModel:
 		model.add(Activation('softmax'))
 
 		# let's train the model using SGD + momentum (how original).
-		sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
+		sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
 		model.compile(loss='categorical_crossentropy', optimizer=sgd)
 
+		lr_scheduler = StageScheduler([50, 70])
 		if not data_augmentation:
 			print('Not using data augmentation or normalization')
-			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch)
+			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
 			#score = model.evaluate(X_test, Y_test, batch_size=batch_size)
 			#print('Test score:', score)
 
@@ -492,14 +537,16 @@ class BaselineModel:
 				samplewise_std_normalization=False,  # divide each input by its std
 				zca_whitening=False,  # apply ZCA whitening
 				rotation_range=20,  # randomly rotate images in the range (degrees, 0 to 180)
-				width_shift_range=0.2,  # randomly shift images horizontally (fraction of total width)
-				height_shift_range=0.2,  # randomly shift images vertically (fraction of total height)
+				width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
+				height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
 				horizontal_flip=True,  # randomly flip images
 				vertical_flip=False)  # randomly flip images
 
+			# clone positive samples in order to get a balanced dataset and ...
 			# compute quantities required for featurewise normalization
 			# (std, mean, and principal components if ZCA whitening is applied)
-			datagen.fit(X_train)
+			X_train, Y_train = datagen.fit_transform(X_train, Y_train)
+			#datagen.fit(X_train)
 
 			for e in range(nb_epoch):
 				print('-'*40)
@@ -513,6 +560,73 @@ class BaselineModel:
 					progbar.add(X_batch.shape[0], values=[('train loss', loss[0])])
 		self.keras_model = model
 
+	def fit_graham(self, X_train, Y_train):
+		np.random.seed(1337)  # for reproducibility
+		batch_size = 32
+		nb_classes = 2
+		nb_epoch = 100
+		data_augmentation = False
+
+		# input image dimensions
+		img_rows, img_cols = 32, 32
+		# the CIFAR10 images are RGB
+		img_channels = 1
+
+		#print('X_train shape:', X_train.shape)
+		#print(X_train.shape[0], 'train samples')
+
+		_init = 'orthogonal'
+		_activation = 'linear' #LeakyReLU(alpha=.333)
+		_filters = 32
+		_dropout = 0.1
+
+		model = Sequential()
+
+		model.add(Convolution2D(_filters, 3, 3, border_mode='same',
+					input_shape=(img_channels, img_rows, img_cols), init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Convolution2D(_filters, 3, 3, init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(MaxPooling2D(pool_size=(2, 2)))
+		model.add(Dropout(_dropout))
+
+		model.add(Convolution2D(2 * _filters, 3, 3, border_mode='same', init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Convolution2D(2 * _filters, 3, 3, init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(MaxPooling2D(pool_size=(2, 2)))
+		model.add(Dropout(2 * _dropout))
+
+		model.add(Convolution2D(3 * _filters, 3, 3, border_mode='same', init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Convolution2D(3 * _filters, 3, 3, init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(MaxPooling2D(pool_size=(2, 2)))
+		model.add(Dropout(3 * _dropout))
+
+		model.add(Flatten())
+		model.add(Dense(512, init=_init))
+		model.add(Activation('relu'))
+		model.add(Dropout(0.5))
+		model.add(Dense(nb_classes))
+		model.add(Activation('softmax'))
+
+		# let's train the model using SGD + momentum (how original).
+		sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+		model.compile(loss='categorical_crossentropy', optimizer=sgd)
+
+		if not data_augmentation:
+			print('Not using data augmentation or normalization')
+			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch)
+
+		self.keras_model = model
+	
 	def train_with_feature_set_keras(self, feature_set, pred_blobs, real_blobs):
 		X_train, y_train = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
 		
@@ -529,6 +643,8 @@ class BaselineModel:
 		return self.keras_model
 
 	def predict_proba(self, data):
+		self.load(self.name)
+
 		data_blobs = []
 		data_probs = []
 		for i in range(len(data)):
@@ -614,6 +730,8 @@ class BaselineModel:
 		return np.array(data_blobs)
 
 	def predict_proba_from_feature_set(self, feature_set, blob_set):
+		self.load(self.name)
+		
 		data_blobs = []
 		data_probs = []
 		for i in range(len(feature_set)):
@@ -641,6 +759,8 @@ class BaselineModel:
 		return np.array(data_blobs), np.array(data_probs)
 
 	def predict_proba_from_feature_set_keras(self, feature_set, blob_set):
+		self.load(self.name)
+		
 		data_blobs = []
 		data_probs = []
 		for i in range(len(feature_set)):

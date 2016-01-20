@@ -34,7 +34,6 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 
 	for tr_idx, te_idx in folds:	
 		print "Fold {}".format(fold + 1),
-		sys.stdout.flush()
 
 		data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
 		paths_te = paths[te_idx]
@@ -55,9 +54,7 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 			s, fm, fs = eval.evaluate(blobs_te, fblobs_te_pred, data_te)
 
 			print "thold {}, sens {}, fppi mean {}, fppi std {}".format(thold, s, fm, fs)
-			sys.stdout.flush()
 
-			sys.stdout.flush()
 			sen_set[-1].append(s)
 			fppim_set[-1].append(fm)
 			fppis_set[-1].append(fs)
@@ -84,8 +81,6 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 
 	for tr_idx, te_idx in folds:	
 		print "Fold {}".format(fold + 1),
-		sys.stdout.flush()
-
 		data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
 		paths_te = paths[te_idx]
 		blobs_te = []
@@ -105,9 +100,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 			s, fm, fs = eval.evaluate(blobs_te, fblobs_te_pred, data_te)
 
 			print "thold {}, sens {}, fppi mean {}, fppi std {}".format(thold, s, fm, fs)
-			sys.stdout.flush()
 
-			sys.stdout.flush()
 			sen_set[-1].append(s)
 			fppim_set[-1].append(fm)
 			fppis_set[-1].append(fs)
@@ -336,7 +329,7 @@ def protocol_froc_2(_model, fname):
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0.0, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
+	tholds = np.hstack((np.arange(0.0, 0.02, 0.00005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
 	
 	ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf, tholds)
 
@@ -582,8 +575,9 @@ def protocol_cnn_froc(_model, fname):
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0.0, 0.007, 0.00005), np.arange(0.007, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
+	#tholds = np.hstack((np.arange(0.0, 1e-7, 2e-9), np.arange(1e-7, 1e-6, 0.2e-8), np.arange(1e-6, 1e-5, 2e-7), np.arange(1e-5, 5e-5, 1e-6), np.arange(5e-5, 3e-4, 5e-6), np.arange(3e-4, 0.007, 0.00005), np.arange(0.007, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
 	
+	tholds = np.hstack(np.arange(0.49, 0.51, 1e-4))
 	ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, tholds)
 
 	base_line = [[0.0, 0.0], [1.0, 0.57], [2.0, 0.72], [3.0, 0.78], [4.0, 0.79], [5.0, 0.81], [6.0, 0.82], [7.0, 0.85], [8.0, 0.86], [9.0, 0.895], [10.0, 0.93]]
