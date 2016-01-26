@@ -95,15 +95,30 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 		sen_set.append([])
 		fppim_set.append([])
 		fppis_set.append([])
+		
+		sampled = np.full(11, dtype=np.float32, fill_value=-1.0)
+		vth = np.full(11, dtype=np.float32, fill_value=-1.0)
+		best_diff = np.full(11, dtype=np.float32, fill_value=1e10)
+
 		for thold in tholds:
 			fblobs_te_pred, fprobs_te_pred = _model.filter_by_proba(blobs_te_pred, probs_te_pred, thold)
 			s, fm, fs = eval.evaluate(blobs_te, fblobs_te_pred, data_te)
+			cur = round(fm)
+			if cur < 11 and best_diff[cur] > abs(fm - cur):
+				best_diff[cur] = fm - cur
+				sampled[cur] = s
+				vth[cur] = thold
 
-			print "thold {}, sens {}, fppi mean {}, fppi std {}".format(thold, s, fm, fs)
+			#print "thold {}, sens {}, fppi mean {}, fppi std {}".format(thold, s, fm, fs)
 
 			sen_set[-1].append(s)
 			fppim_set[-1].append(fm)
 			fppis_set[-1].append(fs)
+
+		print "froc:"
+		print sampled
+		print 'tholds:'
+		print vth
 
 		fold += 1
 
@@ -329,7 +344,7 @@ def protocol_froc_2(_model, fname):
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0.0, 0.02, 0.00005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
+	tholds = np.hstack((np.arange(0.0, 2e-4, 1e-7), np.arange(2e-4, 2e-3, 1e-6), np.arange(2e-3, 2e-2, 1e-5), np.arange(0.02, 0.06, 0.001), np.arange(0.06, 0.66, 0.01)))
 	
 	ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf, tholds)
 
@@ -577,7 +592,7 @@ def protocol_cnn_froc(_model, fname):
 
 	#tholds = np.hstack((np.arange(0.0, 1e-7, 2e-9), np.arange(1e-7, 1e-6, 0.2e-8), np.arange(1e-6, 1e-5, 2e-7), np.arange(1e-5, 5e-5, 1e-6), np.arange(5e-5, 3e-4, 5e-6), np.arange(3e-4, 0.007, 0.00005), np.arange(0.007, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
 	
-	tholds = np.hstack(np.arange(0.49, 0.51, 1e-4))
+	tholds = np.hstack((np.arange(0.0, 1e-7, 1e-11), np.arange(1e-7, 1e-6, 1e-10), np.arange(1e-6, 1e-5, 1e-9), np.arange(1e-5, 1e-4, 1e-8), np.arange(1e-4, 1e-2, 1e-6),np.arange(0.01, 0.1, 1e-5), np.arange(0.1, 1.0, 1e-4)))
 	ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, tholds)
 
 	base_line = [[0.0, 0.0], [1.0, 0.57], [2.0, 0.72], [3.0, 0.78], [4.0, 0.79], [5.0, 0.81], [6.0, 0.82], [7.0, 0.85], [8.0, 0.86], [9.0, 0.895], [10.0, 0.93]]
@@ -600,7 +615,7 @@ if __name__=="__main__":
 
 	extractor = model.extractors.get(model_type)
 	if extractor != None:
-		_model.extractor = extractor()
+		_model.extractor = extractor
 		_model.name = 'data/{}'.format(model_type)
 	else:
 		_model.extractor = model.HardieExtractor()
@@ -610,7 +625,7 @@ if __name__=="__main__":
 	if stage.find('clf') != -1:
 		clf = sys.argv[3]
 		if clf == 'svm':
-			_model.clf = svm.SVC(probability=True)
+			_model.clf = svm.SVC(kernel='linear', probability=True)
 		elif clf == 'lda':
 			_model.clf = lda.LDA()
 		method = protocol_froc_2

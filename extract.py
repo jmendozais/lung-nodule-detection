@@ -672,8 +672,9 @@ class Set1Extractor:
 # Register extractors
 
 class OverfeatExtractor:
-	def __init__(self):
+	def __init__(self, mode=None):
 		overfeat.init('/home/juliomb/lnd-env/OverFeat/data/default/net_weight_0', 0)
+		self.mode = mode
 
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
 		feature_vectors = []
@@ -690,8 +691,14 @@ class OverfeatExtractor:
 
 			lce_roi = lce[ntl[0]:nbr[0], ntl[1]:nbr[1]]
 			lce_roi = cv2.resize(lce_roi, dsize, interpolation=cv2.INTER_CUBIC)
-			
-			image = np.array([lce_roi.copy(), lce_roi.copy(), lce_roi.copy()])
+
+			if self.mode == 'inner':
+				mask = cv2.resize(nod_masks[i], dsize, interpolation=cv2.INTER_CUBIC)
+				image = mask.astype(np.float32) * lce_roi	
+				image = np.array([image.copy(), image.copy(), image.copy()])
+			else:	
+				image = np.array([lce_roi.copy(), lce_roi.copy(), lce_roi.copy()])
+
 			_ = overfeat.fprop(image.astype(np.float32))
 
 			feats = overfeat.get_output(19)
@@ -702,6 +709,7 @@ class OverfeatExtractor:
 		return np.array(feature_vectors)
 
 
-extractors = {'hardie':HardieExtractor, 'hog':HogExtractor, 'hogio':HogIOExtractor, \
-				'lbpio':LBPExtractor, 'znk':ZernikeExtractor, 'shape':ShapeExtractor, \
-				'all':AllExtractor, 'set1': Set1Extractor, 'overf': OverfeatExtractor}
+extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(), 'hogio':HogIOExtractor(), \
+				'lbpio':LBPExtractor(), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
+				'all':AllExtractor(), 'set1':Set1Extractor(), 'overf':OverfeatExtractor(), \
+				'overfin':OverfeatExtractor(mode='inner')}
