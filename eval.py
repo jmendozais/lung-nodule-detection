@@ -4,6 +4,8 @@ import numpy as np
 import cv2
 import sys
 import scipy.stats as stats
+from scipy.interpolate import interp1d
+
 '''
 from shapely.geometry import Polygon
 from shapely.geometry import Point
@@ -144,6 +146,16 @@ def evaluate(real, predicted, data=None, sample=False):
 	#return sensitivity, np.mean(fppi), np.std(fppi), np.mean(iou), np.std(iou), np.mean(iou_pos), np.std(iou_pos)
 	return sensitivity, np.mean(fppi), np.std(fppi)
 
+def vertical_averaging_froc(op_set, range):
+	normalized_ops = []
+
+	for ops in op_set:
+		x = np.array(ops).T
+		f = interp1d(x[0], x[1], kind='linear', fill_value=0, bounds_error=False)
+		new_x = np.array([range, f(range)]).T
+		normalized_ops.append(new_x)
+
+	return np.array(normalized_ops)
 
 if __name__ == "__main__":
 	real_path = sys.argv[1]

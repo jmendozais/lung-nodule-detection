@@ -30,6 +30,7 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 	sen_set = []
 	fppim_set = []
 	fppis_set = []
+	op_set = []
 	fold = 0
 
 	for tr_idx, te_idx in folds:	
@@ -49,6 +50,8 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 		sen_set.append([])
 		fppim_set.append([])
 		fppis_set.append([])
+		op_set.append([])
+
 		for thold in tholds:
 			fblobs_te_pred, fprobs_te_pred = _model.filter_by_proba(blobs_te_pred, probs_te_pred, thold)
 			s, fm, fs = eval.evaluate(blobs_te, fblobs_te_pred, data_te)
@@ -58,19 +61,21 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 			sen_set[-1].append(s)
 			fppim_set[-1].append(fm)
 			fppis_set[-1].append(fs)
+			op_set[-1].append([fm, s])
 
 		fold += 1
-
+	
+	# Threshold averaging operating points
 	sen_set = np.array(sen_set).T
 	fppim_set = np.array(fppim_set).T
 	fppis_set = np.array(fppis_set).T
-
+	ta_ops = []
 	for i in range(len(tholds)):
 		if fppim_set[i].mean() < 10 + util.EPS:
-			print "thold {}: sen mean {}, fppi mean {}, fppi std {}".format(tholds[i], sen_set[i].mean(), fppim_set[i].mean(), fppim_set[i].std())
-			ops.append([fppim_set[i].mean(), sen_set[i].mean()])
+			ta_ops.append([fppim_set[i].mean(), sen_set[i].mean()])
+	ta_ops = np.array(ta_ops)
 
-	return ops
+	return ta_ops
 
 def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, tholds):
 	ops = []
@@ -110,13 +115,18 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 	sen_set = np.array(sen_set).T
 	fppim_set = np.array(fppim_set).T
 	fppis_set = np.array(fppis_set).T
-
+	ta_ops = []
 	for i in range(len(tholds)):
 		if fppim_set[i].mean() < 10 + util.EPS:
-			print "thold {}: sen mean {}, fppi mean {}, fppi std {}".format(tholds[i], sen_set[i].mean(), fppim_set[i].mean(), fppim_set[i].std())
-			ops.append([fppim_set[i].mean(), sen_set[i].mean()])
+			ta_ops.append([fppim_set[i].mean(), sen_set[i].mean()])
+	ta_ops = np.array(ta_ops)
+	
+	# Vertical averaging operating points
+	op_set = np.array(op_set)
+	va_ops = eval.vertical_averaging_froc(op_set, np.arange(0.0, 10.0, 0.1))
+	va_ops = np.mean(va_ops, axis=0)
 
-	return ops
+	return ta_ops, va_ops
 
 def protocol():
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
@@ -578,18 +588,16 @@ def protocol_cnn_froc(_model, fname):
 	#tholds = np.hstack((np.arange(0.0, 1e-7, 2e-9), np.arange(1e-7, 1e-6, 0.2e-8), np.arange(1e-6, 1e-5, 2e-7), np.arange(1e-5, 5e-5, 1e-6), np.arange(5e-5, 3e-4, 5e-6), np.arange(3e-4, 0.007, 0.00005), np.arange(0.007, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
 	
 	tholds = np.hstack(np.arange(0.49, 0.51, 1e-4))
-	ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, tholds)
+	ta_ops, va_ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, tholds)
 
 	base_line = [[0.0, 0.0], [1.0, 0.57], [2.0, 0.72], [3.0, 0.78], [4.0, 0.79], [5.0, 0.81], [6.0, 0.82], [7.0, 0.85], [8.0, 0.86], [9.0, 0.895], [10.0, 0.93]]
-	op_set = []
+	
 	legend = []
-
-	op_set.append(base_line)
 	legend.append('baseline')
-	op_set.append(ops)
 	legend.append('current')
 
-	util.save_froc(op_set, _model.name, legend)
+	util.save_froc([baseline, ta_ops], '{}_ta'.format(_model.name), legend)
+	util.save_froc([baseline, va_ops], '{}_va'.format(_model.name), legend)
 
 	return np.array(ops)
 
