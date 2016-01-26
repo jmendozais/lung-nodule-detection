@@ -1,5 +1,6 @@
 import cv2
 import sys
+
 import skimage.io as io
 from sklearn.lda import LDA
 from sklearn import svm
@@ -691,6 +692,7 @@ class BaselineModel:
 
 	def predict_proba_from_feature_set(self, feature_set, blob_set):
 		self.load(self.name)
+		DIST2 = 987.755
 		
 		data_blobs = []
 		data_probs = []
@@ -704,7 +706,7 @@ class BaselineModel:
 				valid = True
 				for k in range(len(blobs)):
 					dist2 = (blobs[j][0] - blobs[k][0]) ** 2 + (blobs[j][1] - blobs[k][1]) ** 2
-					if dist2 < 988 and probs[j] + EPS < probs[k]:
+					if dist2 < DIST2 and probs[j] + EPS < probs[k]:
 						valid = False
 						break
 
@@ -713,6 +715,7 @@ class BaselineModel:
 					filtered_probs.append(probs[j])
 
 			#show_blobs("Predict result ...", lce, filtered_blob)
+
 			data_blobs.append(np.array(filtered_blobs))	
 			data_probs.append(np.array(filtered_probs))
 
@@ -720,7 +723,8 @@ class BaselineModel:
 
 	def predict_proba_from_feature_set_keras(self, feature_set, blob_set):
 		self.load(self.name)
-		
+		DIST2 = 987.755
+
 		data_blobs = []
 		data_probs = []
 		for i in range(len(feature_set)):
@@ -733,7 +737,7 @@ class BaselineModel:
 				valid = True
 				for k in range(len(blobs)):
 					dist2 = (blobs[j][0] - blobs[k][0]) ** 2 + (blobs[j][1] - blobs[k][1]) ** 2
-					if dist2 < 988 and probs[j] + EPS < probs[k]:
+					if dist2 < DIST2 and probs[j] + EPS < probs[k]:
 						valid = False
 						break
 

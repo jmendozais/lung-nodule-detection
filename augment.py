@@ -136,8 +136,7 @@ def offline_augment(X, y, ratio=0.1,
     aX = X.copy()
     ay = y.copy()
 
-    factor = int((float(ratio * (len(y) - np.sum(y))) / np.sum(y)))
-    #factor = int((float(ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
+    factor = int((float(ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
     print 'factor {}'.format(factor)
 
     for i in range(X.shape[0]):
