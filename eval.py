@@ -6,12 +6,15 @@ import sys
 import scipy.stats as stats
 from scipy.interpolate import interp1d
 
+
 '''
 from shapely.geometry import Polygon
 from shapely.geometry import Point
 '''
 
 import util
+from preprocess import *
+from segment import adaptive_distance_thold as segment
 
 def _poly(res):
 	tl = (res[0], res[1])
@@ -96,14 +99,14 @@ def evaluate(real, predicted, data=None, sample=False):
 	for i in range(num_imgs):
 		if sample: 
 			img, mask = data.get(i)
+			sampled, lce, norm = preprocess(img, mask)
+			img = lce
+
 		found = False
-		found_blob = None
+		found_blob_idx = -1
 		overlap = -1e10
 		for j in range(len(real[i])):
 			if real[i][j][0] == -1:
-				if sample:
-					for k in range(len(predicted[i])):
-						util.save_blob('data/fp/{}_{}_{}.jpg'.format(i, k, data.img_paths[i].split('/')[-1]), img, predicted[i][k])
 				continue
 
 			p += 1
@@ -114,24 +117,38 @@ def evaluate(real, predicted, data=None, sample=False):
 				if dist < MAX_DIST * MAX_DIST:
 					iou_pos.append(overlap)	
 					found = True
-					found_blob = predicted[i][k]
+					found_blob_idx = k
 					break
 			if found:
 				break
 
-		fppi.append(len(predicted[i]))
 
 		#print "real blob {}".format(real[i][0])
-
+		# Assuming that we just have one true object per image at most
 		if found:
+			fppi.append(len(predicted[i]) - 1)
 			tp += 1
 			if sample:
-				util.save_blob('data/tp/{}_{}.jpg'.format(i, data.img_paths[i].split('/')[-1]), img, found_blob)
+				for k in range(len(predicted[i])):
+					if k != found_blob_idx:
+						util.save_blob('data/fp/{}_{}_{}.jpg'.format(i, k, data.img_paths[i].split('/')[-1]), img, predicted[i][k])
+						_, masks = segment(img, [predicted[i][k]])
+						rmask = cv2.resize(masks[0], (128, 128), interpolation=cv2.INTER_CUBIC)
+						util.imwrite('data/fp/{}_{}_{}_mask.jpg'.format(i, k, data.img_paths[i].split('/')[-1]), rmask) 
+					else:
+						print 'real, predicted ->', real[i][0], predicted[i][k]
+						util.save_blob('data/tp/real_{}_{}.jpg'.format(i, data.img_paths[i].split('/')[-1]), img, real[i][0])
+						util.save_blob('data/tp/{}_{}_{}.jpg'.format(i, k, data.img_paths[i].split('/')[-1]), img, predicted[i][k])
 		else:
+			fppi.append(len(predicted[i]))
 			if sample:
-				util.save_blob('data/fn/{}_{}.jpg'.format(i, data.img_paths[i].split('/')[-1]), img, real[i][0])
+				if real[i][0][0] != -1:		
+					util.save_blob('data/fn/{}_{}.jpg'.format(i, data.img_paths[i].split('/')[-1]), img, real[i][0])
 				for k in range(len(predicted[i])):
 					util.save_blob('data/fp/{}_{}_{}.jpg'.format(i, k, data.img_paths[i].split('/')[-1]), img, predicted[i][k])
+					_, masks = segment(img, [predicted[i][k]])
+					rmask = cv2.resize(masks[0], (128, 128), interpolation=cv2.INTER_CUBIC)
+					util.imwrite('data/fp/{}_{}_{}_mask.jpg'.format(i, k, data.img_paths[i].split('/')[-1]), rmask) 
 		
 		#print "found {}, overlap {}".format(found, overlap)
 		

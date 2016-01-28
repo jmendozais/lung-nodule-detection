@@ -655,6 +655,7 @@ class AllExtractor:
 class Set1Extractor:
 	def __init__(self):
 		self.extractors = []
+		self.extractors.append(HardieExtractor())
 		self.extractors.append(LBPExtractor())
 		self.extractors.append(HogIOExtractor())
 		self.extractors.append(ZernikeExtractor())

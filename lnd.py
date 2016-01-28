@@ -9,6 +9,7 @@ from sklearn import lda
 from sklearn import decomposition
 from sklearn import feature_selection as selection
 from sklearn import linear_model
+from sklearn import ensemble
 import matplotlib.pyplot as plt
 
 from data import DataProvider
@@ -25,7 +26,7 @@ DATA_LEN = 40
 returns: Free Receiving Operating Curve obtained given a fold set
 '''
 
-def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, folds, tholds):
+def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, folds, tholds, method='ta'):
 	ops = []
 	sen_set = []
 	fppim_set = []
@@ -52,10 +53,16 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 		fppis_set.append([])
 		op_set.append([])
 
+		#sampled = False
+
 		for thold in tholds:
 			fblobs_te_pred, fprobs_te_pred = _model.filter_by_proba(blobs_te_pred, probs_te_pred, thold)
 			s, fm, fs = eval.evaluate(blobs_te, fblobs_te_pred, data_te)
-
+			'''
+			if sampled == False and fm > 3 and fm < 4:
+				sampled = True
+				_, _, _ = eval.evaluate(blobs_te, fblobs_te_pred, data_te, True)
+			'''
 			print "thold {}, sens {}, fppi mean {}, fppi std {}".format(thold, s, fm, fs)
 
 			sen_set[-1].append(s)
@@ -74,8 +81,18 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 		if fppim_set[i].mean() < 10 + util.EPS:
 			ta_ops.append([fppim_set[i].mean(), sen_set[i].mean()])
 	ta_ops = np.array(ta_ops)
+	
+	# Vertical averaging operating points
+	op_set = np.array(op_set)
+	va_ops = eval.vertical_averaging_froc(op_set, np.arange(0.0, 10.0, 0.1))
+	va_ops = np.mean(va_ops, axis=0)
 
-	return ta_ops
+	if method == 'ta':
+		return ta_ops
+	elif method == 'va':
+		return va_ops
+	else:
+		return ta_ops, va_ops
 
 def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, tholds):
 	ops = []
@@ -112,6 +129,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 
 		fold += 1
 
+	# Threshold averaging operating points
 	sen_set = np.array(sen_set).T
 	fppim_set = np.array(fppim_set).T
 	fppis_set = np.array(fppis_set).T
@@ -339,7 +357,7 @@ def protocol_froc_2(_model, fname):
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0.0, 0.02, 0.00005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
+	tholds = np.hstack((np.arange(0.0, 0.02, 5e-5), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
 	
 	ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf, tholds)
 
@@ -502,6 +520,73 @@ def protocol_selector_froc(_model, fname, selectors, legend):
 	util.save_froc(op_set, _model.name, legend)
 	return op_set
 
+def protocol_classifier_froc(_model, fname, classifiers, legend):
+	paths, locs, rads = jsrt.jsrt(set='jsrt140')
+	left_masks = jsrt.left_lung(set='jsrt140')
+	right_masks = jsrt.right_lung(set='jsrt140')
+	size = len(paths)
+
+	blobs = []
+	for i in range(size):
+		blobs.append([locs[i][0], locs[i][1], rads[i]])
+	blobs = np.array(blobs)
+
+	print "Loading	 blobs & features ..."
+	data = DataProvider(paths, left_masks, right_masks)
+
+	feats = np.load('{}.fts.npy'.format(fname))
+	pred_blobs = np.load('{}_pred.blb.npy'.format(fname))
+
+	av_cpi = 0
+	for tmp in pred_blobs:
+		av_cpi += len(tmp)
+	print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
+
+	Y = (140 > np.array(range(size))).astype(np.uint8)
+	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+	tholds = np.hstack((np.arange(0.0, 1e-3, 1e-6), np.arange(1e-3, 1e-2, 1e-5), np.arange(1e-2, 0.5, 1e-4), np.arange(0.5, 1.0, 0.01)))
+	
+	ta_op_set = []
+	va_op_set = []
+	base_line = [[0.0, 0.0], [1.0, 0.57], [2.0, 0.72], [3.0, 0.78], [4.0, 0.79], [5.0, 0.81], [6.0, 0.82], [7.0, 0.85], [8.0, 0.86], [9.0, 0.895], [10.0, 0.93]]
+
+	ta_op_set.append(base_line)
+	va_op_set.append(base_line)
+	legend.insert(0, "baseline")
+
+	for i in range(len(classifiers)):
+		print legend[i+1]
+		_model.clf = classifiers[i]
+		ta_ops, va_ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf, tholds, method='both')
+		ta_op_set.append(ta_ops)
+		va_op_set.append(va_ops)
+
+	ta_op_set = np.array(ta_op_set)
+	va_op_set = np.array(va_op_set)
+
+	util.save_froc(ta_op_set, '{}_ta'.format(_model.name), legend)
+	util.save_froc(va_op_set, '{}_va'.format(_model.name), legend)
+
+	return ta_op_set, va_op_set
+
+def protocol_clf_eval_froc(_model, fname):
+	classifiers  = []
+	classifiers.append(lda.LDA())
+	classifiers.append(svm.SVC(kernel='linear', probability=True))
+	classifiers.append(svm.SVC(kernel='rbf', probability=True))
+	classifiers.append(ensemble.RandomForestClassifier())
+	classifiers.append(ensemble.AdaBoostClassifier())
+	classifiers.append(ensemble.GradientBoostingClassifier())
+
+	labels = []
+	labels.append('LDA')
+	labels.append('Linear SVC')
+	labels.append('RBF SVC')
+	labels.append('Random Forest')
+	labels.append('AdaBoost')
+	labels.append('Gradient Boosting')
+
+	protocol_classifier_froc(_model, fname, classifiers, labels)
 
 def protocol_pca_froc(_model, fname):
 	selectors = []
@@ -642,6 +727,8 @@ if __name__=="__main__":
 		method = protocol_rlr_froc
 	if stage == 'clf-rfe':
 		method = protocol_rfe_froc
+	if stage == 'clf-eval':
+		method = protocol_clf_eval_froc
 	if stage == 'cnn':
 		method = protocol_cnn_froc
 	_model.name += stage
