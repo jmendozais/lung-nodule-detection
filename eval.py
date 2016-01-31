@@ -5,6 +5,7 @@ import cv2
 import sys
 import scipy.stats as stats
 from scipy.interpolate import interp1d
+from operator import itemgetter
 
 
 '''
@@ -163,17 +164,66 @@ def evaluate(real, predicted, data=None, sample=False):
 	#return sensitivity, np.mean(fppi), np.std(fppi), np.mean(iou), np.std(iou), np.mean(iou_pos), np.std(iou_pos)
 	return sensitivity, np.mean(fppi), np.std(fppi)
 
-def vertical_averaging_froc(op_set, range):
-	normalized_ops = []
+# TODO: Adapt the code to calculate the exact vertical average FROC curve, instead of mix tav and vav
 
-	for ops in op_set:
-		x = np.array(ops).T
-		f = interp1d(x[0], x[1], kind='linear', fill_value=0, bounds_error=False)
-		new_x = np.array([range, f(range)]).T
-		normalized_ops.append(new_x)
+def froc(real, pred, probs, data=None):
+		n = len(real)		
+		p = 0
+		entries = np.full((0,3), fill_value=0, dtype=float)
+		
+		for i in range(n):
+			if real[i][0][0] != -1:
+				p += 1
 
-	return np.array(normalized_ops)
+			dist = np.linalg.norm(pred[i][:,:2] - real[i][0][:2], axis=1)
+			
+			entry = []
+			entry.append(probs[i])
+			entry.append(dist)
+			entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
 
+			entries = np.append(entries, np.array(entry).T, axis=0)
+		
+		entries = sorted(entries, key=itemgetter(0))
+		entries.reverse()
+		entries = np.array(entries)
+	
+		tp = 0.0
+		fppi = np.full((n,), fill_value=0, dtype=np.float)
+		found = np.full((n,), fill_value=False, dtype=bool)
+		froc = []
+		f_prev = -1.0
+		for i in range(entries.shape[0]):
+			idx = entries[i][2]
+			if entries[i][0] != f_prev:
+				froc.append([np.mean(fppi), tp / p])
+				f_prev = entries[i][0]
+
+			if not found[idx] and entries[i][1] < 31.43:
+				found[idx] = True
+				tp += 1
+			else:
+				fppi[idx] += 1
+
+		froc.append([np.mean(fppi), tp / p])
+
+		return np.array(froc)	
+			
+def average_froc(frocs, fppi_range):
+	av_sen = []
+
+	for i in range(len(frocs)):
+		x = frocs[i].T
+		f = interp1d(x[0], x[1], kind='linear', fill_value=0.0, bounds_error=False)
+		sen = f(fppi_range)
+		av_sen.append(sen)
+
+	av_sen = np.array(av_sen)
+	av_froc = [fppi_range, np.mean(av_sen, axis=0)]
+	av_froc = np.array(av_froc).T
+
+	return av_froc
+	
 if __name__ == "__main__":
 	real_path = sys.argv[1]
 	predicted_path = sys.argv[2]

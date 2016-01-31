@@ -5,6 +5,8 @@ import numpy.linalg as la
 from skimage import draw
 import cv2
 from matplotlib import pyplot as plt
+from matplotlib.colors import Normalize
+
 plt.switch_backend('agg')
 plt.ioff()
 import time
@@ -207,7 +209,7 @@ def save_froc(op_set, name, legend=None):
 
 	for i in range(len(op_set)):
 		ops = np.array(op_set[i]).T
-		plt.plot(ops[0], ops[1], line_format[i%14], marker='x')
+		plt.plot(ops[0], ops[1], line_format[i%14], marker='x', markersize=3)
 
 	plt.title(name)
 	plt.ylabel('Sensitivity')
@@ -224,3 +226,25 @@ def save_froc(op_set, name, legend=None):
 	writer = csv.writer(file, delimiter=",")
 	writer.writerows(op_set)
 
+class MidpointNormalize(Normalize):
+	def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
+		self.midpoint = midpoint
+		Normalize.__init__(self, vmin, vmax, clip)
+	def __call__(self, value, clip=None):
+		x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.5, 1]
+		return np.ma.masked_array(np.interp(value, x, y))
+
+def save_grid(scores, name, labels, ranges, title):
+	min_score = np.min(scores.flatten())
+	max_score = np.max(scores.flatten())
+	plt.imshow(scores, interpolation='nearest', cmap=plt.cm.hot,
+           	   norm=MidpointNormalize(vmin=0.2 * max_score, midpoint=0.92 * max_score, vmax=max_score))
+	plt.xlabel(labels[1])
+	plt.ylabel(labels[0])
+	plt.colorbar()
+	plt.xticks(np.arange(len(ranges[1])), ranges[1], rotation=45)
+	plt.yticks(np.arange(len(ranges[0])), ranges[0])
+	plt.title(title)
+	name='{}_{}'.format(name, time.clock())
+	plt.savefig('{}_grid.jpg'.format(name))
+	plt.clf()
