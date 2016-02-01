@@ -19,5 +19,5 @@ python lnd.py view <img path> <left mask> <right mask>
 # Reference
 -d --candidate-detector: candidate detection. Options: wmci(default)
 -f --feature-extractor: feature extraction method. Options: hardie(default), hog, hogio, lbpio, zernike, shape, all
--s --selector: feature selection / reduction : none(default), pca, lda, rfe
+-s --selector: feature selection / reduction : none(default), pca, lda, rfe, rlr
 -c --classifier: lda(default), svm

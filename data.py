@@ -15,6 +15,7 @@ class DataProvider:
 		ll_mask = cv2.imread(self.ll_paths[i])
 		lr_mask = cv2.imread(self.lr_paths[i])
 		lung_mask = ll_mask + lr_mask
+		# FIX: don't resize here
 		dsize = (512, 512)
 		lung_mask = cv2.resize(lung_mask, dsize, interpolation=cv2.INTER_CUBIC)
 		lung_mask = cv2.cvtColor(lung_mask, cv2.COLOR_BGR2GRAY)

@@ -2,11 +2,14 @@ import cv2
 import sys
 
 import skimage.io as io
-from sklearn.lda import LDA
+from sklearn import lda
 from sklearn import svm
+from sklearn import decomposition
 from sklearn import preprocessing
+from sklearn import feature_selection as selection
 from sklearn.externals import joblib
 from sklearn.feature_selection import RFE
+
 from time import *
 from os import path
 
@@ -128,13 +131,12 @@ class StageScheduler(keras.callbacks.Callback):
 				self.idx += 1
 		print 'lr {}'.format(self.model.optimizer.lr.get_value())
 				
-#
 # Baseline Model
 class BaselineModel:
 	def __init__(self, name='default'):
 		self.name = name
 
-		self.clf = LDA()
+		self.clf = lda.LDA()
 		self.scaler = preprocessing.StandardScaler()
 		self.selector = None
 		self.transform = None
@@ -750,20 +752,24 @@ class BaselineModel:
 
 		return np.array(data_blobs), np.array(data_probs)
 
+	# Join filter and eval on the same function and vectorize
 	def filter_by_proba(self, blob_set, prob_set, thold = 0.012):
 		data_blobs = []
 		data_probs = []
 		for i in range(len(blob_set)):
-			blobs = blob_set[i]
 			probs = prob_set[i]
-
-			## candidate cue adjacency rule: 22 mm
+			filtered_blobs = blob_set[i][probs > thold]
+			filtered_probs = prob_set[i][probs > thold]
+			'''
+			probs = prob_set[i]
+			blobs = blob_set[i]
 			filtered_blobs = []
 			filtered_probs = []
 			for j in range(len(blobs)):
 				if probs[j] > thold:
 					filtered_blobs.append(blobs[j])
 					filtered_probs.append(probs[j])
+			'''
 
 			#show_blobs("Predict result ...", lce, filtered_blob)
 			data_blobs.append(np.array(filtered_blobs))	
@@ -771,7 +777,7 @@ class BaselineModel:
 
 		return np.array(data_blobs), np.array(data_probs)
 
-
-
-
+classifiers = {'svm':svm.SVC(probability=True, C=0.0373, gamma=0.002), 'lda':lda.LDA()}
+#classifiers = {'svm':svm.SVC(probability=True), 'lda':lda.LDA()}
+reductors = {'none':None, 'pca':decomposition.PCA(n_components=0.99999999999, whiten=True), 'lda':selection.SelectFromModel(lda.LDA())}
 
