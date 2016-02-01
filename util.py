@@ -79,25 +79,22 @@ def imwrite(fname, _img):
 	cv2.imwrite(fname, 255 * img)
 
 def label_blob(img, blob, color=(255, 0, 0), margin=0):
-  if len(img.shape) == 2:
-    img = cv2.cvtColor(img.copy(), cv2.COLOR_GRAY2BGR)
+	if len(img.shape) == 2:
+		img = cv2.cvtColor(img.copy(), cv2.COLOR_GRAY2BGR)
 
-  ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
+	ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
+	if np.max(ex) + 3 + margin >= img.shape[0] or np.max(ey) + 3 + margin >= img.shape[1]:
+		return img
 
-  if np.max(ex) + 3 + margin >= img.shape[0] or np.max(ey) + 3 + margin >= img.shape[1]:
-    return img
-
-  img[ex, ey] = color 
-  ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+1+margin)
-  img[ex, ey] = color 
-
+	img[ex, ey] = color 
+	ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+1+margin)
+	img[ex, ey] = color 
 	'''
 	ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+2+margin)
 	img[ex, ey] = color 
 	ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+3+margin)
 	img[ex, ey] = color 
 	'''
-	
 	return img
 
 def show_blobs(windowName, img, blobs):
