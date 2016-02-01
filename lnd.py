@@ -82,6 +82,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 	sen_set = []
 	fppim_set = []
 	fppis_set = []
+	op_set = []
 	fold = 0
 
 	for tr_idx, te_idx in folds:	
@@ -605,7 +606,7 @@ def protocol_cnn_froc(_model, fname):
 	tholds = np.hstack((np.arange(0.0, 1e-7, 1e-11), np.arange(1e-7, 1e-6, 1e-10), np.arange(1e-6, 1e-5, 1e-9), np.arange(1e-5, 1e-4, 1e-8), np.arange(1e-4, 1e-2, 1e-6),np.arange(0.01, 0.1, 1e-5), np.arange(0.1, 1.0, 1e-4)))
 	ta_ops, va_ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, tholds)
 
-	base_line = [[0.0, 0.0], [1.0, 0.57], [2.0, 0.72], [3.0, 0.78], [4.0, 0.79], [5.0, 0.81], [6.0, 0.82], [7.0, 0.85], [8.0, 0.86], [9.0, 0.895], [10.0, 0.93]]
+	baseline = [[0.0, 0.0], [1.0, 0.57], [2.0, 0.72], [3.0, 0.78], [4.0, 0.79], [5.0, 0.81], [6.0, 0.82], [7.0, 0.85], [8.0, 0.86], [9.0, 0.895], [10.0, 0.93]]
 	
 	legend = []
 	legend.append('baseline')

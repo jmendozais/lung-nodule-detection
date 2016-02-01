@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+from math import ceil
 import numpy as np
 import re
 from scipy import ndimage
@@ -152,6 +153,56 @@ def offline_augment(X, y, ratio=0.1,
     np.random.seed(seed)
     np.random.shuffle(ay)
 
+    X = np.copy(aX)
+    y = np.copy(ay)
+
+    for i in range(X.shape[0]):
+        x = X[i]
+        if y[i][1] > 0:
+            x = random_transform(x.astype("float32"), rotation_range, width_shift_range, height_shift_range, horizontal_flip, vertical_flip)
+        x = standardize(x, featurewise_center, featurewise_std_normalization, samplewise_center, samplewise_std_normalization, zca_whitening, 0, 0, [])
+        X[i] = x
+
+    return X, y
+
+def bootstraping_augment(X, y, ratio=0.1, batch_size=32,
+        featurewise_center=False, # set input mean to 0 over the dataset
+        samplewise_center=False, # set each sample mean to 0
+        featurewise_std_normalization=False, # divide inputs by std of the dataset
+        samplewise_std_normalization=False, # divide each input by its std
+
+        zca_whitening=False, # apply ZCA whitening
+        rotation_range=0., # degrees (0 to 180)
+        width_shift_range=0., # fraction of total width
+        height_shift_range=0., # fraction of total height
+        horizontal_flip=False,
+        vertical_flip=False,
+    ):
+    assert batch_size % 2 == 0, 'Batch size should be even'
+
+    factor = int((float(ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
+    print 'factor {}'.format(factor)
+
+    idx = y.T[1]
+    positives = X[idx > 0]
+    negatives = X[idx == 0]
+    l_pos = y[idx > 0][0]
+    l_neg = y[idx == 0][0]
+
+    aX = np.zeros((0,) + X[0].shape).astype(X[0].dtype)
+    ay = np.zeros((0,) + y[0].shape).astype(y[0].dtype)
+    n_batches = int(ceil(float(2 * negatives.shape[0]) / batch_size))
+    for batch_idx in range(n_batches):
+        begin = batch_idx * (batch_size / 2)
+        end = min(begin + (batch_size / 2), negatives.shape[0]) 
+        aX = np.append(aX, negatives[begin:end], axis=0)    
+        ay = np.append(ay, np.full((end - begin,) + l_neg.shape, dtype=l_neg.dtype, fill_value=l_neg), axis=0)
+	
+        b_idx = np.random.uniform(size=(end - begin,))
+        b_idx = np.floor(b_idx * positives.shape[0]).astype(np.int)
+        aX = np.append(aX, positives[b_idx], axis=0)
+        ay = np.append(ay, np.full((end - begin,) + l_pos.shape, dtype=l_pos.dtype, fill_value=l_pos), axis=0)
+     
     X = np.copy(aX)
     y = np.copy(ay)
 

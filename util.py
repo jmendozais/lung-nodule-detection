@@ -59,14 +59,14 @@ def scale_list(path, factor):
 # Display utils 
 
 def imshow(windowName,  _img):
-	img = np.array(_img).astype(np.float64)
-	a = np.min(img)
-	b = np.max(img)
-	img = (img - a) / (b - a + EPS);
-	print np.min(img), np.max(img)
+  img = np.array(_img).astype(np.float64)
+  a = np.min(img)
+  b = np.max(img)
+  img = (img - a) / (b - a + EPS);
+  print np.min(img), np.max(img)
   
-	cv2.imshow(windowName, img)
-	cv2.waitKey()
+  cv2.imshow(windowName, img)
+  cv2.waitKey()
 
 def imwrite(fname, _img):
   img = np.array(_img).astype(np.float64)
@@ -77,34 +77,34 @@ def imwrite(fname, _img):
   cv2.imwrite(fname, 255 * img)
 
 def label_blob(img, blob, color=(255, 0, 0), margin=0):
-	if len(img.shape) == 2:
-		img = cv2.cvtColor(img.copy(), cv2.COLOR_GRAY2BGR)
+  if len(img.shape) == 2:
+    img = cv2.cvtColor(img.copy(), cv2.COLOR_GRAY2BGR)
 
-	ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
+  ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
 
-	if np.max(ex) + 3 + margin >= img.shape[0] or np.max(ey) + 3 + margin >= img.shape[1]:
-		return img
+  if np.max(ex) + 3 + margin >= img.shape[0] or np.max(ey) + 3 + margin >= img.shape[1]:
+    return img
 
-	img[ex, ey] = color 
-	ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+1+margin)
-	img[ex, ey] = color 
+  img[ex, ey] = color 
+  ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+1+margin)
+  img[ex, ey] = color 
 
-	'''
-	ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+2+margin)
-	img[ex, ey] = color 
-	ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+3+margin)
-	img[ex, ey] = color 
-	'''
+  '''
+  ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+2+margin)
+  img[ex, ey] = color 
+  ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+3+margin)
+  img[ex, ey] = color 
+  '''
   
-	return img
+  return img
 
 def show_blobs(windowName, img, blobs):
-	labeled = np.array(img).astype(np.float32)
-	maxima = np.max(labeled)
-	for blob in blobs:
-		labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=-5)
+  labeled = np.array(img).astype(np.float32)
+  maxima = np.max(labeled)
+  for blob in blobs:
+    labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=-5)
 
-	imshow(windowName, labeled)
+  imshow(windowName, labeled)
 
 def imwrite_with_blobs(fname, img, blobs):
   labeled = np.array(img).astype(np.float32)
@@ -223,3 +223,9 @@ def save_froc(op_set, name, legend=None):
   writer = csv.writer(file, delimiter=",")
   writer.writerows(op_set)
 
+if __name__ == '__main__':
+  if sys.argv[1] == '-m':
+    n = int(sys.argv[2])
+    for i in range(n):  
+      fname = sys.argv[2 + i]
+        

@@ -46,7 +46,7 @@ def input(img_path, ll_path, lr_path):
 
  	return img, lung_mask
 
-def create_rois(data, blob_set, dsize=(32, 32), mode='mask'):
+def create_rois(data, blob_set, dsize=(32, 32), mode=None):
 	# Create image set
 	img_set = []
 	for i in range(len(data)):
@@ -352,7 +352,7 @@ class BaselineModel:
 		np.random.seed(1337)  # for reproducibility
 		batch_size = 32
 		nb_classes = 2
-		nb_epoch = 50
+		nb_epoch = 60
 		data_augmentation = True
 
 		# input image dimensions
@@ -392,7 +392,7 @@ class BaselineModel:
 		sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
 		model.compile(loss='categorical_crossentropy', optimizer=sgd)
 
-		lr_scheduler = StageScheduler([15, 30])
+		lr_scheduler = StageScheduler([30, 50])
 		if not data_augmentation:
 			print('Not using data augmentation or normalization')
 			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
@@ -400,9 +400,8 @@ class BaselineModel:
 			#print('Test score
 		else:
 			print('Using data augmentation')
-			X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, 
-						rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
-
+			#X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
+			X_train, Y_train = bootstraping_augment(X_train, Y_train, ratio=1, batch_size=batch_size, rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
 			print 'Negatives: {}'.format(np.sum(Y_train.T[0]))
 			print 'Positives: {}'.format(np.sum(Y_train.T[1]))
 			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
