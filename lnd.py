@@ -38,7 +38,7 @@ returns: Free Receiving Operating Curve obtained given a fold set
 '''
 
 
-def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, folds, tholds):
+def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, folds):
 	fold = 0
 	valid = True
 	frocs = []
@@ -65,7 +65,7 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 	av_froc = eval.average_froc(frocs, fppi_range)
 	return av_froc
 
-def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, tholds):
+def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds):
 	fold = 0
 	valid = True
 	frocs = []
@@ -122,7 +122,7 @@ def protocol_two_stages():
 		print "Fold {}".format(fold), 
 
 		model.train_with_feature_set(feats[tr_idx], pred_blobs[tr_idx], blobs[tr_idx])
-		blobs_te_pred = model.predict_from_feature_set(feats[te_idx], pred_blobs[te_idx], thold)
+		blobs_te_pred = model.predict_from_feature_set(feats[te_idx], pred_blobs[te_idx])
 
 		paths_te = paths[te_idx]
 		for i in range(len(blobs_te_pred)):
@@ -196,10 +196,7 @@ def protocol_froc_2(_model, fname):
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	#tholds = np.hstack((np.arange(0.0, 0.02, 5e-5), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
-	tholds = np.hstack((np.arange(0.0, 1e-3, 1e-5),np.arange(1e-3, 0.1, 1e-4 ), np.linspace(0.1, 1.0, 1e-3)))
-	
-	ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf, tholds)
+	ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf)
 
 	legend = []
 	legend.append('baseline')
@@ -236,8 +233,6 @@ def protocol_wmci_froc(_model, fname):
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
-	tholds = np.hstack((np.arange(0.0, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
-	
 	op_set = []
 	op_set.append(baseline)
 	detect_range = np.arange(0.3, 0.8, 0.1)
@@ -253,7 +248,7 @@ def protocol_wmci_froc(_model, fname):
 		selected_feats = np.array(selected_feats)
 		selected_blobs = np.array(selected_blobs)
 
-		ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, selected_blobs, selected_feats, skf, tholds)
+		ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, selected_blobs, selected_feats, skf)
 		op_set.append(ops)
 
 	op_set = np.array(op_set)
@@ -289,7 +284,6 @@ def protocol_selector_froc(_model, fname, selectors, legend):
 
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
-	tholds = np.hstack((np.arange(0.0, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
 	
 	op_set = []
 	
@@ -299,7 +293,7 @@ def protocol_selector_froc(_model, fname, selectors, legend):
 	for i in range(len(selectors)):
 		print legend[i+1]
 		_model.selector = selectors[i]
-		ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf, tholds)
+		ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf)
 		op_set.append(ops)
 
 	op_set = np.array(op_set)
@@ -331,7 +325,6 @@ def protocol_classifier_froc(_model, fname, classifiers, legend):
 
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
-	tholds = np.hstack((np.arange(0.0, 1e-3, 1e-7), np.arange(1e-3, 1e-2, 1e-5), np.arange(1e-2, 0.5, 1e-4), np.arange(0.5, 1.0, 0.01)))
 	
 	op_set = []
 
@@ -341,7 +334,7 @@ def protocol_classifier_froc(_model, fname, classifiers, legend):
 	for i in range(len(classifiers)):
 		print legend[i+1]
 		_model.clf = classifiers[i]
-		ops = get_froc_on_folds_fast(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf, tholds, method='both')
+		ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf) 
 		op_set.append(ops)
 
 	op_set = np.array(op_set)
@@ -471,11 +464,8 @@ def protocol_cnn_froc(_model, fname):
 
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
-
-	#tholds = np.hstack((np.arange(0.0, 1e-7, 2e-9), np.arange(1e-7, 1e-6, 0.2e-8), np.arange(1e-6, 1e-5, 2e-7), np.arange(1e-5, 5e-5, 1e-6), np.arange(5e-5, 3e-4, 5e-6), np.arange(3e-4, 0.007, 0.00005), np.arange(0.007, 0.02, 0.0005), np.arange(0.02, 0.06, 0.0025), np.arange(0.06, 0.66, 0.01)))
 	
-	tholds = np.hstack(np.arange(0.49, 0.51, 1e-4))
-	ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, tholds)
+	ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf)
 
 	legend = []
 	legend.append('baseline')
@@ -492,7 +482,7 @@ if __name__=="__main__":
 
 	extractor = model.extractors.get(model_type)
 	if extractor != None:
-		_model.extractor = extractor()
+		_model.extractor = extractor
 		_model.name = 'data/{}'.format(model_type)
 	else:
 		_model.extractor = model.HardieExtractor()
@@ -502,7 +492,7 @@ if __name__=="__main__":
 	if stage.find('clf') != -1:
 		clf = sys.argv[3]
 		if clf == 'svm':
-			_model.clf = svm.SVC(probability=True)
+			_model.clf = svm.SVC(kernel='linear', probability=True)
 		elif clf == 'lda':
 			_model.clf = lda.LDA()
 		method = protocol_froc_2

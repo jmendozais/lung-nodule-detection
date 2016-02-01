@@ -7,6 +7,7 @@ import cv2
 from scipy.stats import skew, kurtosis
 import skimage.feature as feature
 import mahotas
+import overfeat
 
 import util
 
@@ -671,6 +672,45 @@ class Set1Extractor:
 		return fv
 # Register extractors
 
-extractors = {'hardie':HardieExtractor, 'hog':HogExtractor, 'hogio':HogIOExtractor, \
-				'lbpio':LBPExtractor, 'znk':ZernikeExtractor, 'shape':ShapeExtractor, \
-				'all':AllExtractor, 'set1': Set1Extractor}
+class OverfeatExtractor:
+	def __init__(self, mode=None):
+		overfeat.init('/home/juliomb/lnd-env/OverFeat/data/default/net_weight_0', 0)
+		self.mode = mode
+
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+			dsize = (231, 231)
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(lce.shape[0], br[0]), min(lce.shape[1], br[1]))
+
+			lce_roi = lce[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			lce_roi = cv2.resize(lce_roi, dsize, interpolation=cv2.INTER_CUBIC)
+
+			if self.mode == 'inner':
+				mask = cv2.resize(nod_masks[i], dsize, interpolation=cv2.INTER_CUBIC)
+				image = mask.astype(np.float32) * lce_roi	
+				image = np.array([image.copy(), image.copy(), image.copy()])
+			else:	
+				image = np.array([lce_roi.copy(), lce_roi.copy(), lce_roi.copy()])
+
+			_ = overfeat.fprop(image.astype(np.float32))
+
+			feats = overfeat.get_output(19)
+			feats = feats.flatten()	
+
+			feature_vectors.append(np.array(feats))
+
+		return np.array(feature_vectors)
+
+
+extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(), 'hogio':HogIOExtractor(), \
+				'lbpio':LBPExtractor(), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
+				'all':AllExtractor(), 'set1':Set1Extractor(), 'overf':OverfeatExtractor(), \
+				'overfin':OverfeatExtractor(mode='inner')}

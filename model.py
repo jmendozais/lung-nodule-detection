@@ -17,7 +17,6 @@ from keras.models import model_from_json
 from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.layers.advanced_activations import LeakyReLU, PReLU
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
-from augment import ImageDataGenerator
 from keras.optimizers import SGD, Adadelta, Adagrad
 from keras.utils import np_utils, generic_utils
 from six.moves import range
@@ -27,12 +26,13 @@ from detect import *
 from extract import * 
 from preprocess import *
 from segment import *
+from augment import *
 from util import *
 
 import jsrt
 
 #TODO: up classifier
-'''
+
 def input(img_path, ll_path, lr_path):
 	img = np.load(img_path)
 	img = img.astype(np.float)
@@ -46,161 +46,7 @@ def input(img_path, ll_path, lr_path):
 
  	return img, lung_mask
 
-def detect_blobs(img, lung_mask):
-	sampled, lce, norm = preprocess(img, lung_mask)
-	blobs, ci = wmci(lce, lung_mask)
-	#ci = lce
-	#blobs = log_(lce, lung_mask)
-
-	return blobs, norm, lce, ci
-
-def segment(img, blobs):
-	blobs, nod_masks = adaptive_distance_thold(img, blobs)
-
-	return blobs, nod_masks
-
-def extract(norm, lce, wmci, lung_mask, blobs, nod_masks):
-
-	return hardie(norm, lce, wmci, lung_mask, blobs, nod_masks)
-
-def extract_feature_set(data):
-	feature_set = []
-	blob_set = []
-	print '[',
-	for i in range(len(data)):
-		if i % (len(data)/10) == 0:
-			print ".",
-			sys.stdout.flush()
-
-		img, lung_mask = data.get(i)
-		blobs, norm, lce, ci = detect_blobs(img, lung_mask)
-		blobs, nod_masks = segment(lce, blobs)
-		feats = extract(norm, lce, ci, lung_mask, blobs, nod_masks)
-		feature_set.append(feats)
-		blob_set.append(blobs)
-	print ']'
-	return np.array(feature_set), np.array(blob_set)
-
-def _classify(blobs, feature_vectors, thold=0.012):
-	clf = joblib.load('data/clf.pkl')
-	scaler = joblib.load('data/scaler.pkl')
-	selector = joblib.load('data/selector.pkl')
-
-	feature_vectors = scaler.transform(feature_vectors)
-	feature_vectors = selector.transform(feature_vectors)
-	probs = clf.predict_proba(feature_vectors)
-	probs = probs.T[1]
-
-	blobs = np.array(blobs)
-	blobs = blobs[probs>thold]
-
-	return blobs, probs[probs>thold]
-
-
-	Input: images & masks (data provider), blobs
-	Returns: classifier, scaler
-
-def deprecated_train(data, blobs):
-	X, Y = classify.create_training_set(data, blobs)
-	#clf = svm.SVC()
-	clf = LDA()
-	#scaler = preprocessing.MinMaxScaler()
-	scaler = preprocessing.StandardScaler()
-	
-	clf, scaler = classify.train(X, Y, clf, scaler)
-
-	joblib.dump(clf, 'data/clf.pkl')
-	joblib.dump(scaler, 'data/scaler.pkl')
-
-	return clf, scaler
-
-def deprecated_train_with_feature_set(feature_set, pred_blobs, real_blobs):
-	X, Y = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
-
-	#scaler = preprocessing.MinMaxScaler()
-	scaler = preprocessing.StandardScaler()
-	selector = RFE(estimator=LDA(), n_features_to_select=len(X[0]), step=1)
-	#clf = svm.SVC()
-	clf = LDA()
-	clf, scaler, selector = classify.train(X, Y, clf, scaler, selector)
-
-	joblib.dump(clf, 'data/clf.pkl')
-	joblib.dump(scaler, 'data/scaler.pkl')
-	joblib.dump(selector, 'data/selector.pkl')
-
-	return clf, scaler, selector
-
-
-	Input: data provider
-	Returns: blobs
-
-def predict(data):
-	data_blobs = []
-	for i in range(len(data)):
-		img, lung_mask = data.get(i)
-		blobs, norm, lce, ci = detect_blobs(img, lung_mask)
-		blobs, nod_masks = segment(lce, blobs)
-		feats = extract(norm, lce, ci, lung_mask, blobs, nod_masks)
-		blobs, probs = _classify(blobs, feats)
-
-		# candidate cue adjacency rule: 22 mm
-		filtered_blobs = []
-		for j in range(len(blobs)):
-			valid = True
-			for k in range(len(blobs)):
-				dist2 = (blobs[j][0] - blobs[k][0]) ** 2 + (blobs[j][1] - blobs[k][1]) ** 2
-				if dist2 < 988 and probs[j] + EPS < probs[k]:
-					valid = False
-					break
-
-			if valid:
-				filtered_blobs.append(blobs[j])
-
-		#show_blobs("Predict result ...", lce, filtered_blob)
-		data_blobs.append(np.array(filtered_blobs))		
-
-	return np.array(data_blobs)
-
-def predict_from_feature_set(feature_set, blob_set, thold=0.012):
-	data_blobs = []
-	for i in range(len(feature_set)):
-		blobs, probs = _classify(blob_set[i], feature_set[i], thold)
-
-		# candidate cue adjacency rule: 22 mm
-		filtered_blobs = []
-		for j in range(len(blobs)):
-			valid = True
-			for k in range(len(blobs)):
-				dist2 = (blobs[j][0] - blobs[k][0]) ** 2 + (blobs[j][1] - blobs[k][1]) ** 2
-				if dist2 < 988 and probs[j] + EPS < probs[k]:
-					valid = False
-					break
-
-			if valid:
-				filtered_blobs.append(blobs[j])
-
-		#show_blobs("Predict result ...", lce, filtered_blob)
-		data_blobs.append(np.array(filtered_blobs))		
-
-	return np.array(data_blobs)
-
-# PIPELINES 
-def pipeline_features(img_path, blobs, ll_path, lr_path):
-	img, lung_mask = input(img_path, ll_path, lr_path)
-	_, norm, lce, ci = detect_blobs(img, lung_mask)
-	blobs, nod_masks = segment(lce, blobs)
-	feats = extract(norm, lce, ci, lung_mask, blobs, nod_masks)
-
-	return lce, feats
-
-def pipeline(img_path, ll_path, lr_path):
-	img, lung_mask = input(img_path, ll_path, lr_path)
-	blobs = predict(img, lung_mask)
-
-	return img, blobs
-'''
-
-def create_rois(data, blob_set, dsize=(32, 32)):
+def create_rois(data, blob_set, dsize=(32, 32), mode='mask'):
 	# Create image set
 	img_set = []
 	for i in range(len(data)):
@@ -213,6 +59,10 @@ def create_rois(data, blob_set, dsize=(32, 32)):
 	for i in range(len(img_set)):
 		img = img_set[i]
 		rois = []
+		masks = []
+		if mode == 'mask':
+			_, masks = adaptive_distance_thold(img, blob_set[i])
+		
 		for j in range(len(blob_set[i])):
 			x, y, r = blob_set[i][j]
 			shift = 0 
@@ -225,6 +75,11 @@ def create_rois(data, blob_set, dsize=(32, 32)):
 
 			roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
 			roi = cv2.resize(roi, dsize, interpolation=cv2.INTER_CUBIC)
+
+			if mode == 'mask':
+				mask = cv2.resize(masks[j], dsize, interpolation=cv2.INTER_CUBIC)
+				roi *= mask.astype(np.float64)
+
 			rois.append(roi)
 		roi_set.append(np.array(rois))
 	return np.array(roi_set)
@@ -435,11 +290,11 @@ class BaselineModel:
 
 		return clf, scaler, selector
 
-	def fit_mnist_model(self, X_train, Y_train, batch_size=128, nb_epoch=12):
+	def fit_mnist(self, X_train, Y_train, batch_size=128, nb_epoch=12):
 		np.random.seed(1337)  # for reproducibility
 		batch_size = 128
 		nb_classes = 2#10
-		nb_epoch = 50
+		nb_epoch = 12
 		# input image dimensions
 		img_rows, img_cols = 28, 28
 		# number of convolutional filters to use
@@ -448,6 +303,8 @@ class BaselineModel:
 		nb_pool = 2
 		# convolution kernel size
 		nb_conv = 3
+		# augment
+		data_augmentation = True
 
 		#print('X_train shape:', X_train.shape)
 		#print(X_train.shape[0], 'train samples')
@@ -473,17 +330,32 @@ class BaselineModel:
 
 		# TODO: validation
 		self.keras_model.compile(loss='categorical_crossentropy', optimizer='adadelta')
-		self.keras_model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, show_accuracy=True, verbose=1) # , validation_data=(X_test, Y_test))
+
+		#self.keras_model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, show_accuracy=True, verbose=1) # , validation_data=(X_test, Y_test))
+
+		lr_scheduler = StageScheduler([50, 70])
+		if not data_augmentation:
+			print('Not using data augmentation or normalization')
+			self.keras_model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
+			#score = model.evaluate(X_test, Y_test, batch_size=batch_size)
+			#print('Test score:', score)
+
+		else:
+			print('Using data augmentation')
+			X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
+
+			self.keras_model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
+
 
 	def fit_cifar(self, X_train, Y_train):
 		np.random.seed(1337)  # for reproducibility
 		batch_size = 32
 		nb_classes = 2
-		nb_epoch = 20
+		nb_epoch = 50
 		data_augmentation = True
 
 		# input image dimensions
-		img_rows, img_cols = 32, 32
+		img_rows, img_cols = X_train[0][0].shape
 		# the CIFAR10 images are RGB
 		img_channels = 1
 
@@ -519,53 +391,29 @@ class BaselineModel:
 		sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
 		model.compile(loss='categorical_crossentropy', optimizer=sgd)
 
-		lr_scheduler = StageScheduler([50, 70])
+		lr_scheduler = StageScheduler([15, 30])
 		if not data_augmentation:
 			print('Not using data augmentation or normalization')
 			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
 			#score = model.evaluate(X_test, Y_test, batch_size=batch_size)
-			#print('Test score:', score)
-
+			#print('Test score
 		else:
-			print('Using real time data augmentation')
+			print('Using data augmentation')
+			X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, 
+						rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
 
-			# this will do preprocessing and realtime data augmentation
-			datagen = ImageDataGenerator(
-				featurewise_center=True,  # set input mean to 0 over the dataset
-				samplewise_center=False,  # set each sample mean to 0
-				featurewise_std_normalization=True,  # divide inputs by std of the dataset
-				samplewise_std_normalization=False,  # divide each input by its std
-				zca_whitening=False,  # apply ZCA whitening
-				rotation_range=20,  # randomly rotate images in the range (degrees, 0 to 180)
-				width_shift_range=0.1,  # randomly shift images horizontally (fraction of total width)
-				height_shift_range=0.1,  # randomly shift images vertically (fraction of total height)
-				horizontal_flip=True,  # randomly flip images
-				vertical_flip=False)  # randomly flip images
+			print 'Negatives: {}'.format(np.sum(Y_train.T[0]))
+			print 'Positives: {}'.format(np.sum(Y_train.T[1]))
+			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
 
-			# clone positive samples in order to get a balanced dataset and ...
-			# compute quantities required for featurewise normalization
-			# (std, mean, and principal components if ZCA whitening is applied)
-			X_train, Y_train = datagen.fit_transform(X_train, Y_train)
-			#datagen.fit(X_train)
-
-			for e in range(nb_epoch):
-				print('-'*40)
-				print('Epoch', e)
-				print('-'*40)
-				print('Training...')
-				# batch train with realtime data augmentation
-				progbar = generic_utils.Progbar(X_train.shape[0])
-				for X_batch, Y_batch in datagen.flow(X_train, Y_train):
-					loss = model.train_on_batch(X_batch, Y_batch)
-					progbar.add(X_batch.shape[0], values=[('train loss', loss[0])])
 		self.keras_model = model
 
-	def fit_graham(self, X_train, Y_train):
+	def fit_vgg(self, X_train, Y_train):
 		np.random.seed(1337)  # for reproducibility
 		batch_size = 32
 		nb_classes = 2
-		nb_epoch = 100
-		data_augmentation = False
+		nb_epoch = 40
+		data_augmentation = True
 
 		# input image dimensions
 		img_rows, img_cols = 32, 32
@@ -577,7 +425,7 @@ class BaselineModel:
 
 		_init = 'orthogonal'
 		_activation = 'linear' #LeakyReLU(alpha=.333)
-		_filters = 32
+		_filters = 64
 		_dropout = 0.1
 
 		model = Sequential()
@@ -621,12 +469,124 @@ class BaselineModel:
 		sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
 		model.compile(loss='categorical_crossentropy', optimizer=sgd)
 
+		lr_scheduler = StageScheduler([20, 30])
 		if not data_augmentation:
 			print('Not using data augmentation or normalization')
-			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch)
+			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
+			#score = model.evaluate(X_test, Y_test, batch_size=batch_size)
+			#print('Test score
+		else:
+			print('Using data augmentation')
+			X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, 
+						rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
+
+			print 'Negatives: {}'.format(np.sum(Y_train.T[0]))
+			print 'Positives: {}'.format(np.sum(Y_train.T[1]))
+			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
 
 		self.keras_model = model
-	
+
+	def fit_graham(self, X_train, Y_train):
+		Y_train = np.array([Y_train.T[1]]).T
+		print 'labels shape {}'.format(Y_train)
+		np.random.seed(1337)  # for reproducibility
+		batch_size = 32
+		nb_classes = 2
+		nb_epoch = 40
+		data_augmentation = True
+
+		# input image dimensions
+		img_rows, img_cols = X_train[0][0].shape
+		print img_rows, img_cols
+		# the CIFAR10 images are RGB
+		img_channels = 1
+
+		#print('X_train shape:', X_train.shape)
+		#print(X_train.shape[0], 'train samples')
+
+		_init = 'orthogonal'
+		_activation = 'linear' #LeakyReLU(alpha=.333)
+		_filters = 64
+		_dropout = 0.1
+
+		model = Sequential()
+
+		model.add(Convolution2D(_filters, 3, 3, border_mode='same',
+					input_shape=(img_channels, img_rows, img_cols), init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Convolution2D(_filters, 3, 3, init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(MaxPooling2D(pool_size=(2, 2)))
+
+		model.add(Convolution2D(2 * _filters, 2, 2, border_mode='same', init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Dropout(_dropout))
+		model.add(Convolution2D(2 * _filters, 2, 2, init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Dropout(_dropout))
+		model.add(MaxPooling2D(pool_size=(2, 2)))
+
+		model.add(Convolution2D(3 * _filters, 2, 2, border_mode='same', init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Dropout(2 * _dropout))
+		model.add(Convolution2D(3 * _filters, 2, 2, init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Dropout(2 * _dropout))
+		model.add(MaxPooling2D(pool_size=(2, 2)))
+
+		model.add(Convolution2D(4 * _filters, 2, 2, border_mode='same', init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Dropout(3 * _dropout))
+		model.add(Convolution2D(4 * _filters, 2, 2, init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Dropout(3 * _dropout))
+		model.add(MaxPooling2D(pool_size=(2, 2)))
+
+		model.add(Convolution2D(5 * _filters, 2, 2, border_mode='same', init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Dropout(4 * _dropout))
+		model.add(Convolution2D(5 * _filters, 2, 2, init=_init))
+		#model.add(Activation(_activation))
+		model.add(LeakyReLU(alpha=.333))
+		model.add(Dropout(4 * _dropout))
+		model.add(MaxPooling2D(pool_size=(2, 2)))
+
+		model.add(Flatten())
+		model.add(Dense(512, init=_init))
+		model.add(Activation('relu'))
+		model.add(Dropout(0.5))
+		model.add(Dense(1))
+		model.add(Activation('softmax'))
+
+		# let's train the model using SGD + momentum (how original).
+		sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
+		model.compile(loss='binary_crossentropy', optimizer=sgd)
+
+		lr_scheduler = StageScheduler([15, 30])
+		if not data_augmentation:
+			print('Not using data augmentation or normalization')
+			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
+			#score = model.evaluate(X_test, Y_test, batch_size=batch_size)
+			#print('Test score
+		else:
+			print('Using data augmentation')
+			X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, 
+						rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
+
+			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
+
+		self.keras_model = model
+
+
 	def train_with_feature_set_keras(self, feature_set, pred_blobs, real_blobs):
 		X_train, y_train = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
 		
