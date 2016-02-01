@@ -778,7 +778,7 @@ class BaselineModel:
 
 		return np.array(data_blobs), np.array(data_probs)
 
-#classifiers = {'svm':svm.SVC(probability=True, C=0.27, gamma=0.02), 'lda':lda.LDA()}
-classifiers = {'svm':svm.SVC(probability=True), 'lda':lda.LDA()}
+classifiers = {'svm':svm.SVC(probability=True, C=0.0373, gamma=0.002), 'lda':lda.LDA()}
+#classifiers = {'svm':svm.SVC(probability=True), 'lda':lda.LDA()}
 reductors = {'none':None, 'pca':decomposition.PCA(n_components=0.99999999999, whiten=True), 'lda':selection.SelectFromModel(lda.LDA())}
 

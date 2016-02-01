@@ -205,7 +205,8 @@ def save_froc(op_set, name, legend=None):
 
 	line_format = ['b.-', 'g.-', 'r.-', 'c.-', 'm.-', 'y.-', 'k.-', 
 								 'b.--', 'g.--', 'r.--', 'c.--', 'm.--', 'y.--', 'k.--',
-								 'b.-.', 'g.-.', 'r.-.', 'c.-.', 'm.-.', 'y.-.', 'k.-.']
+								 'b.-.', 'g.-.', 'r.-.', 'c.-.', 'm.-.', 'y.-.', 'k.-.',
+								 'b.:', 'g.:', 'r.:', 'c.:', 'm.:', 'y.:', 'k.:']
 
 	for i in range(len(op_set)):
 		ops = np.array(op_set[i]).T
@@ -242,8 +243,8 @@ def save_grid(scores, name, labels, ranges, title):
 	plt.xlabel(labels[1])
 	plt.ylabel(labels[0])
 	plt.colorbar()
-	plt.xticks(np.arange(len(ranges[1])), ranges[1], rotation=45)
-	plt.yticks(np.arange(len(ranges[0])), ranges[0])
+	plt.xticks(np.arange(len(ranges[1])), np.round(ranges[1], 5), rotation=45)
+	plt.yticks(np.arange(len(ranges[0])), np.round(ranges[0], 5))
 	plt.title(title)
 	name='{}_{}'.format(name, time.clock())
 	plt.savefig('{}_grid.jpg'.format(name))

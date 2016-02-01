@@ -204,8 +204,6 @@ def protocol_froc_2(_model, fname):
 	legend.append('baseline')
 	legend.append(_model.name)
 
-	print ops[20:41]
-	print auc(ops[20:41].T[0], ops[20:41].T[1])
 	util.save_froc([baseline, ops], '{}'.format(_model.name), legend)
 
 	return ops
@@ -368,8 +366,10 @@ def protocol_clf_eval_froc(_model, fname):
 def protocol_svm_hp_search(_model, fname):
 	#C_set = np.logspace(-3, 4, 8)
 	#g_set = np.logspace(-3, 4, 8)
-	C_set = np.logspace(-2, 2, 8)
-	g_set = np.logspace(-4, -1, 8)
+	#C_set = np.logspace(-2, 2, 8)
+	#g_set = np.logspace(-4, -1, 8)
+	C_set = np.logspace(-2, 1, 10)
+	g_set = np.logspace(-4, -2, 9)
 	classifiers = []
 	legend = []
 	for C, gamma in product(C_set, g_set):
