@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys
 import time
 from itertools import product
@@ -19,6 +20,7 @@ import model
 import eval
 import util
 import sys
+import argparse
 
 import jsrt
 
@@ -202,6 +204,8 @@ def protocol_froc_2(_model, fname):
 	legend.append('baseline')
 	legend.append(_model.name)
 
+	print ops[20:41]
+	print auc(ops[20:41].T[0], ops[20:41].T[1])
 	util.save_froc([baseline, ops], '{}'.format(_model.name), legend)
 
 	return ops
@@ -362,8 +366,10 @@ def protocol_clf_eval_froc(_model, fname):
 	protocol_classifier_froc(_model, fname, classifiers, labels)
 
 def protocol_svm_hp_search(_model, fname):
-	C_set = np.logspace(-3, 4, 8)
-	g_set = np.logspace(-3, 4, 8)
+	#C_set = np.logspace(-3, 4, 8)
+	#g_set = np.logspace(-3, 4, 8)
+	C_set = np.logspace(-2, 2, 8)
+	g_set = np.logspace(-4, -1, 8)
 	classifiers = []
 	legend = []
 	for C, gamma in product(C_set, g_set):
@@ -476,51 +482,59 @@ def protocol_cnn_froc(_model, fname):
 	return ops
 
 if __name__=="__main__":	
-	model_type = sys.argv[1]
-	stage = sys.argv[2]
+	parser = argparse.ArgumentParser(prog='lnd.py')
+	parser.add_argument('-b', '--blob-detector', help='Options: wmci(default), TODO hog, log.', default='wmci')
+	parser.add_argument('-d', '--descriptor', help='Options: hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='hardie')
+	parser.add_argument('-r', '--reductor', help='Feature reductor or selector. Options: none(default), pca, lda, rfe, rlr.', default='none')
+	parser.add_argument('-c', '--classifier', help='Options: lda(default), svm.', default='lda')
+	parser.add_argument('--fts', help='Performs feature extraction.', action='store_true')
+	parser.add_argument('--clf', help='Performs classification.', action='store_true')
+	parser.add_argument('--hyp', help='Performs hyperparameter search. The target method to evaluate should be specified using -t.', action='store_true')
+	parser.add_argument('--cmpclf', help='Evaluate classifiers.', action='store_true')
+	parser.add_argument('--cnn', help='Evaluate ConvNet.', action='store_true')
+	parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
+
+	args = parser.parse_args()
+	opts = vars(args)
+	extractor_key = args.descriptor
 	_model = model.BaselineModel("data/default")
+	_model.extractor = model.extractors[extractor_key]
+	_model.name = 'data/{}'.format(extractor_key)
 
-	extractor = model.extractors.get(model_type)
-	if extractor != None:
-		_model.extractor = extractor
-		_model.name = 'data/{}'.format(model_type)
-	else:
-		_model.extractor = model.HardieExtractor()
+	print args.clf
+	print args.fts
 
-	if stage == 'fts':
+	# default: clf -d hardie
+	method = protocol_froc_2
+	if args.fts:
 		method = protocol_froc_1
-	if stage.find('clf') != -1:
-		clf = sys.argv[3]
-		if clf == 'svm':
-			_model.clf = svm.SVC(kernel='linear', probability=True)
-		elif clf == 'lda':
-			_model.clf = lda.LDA()
+	elif args.clf:
 		method = protocol_froc_2
-	if stage == 'red-clf':
-		red = sys.argv[4]
-		if red == 'pca':
-			_model.selector = decomposition.PCA(n_components=0.99999999999, whiten=True)
-		if red == 'lda':
-			_model.selector = selection.SelectFromModel(lda.LDA())
-
-		method = protocol_froc_2
-	if stage == 'wmci':
-		method = protocol_wmci_froc
-	if stage == 'clf-pca':
-		method = protocol_pca_froc
-	if stage == 'clf-lda':
-		method = protocol_lda_froc
-	if stage == 'clf-svm':
-		#method = protocol_svm_froc
-		method = protocol_svm_hp_search
-	if stage == 'clf-rlr':
-		method = protocol_rlr_froc
-	if stage == 'clf-rfe':
-		method = protocol_rfe_froc
-	if stage == 'clf-eval':
+		_model.clf = model.classifiers[args.classifier]
+		_model.selector = model.reductors[args.reductor]
+		if args.reductor != 'none':
+			_model.name += '-{}'.format(args.reductor)
+		_model.name += '-{}'.format(args.classifier)
+			
+	elif args.hyp:
+		if args.target == 'wmci':
+			method = protocol_wmci_froc
+		if args.target == 'pca':
+			method = protocol_pca_froc
+		if args.target == 'lda':
+			method = protocol_lda_froc
+		if args.target == 'svm':
+			method = protocol_svm_hp_search
+		if args.target == 'rfe':
+			method = protocol_rfe_froc
+		if args.target == 'rlr':
+			method = protocol_rlr_froc
+		if args.target == 'rfe':
+			method = protocol_lda_froc
+	elif args.cmpclf:
 		method = protocol_clf_eval_froc
-	if stage == 'cnn':
+	elif args.cnn:
 		method = protocol_cnn_froc
-	_model.name += stage
-	method(_model, '{}'.format(model_type))
 
+	print _model.extractor
+	method(_model, '{}'.format(extractor_key))

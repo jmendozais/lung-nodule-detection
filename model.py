@@ -2,11 +2,14 @@ import cv2
 import sys
 
 import skimage.io as io
-from sklearn.lda import LDA
+from sklearn import lda
 from sklearn import svm
+from sklearn import decomposition
 from sklearn import preprocessing
+from sklearn import feature_selection as selection
 from sklearn.externals import joblib
 from sklearn.feature_selection import RFE
+
 from time import *
 from os import path
 
@@ -133,7 +136,7 @@ class BaselineModel:
 	def __init__(self, name='default'):
 		self.name = name
 
-		self.clf = LDA()
+		self.clf = lda.LDA()
 		self.scaler = preprocessing.StandardScaler()
 		self.selector = None
 		self.transform = None
@@ -775,7 +778,7 @@ class BaselineModel:
 
 		return np.array(data_blobs), np.array(data_probs)
 
-
-
-
+#classifiers = {'svm':svm.SVC(probability=True, C=0.27, gamma=0.02), 'lda':lda.LDA()}
+classifiers = {'svm':svm.SVC(probability=True), 'lda':lda.LDA()}
+reductors = {'none':None, 'pca':decomposition.PCA(n_components=0.99999999999, whiten=True), 'lda':selection.SelectFromModel(lda.LDA())}
 

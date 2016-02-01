@@ -206,6 +206,7 @@ def froc(real, pred, probs, data=None):
 				fppi[idx] += 1
 
 		froc.append([np.mean(fppi), tp / p])
+		print "last operating point: {}".format((np.mean(fppi), tp / p))
 
 		return np.array(froc)	
 			
