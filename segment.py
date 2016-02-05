@@ -59,14 +59,14 @@ def distance_thold(img, point, grad, dx, dy, t0=0,):
 	roi = img[point[0] - rmax:point[0] + rmax + 1, point[1] - rmax:point[1] + rmax + 1]
 	s = roi > T
 	s = s.astype(np.uint8)
-
-	kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 1))
-
-	# TODO:  Hole filling via morphological op
+	
+	kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+	# TODO:  Hole filling via morphological op ( it can be done with findConturs retrccomps )
 	s = cv2.morphologyEx(s, cv2.MORPH_OPEN, kernel)
 
 	smask = np.full((s.shape[0] + 2, s.shape[1] + 2), dtype=np.uint8, fill_value=0)
-	cv2.floodFill(s, smask, (rmax, rmax), 255)
+	s[rmax, rmax] = 1
+	cv2.floodFill(s, smask, (rmax, rmax), 255, loDiff=0, upDiff=0, flags=4|cv2.FLOODFILL_FIXED_RANGE)
 	s = smask[1:s.shape[0] + 1, 1:s.shape[1] + 1]
 	
 	# Calculate the ARG of t0
