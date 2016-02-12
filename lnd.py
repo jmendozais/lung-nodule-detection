@@ -437,7 +437,7 @@ def lbp_froc(_model, fname, fts=False, clf=True, mode='default'):
 	descriptors = []
 	labels = []
 
-	for inp, method in product(['lce, norm, wmci'], ['default', 'uniform', 'nri_uniform']):
+	for inp, method in product(['lce', 'norm', 'wmci'], ['default', 'uniform', 'nri_uniform']):
 		descriptors.append(model.LBPExtractor(method=method, input=inp, mode=mode))
 		labels.append('{}_{}_{}'.format(inp, method, mode))
 
