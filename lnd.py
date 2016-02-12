@@ -444,17 +444,18 @@ def hog_froc(_model, fname, fts=False, clf=True):
 	if clf:
 		protocol_generic_froc(_model, fnames, descriptors, labels, kind='descriptor')
 
-def lbp_froc(_model, fname, fts=False, clf=True):
+def lbp_froc(_model, fname, fts=False, clf=True, mode='all'):
 	descriptors = []
-	descriptors.append(model.LBPExtractor(method='default', input='lce'))
-	descriptors.append(model.LBPExtractor(method='uniform', input='lce'))
-	descriptors.append(model.LBPExtractor(method='nri_uniform', input='lce'))
-	descriptors.append(model.LBPExtractor(method='default', input='norm'))
-	descriptors.append(model.LBPExtractor(method='uniform', input='norm'))
-	descriptors.append(model.LBPExtractor(method='nri_uniform', input='norm'))
-	descriptors.append(model.LBPExtractor(method='default', input='wmci'))
-	descriptors.append(model.LBPExtractor(method='uniform', input='wmci'))
-	descriptors.append(model.LBPExtractor(method='nri_uniform', input='wmci'))
+	descriptors.append(model.LBPExtractor(method='default', input='lce', mode=mode))
+	descriptors.append(model.LBPExtractor(method='uniform', input='lce', mode=mode))
+	descriptors.append(model.LBPExtractor(method='nri_uniform', input='lce', mode=mode))
+	descriptors.append(model.LBPExtractor(method='default', input='norm', mode=mode))
+	descriptors.append(model.LBPExtractor(method='uniform', input='norm', mode=mode))
+	descriptors.append(model.LBPExtractor(method='nri_uniform', input='norm', mode=mode))
+	descriptors.append(model.LBPExtractor(method='default', input='wmci', mode=mode))
+	descriptors.append(model.LBPExtractor(method='uniform', input='wmci', mode=mode))
+	descriptors.append(model.LBPExtractor(method='nri_uniform', input='wmci', mode=mode))
+
 	labels = []
 	labels.append('default_lce')
 	labels.append('uniform_lce')
@@ -468,7 +469,7 @@ def lbp_froc(_model, fname, fts=False, clf=True):
 	# extract
 	fnames = []
 	for descriptor in descriptors:
-		fnames.append('{}_{}_{}'.format(fname, descriptor.method, descriptor.input))
+		fnames.append('{}_{}_{}_{}'.format(fname, descriptor.mode, descriptor.method, descriptor.input))
 		if fts:
 			_model.extractor = descriptor
 			protocol_froc_1(_model, fnames[-1])
@@ -625,7 +626,7 @@ if __name__=="__main__":
 	parser.add_argument('--fts', help='Performs feature extraction.', action='store_true')
 	parser.add_argument('--clf', help='Performs classification.', action='store_true')
 	parser.add_argument('--hyp', help='Performs hyperparameter search. The target method to evaluate should be specified using -t.', action='store_true')
-	parser.add_argument('--cmp', help='Compare results of different models via froc. Options: hog.', default='none')
+	parser.add_argument('--cmp', help='Compare results of different models via froc. Options: hog, hog-inps, lbp, clf.', default='none')
 	parser.add_argument('--cnn', help='Evaluate convnet.', action='store_true')
 	parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
 
@@ -652,10 +653,22 @@ if __name__=="__main__":
 				_model.clf = model.classifiers[args.classifier]
 			hog_by_input_type(_model, 'hog2', args.fts, args.clf)	
 		elif args.cmp == 'lbp':
-			_model.name = 'data/lbp'
+			_model.name = 'data/lbp-deafult'
 			if args.clf:
 				_model.clf = model.classifiers[args.classifier]
-			lbp_froc(_model, 'lbp', args.fts, args.clf)	
+			lbp_froc(_model, 'lbp', args.fts, args.clf, mode='default')	
+		elif args.cmp == 'lbp-inner':
+			_model.name = 'data/lbp-inner'
+			if args.clf:
+				_model.clf = model.classifiers[args.classifier]
+			lbp_froc(_model, 'lbp', args.fts, args.clf, mode='inner')	
+		elif args.cmp == 'lbp-io':
+			_model.name = 'data/lbp-io'
+			if args.clf:
+				_model.clf = model.classifiers[args.classifier]
+			lbp_froc(_model, 'lbp', args.fts, args.clf, mode='io')	
+		elif args.cmp == 'clf':
+			protocol_clf_eval_froc(_model, '{}'.format(extractor_key))
 	
 	else:
 		method = protocol_froc_2
@@ -684,8 +697,6 @@ if __name__=="__main__":
 				method = protocol_rlr_froc
 			if args.target == 'rfe':
 				method = protocol_lda_froc
-		elif args.cmpclf:
-			method = protocol_clf_eval_froc
 		elif args.cnn:
 			method = protocol_cnn_froc
 
