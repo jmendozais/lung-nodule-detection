@@ -711,7 +711,7 @@ class OverfeatExtractor:
 
 
 # Register extractors
-extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(mode='32x32'), 'hogio':HogExtractor(mode='32x32_inner_outer'), \
-				'lbpio':LBPExtractor(method='uniform', mode='inner_outer'), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
+extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(), 'hogio':HogExtractor(mode='inner_outer'), \
+				'lbp':LBPExtractor(), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
 				'all':AllExtractor(), 'set1':Set1Extractor(), 'overf':OverfeatExtractor(), \
 				'overfin':OverfeatExtractor(mode='inner')}
