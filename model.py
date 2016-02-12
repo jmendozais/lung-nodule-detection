@@ -160,7 +160,6 @@ class BaselineModel:
 			self.keras_model = model_from_json(open('{}_arch.json'.format(name)).read())
 			self.keras_model.load_weights('{}_weights.h5'.format(name))
 
-
 		# Data
 		if path.isfile('{}_fs.npy'.format(name)):
 			self.feature_set = np.load('{}_fs.npy'.format(name))
@@ -782,6 +781,9 @@ class BaselineModel:
 # optimized
 opt_classifiers = {'svm':svm.SVC(probability=True, C=0.0373, gamma=0.002), 'lda':lda.LDA()}
 # default
-classifiers = {'svm':svm.SVC(probability=True), 'lda':lda.LDA()}
+#classifiers = {'svm':svm.SVC(probability=True, C=0.44668359215096315, gamma=0.0005623413251903491, max_iter=1000), 'lda':lda.LDA()}
+classifiers = {'svm':svm.SVC(kernel='rbf', probability=True), 'lda':lda.LDA()}
+#classifiers = {'svm':svm.SVC(probability=True, C=0.0373, gamma=0.002), 'lda':lda.LDA()}
+#classifiers = {'svm':svm.SVC(probability=True), 'lda':lda.LDA()}
 reductors = {'none':None, 'pca':decomposition.PCA(n_components=0.99999999999, whiten=True), 'lda':selection.SelectFromModel(lda.LDA())}
 

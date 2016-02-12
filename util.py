@@ -60,7 +60,7 @@ def scale_list(path, factor):
 
 # Display utils 
 
-def imshow(windowName,	_img):
+def imshow(windowName,	_img, wait=True):
 	img = np.array(_img).astype(np.float64)
 	a = np.min(img)
 	b = np.max(img)
@@ -68,7 +68,8 @@ def imshow(windowName,	_img):
 	print np.min(img), np.max(img)
 	
 	cv2.imshow(windowName, img)
-	cv2.waitKey()
+	if wait:
+		cv2.waitKey()
 
 def imwrite(fname, _img):
 	img = np.array(_img).astype(np.float64)
@@ -245,4 +246,16 @@ def save_grid(scores, name, labels, ranges, title):
 	plt.title(title)
 	name='{}_{}'.format(name, time.clock())
 	plt.savefig('{}_grid.jpg'.format(name))
+	plt.clf()
+
+def save_weights(weights, name):
+	print weights.shape
+	plt.bar(np.arange(len(weights)), weights,
+        	label='Weight', color='b')
+	plt.title("Feature weights")
+	plt.xlabel('Feature number')
+	plt.yticks(())
+	plt.axis('tight')
+	plt.legend(loc='upper right')
+	plt.savefig('{}_{}.jpg'.format(name, time.clock()))
 	plt.clf()

@@ -24,6 +24,9 @@ _gr = ['mag_mean_in', 'mag_std_in', 'rd_mean_in',
 	   'rgrad_std_out', 'rgrad_std_sep', 'rgrad_mean_per',
 	   'rgrad_std_per']
 
+def sort_by_len(arr1, arr2):
+	return len(arr2) - len(arr1)
+
 def finite_derivatives(img):
 	size = img.shape
 
@@ -48,7 +51,7 @@ def _mean_std_maxin_with_extended_mask(img, blob, mask):
 	shift = 35 
 	side = 2 * (shift + r) + 1
 
-	# Vectorize ROI 	operations
+	# Vectorize ROI		operations
 	tl = (x - shift - r, y - shift - r)
 	ntl = (max(0, tl[0]), max(0, tl[1]))
 	br = (x + shift + r + 1, y + shift + r + 1)
@@ -124,6 +127,7 @@ def _mean_std_maxin_with_extended_mask_phase_rgrad(mag, dx, dy, blob, mask):
 def geometric(img, blob, mask, xrange, yrange, dt_img):
 	results = {}
 	contours, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+	contours = sorted(contours, cmp=sort_by_len)
 	if len(contours) > 0:
 		center, radius = cv2.minEnclosingCircle(contours[0])
 	else :
@@ -191,7 +195,8 @@ def gradient(img, blob, mask, mag, dx, dy):
 
 	per_mask = np.full(mask.shape, dtype=mask.dtype, fill_value=0)
 	contours, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-  	cv2.drawContours(per_mask, contours, -1, 1, 1)
+	contours = sorted(contours, cmp=sort_by_len)
+	cv2.drawContours(per_mask, contours, -1, 1, 1)
 	_, rgrad_per = _mean_std_maxin_with_extended_mask_phase_rgrad(mag, dx, dy, blob, per_mask)
 	rgrad_mean_per, _, rgrad_std_per, _ = rgrad_per
 
@@ -271,6 +276,7 @@ def hardie(norm, lce, wmci, lung_mask, blobs, masks):
 
 
 	# FLD selected features
+	# 0-15
 	adt_geom = ['x_fract', 'dist_perim']
 	
 	norm_inte = ['mean_sep', 'skew_in', 
@@ -280,13 +286,13 @@ def hardie(norm, lce, wmci, lung_mask, blobs, masks):
 	   'rd_std_out', 'rd_std_sep', 'rgrad_mean_in',
 	   'rgrad_mean_sep', 'rgrad_std_in',
 	   'rgrad_std_out', 'rgrad_std_sep']
-
+	# 16-26
 	lce_inte = ['mean_sep', 'contrast_1', 
 	   'std_in', 'std_sep', 
 	   'skew_in', 'kurt_in', 'moment_1_in']
 	lce_grad = ['mag_mean_in', 'rd_std_in',
 	   'rd_std_out', 'rgrad_mean_sep']
-
+	# 27-43
 	wmci_inte = ['max_value_in', 'contrast_1',
 	   'std_out', 'std_sep', 
 	   'skew_in', 'kurt_in', 'moment_1_in',
@@ -318,7 +324,7 @@ def hardie(norm, lce, wmci, lung_mask, blobs, masks):
 
 	return np.array(feature_vectors)
 
-def _hog(img, mask, orientations=9, cell=(8,8)):
+def hog(img, mask, orientations=9, cell=(8,8)):
 	mag, dx, dy = finite_derivatives(img)
 	phase = np.arctan2(dy, dx)
 	phase = phase.astype(np.float64)	
@@ -349,7 +355,7 @@ def _hog(img, mask, orientations=9, cell=(8,8)):
 	return ans
 
 import matplotlib.pyplot as plt
-def hog_io(norm, lce, wmci, lung_mask, blobs, masks):
+def hog_mask(img, lung_mask, blobs, masks, mode='default'):
 	feature_vectors = []
 	for i in range(len(blobs)):
 		x, y, r = blobs[i]
@@ -360,29 +366,36 @@ def hog_io(norm, lce, wmci, lung_mask, blobs, masks):
 		tl = (x - shift - r, y - shift - r)
 		ntl = (max(0, tl[0]), max(0, tl[1]))
 		br = (x + shift + r + 1, y + shift + r + 1)
-		nbr = (min(lce.shape[0], br[0]), min(lce.shape[1], br[1]))
+		nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
 
-		lce_roi = lce[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-		lce_roi = cv2.resize(lce_roi, dsize, interpolation=cv2.INTER_CUBIC)
+		img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+		img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
 		mask = cv2.resize(masks[i], dsize, interpolation=cv2.INTER_CUBIC)
-		#mask = np.ones(mask.shape, dtype=mask.dtype)
 		
-		feats = _hog(lce_roi, mask, orientations=9, cell=(32, 32))
-		feats_outer = _hog(lce_roi, 1-mask, orientations=9, cell=(32, 32))
-		feats = np.hstack((feats, feats_outer))
-		feats /= 2
+		feats = hog(img_roi, mask, orientations=9, cell=(32, 32))
+
+		if mode == 'default':
+			mask = np.ones(mask.shape, dtype=mask.dtype)
+			feats = hog(img_roi, mask, orientations=9, cell=(32, 32))
+		elif mode == 'inner':
+			feats = hog(img_roi, mask, orientations=9, cell=(32, 32))
+		elif mode == 'inner_outer':
+			feats_outer = hog(img_roi, 1-mask, orientations=9, cell=(32, 32))
+			feats = np.hstack((feats, feats_outer))
+			feats /= 2
+		
 		'''
 		print len(feats), max(feats), min(feats), np.mean(feats), np.sum(feats)
 		plt.bar(range(len(feats)), feats)
 		plt.show()
-		util.imshow('roi', lce_roi)
+		util.imshow('roi', img_roi)
 		'''
 		feature_vectors.append(np.array(feats))
 
 	return np.array(feature_vectors)
 
 
-def hog(norm, lce, wmci, lung_mask, blobs, masks):
+def hog_skimage(img, lung_mask, blobs, masks, cell=None):
 	feature_vectors = []
 	for i in range(len(blobs)):
 		x, y, r = blobs[i]
@@ -393,26 +406,30 @@ def hog(norm, lce, wmci, lung_mask, blobs, masks):
 		tl = (x - shift - r, y - shift - r)
 		ntl = (max(0, tl[0]), max(0, tl[1]))
 		br = (x + shift + r + 1, y + shift + r + 1)
-		nbr = (min(lce.shape[0], br[0]), min(lce.shape[1], br[1]))
+		nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
 
-		lce_roi = lce[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-		lce_roi = cv2.resize(lce_roi, dsize, interpolation=cv2.INTER_CUBIC)
+		img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+		img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
 
 		#util.imshow('hog lce roi', lce_roi)
-
-		feats = feature.hog(lce_roi, orientations=9, pixels_per_cell=(32, 32), cells_per_block=(1, 1), visualise=False, normalise=False)
+		if cell != None:
+			feats = feature.hog(img_roi, orientations=9, pixels_per_cell=cell, cells_per_block=(1, 1), visualise=False, normalise=False)
+		else:
+			feats = feature.hog(img_roi, orientations=9, cells_per_block=(1, 1), visualise=False, normalise=False)
+		
 		'''
 		print feats
 		print len(feats), max(feats), min(feats), np.mean(feats), np.sum(feats)
 		plt.bar(range(len(feats)), feats)
 		plt.show()
-		util.imshow('roi', lce_roi)
+		util.imshow('roi', img_roi)
 		'''
+
 		feature_vectors.append(np.array(feats))
 
 	return np.array(feature_vectors)
 
-def lbpio(img, lung_mask, blobs, masks):
+def lbpio(img, lung_mask, blobs, masks, method='uniform', mode='inner_outer'):
 	P = 9
 	R = 1
 	feature_vectors = []
@@ -427,48 +444,78 @@ def lbpio(img, lung_mask, blobs, masks):
 		nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
 
 		img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-		#util.imshow('hog lce roi', lce_roi)
-		lbp = feature.local_binary_pattern(img_roi, P, R, method='uniform')
+		lbp = feature.local_binary_pattern(img_roi, P, R, method=method)
 
 		mask = masks[i].astype(np.float64)
 		imask = 1 - mask
 
-		#print "mask shape {} {}".format(mask.shape, mask.ravel().shape)
-		#print "roi shape {} {}".format(lbp.shape, lbp.ravel().shape)
 		bins = lbp.max() + 1
-		hi, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=mask.ravel(), density=True)
-		ho, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=imask.ravel(), density=True)
+		hi = []
+		ho = []
+		if mode == 'inner' or mode == 'inner_outer':
+			hi, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=mask.ravel(), density=True)
+			hi /= (np.sum(hi) + util.EPS)
+		if mode == 'outer' or mode == 'inner_outer':
+			ho, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=imask.ravel(), density=True)
+			ho /= (np.sum(hi) + util.EPS)
 		
 		#print "hi shape {} sum {}".format(hi.shape, util.EPS)
-		hi /= (np.sum(hi) + util.EPS)
-		ho /= (np.sum(hi) + util.EPS)
-		hist = np.hstack((hi, ho))
-		hist /= (np.sum(hist) + util.EPS)
+		if mode == 'inner_outer':
+			hist = np.hstack((hi, ho))
+			hist /= (np.sum(hist) + util.EPS)
+		elif mode == 'inner':
+			hist = hi
+		elif mode == 'outer':
+			hist = ho
+		elif mode == 'default':
+			hist, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins))
+			hist /= (np.sum(hist) + util.EPS)
 
 		feature_vectors.append(np.array(hist))
 
 	return np.array(feature_vectors)
 
+from skimage.exposure import equalize_hist
 class HardieExtractor:
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
 		return hardie(norm, lce, wmci, lung_mask, blobs, nod_masks)
 
 class HogExtractor:
+	def __init__(self, mode='32x32', input='lce'):
+		self.mode = mode
+		self.input = input
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-		return hog(norm, lce, wmci, lung_mask, blobs, nod_masks)
+		img = lce
+		if self.input == 'norm':
+			img = norm
+		elif self.input == 'wmci':
+			img = wmci
 
-class HogIOExtractor:
-	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-		return hog_io(norm, lce, wmci, lung_mask, blobs, nod_masks)
+		if self.mode == 'skimage_default':
+			return hog_skimage(img, lung_mask, blobs, nod_masks)
+		elif self.mode == 'skimage_32x32':
+			return hog_skimage(img, lung_mask, blobs, nod_masks, cell=(32,32))
+		elif self.mode == '32x32':
+			return hog_mask(img, lung_mask, blobs, nod_masks, mode='default')
+		elif self.mode == '32x32_inner':
+			return hog_mask(img, lung_mask, blobs, nod_masks, mode='inner')
+		elif self.mode == '32x32_inner_outer':
+			return hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer')
 
 class LBPExtractor:
-	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-		fv_lce = lbpio(lce, lung_mask, blobs, nod_masks)
-		fv_wmci = lbpio(wmci, lung_mask, blobs, nod_masks)
-		hist = np.hstack((fv_lce, fv_wmci))
-		hist /= 2.0
+	def __init__(self, method='uniform', input='lce', mode='default'):
+		self.method = method
+		self.input = input
+		self.mode = mode
 
-		return hist
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		img = lce
+		if self.input == 'wmci':
+			img = wmci
+		if self.input == 'norm':
+			img = norm
+		
+		return lbpio(img, lung_mask, blobs, nod_masks, self.method, self.mode)
 
 class ZernikeExtractor:
 	def __init__(self):
@@ -535,7 +582,7 @@ class ZernikeExtractor:
 			imask = 1 - mask
 			per_mask = np.full(mask.shape, dtype=mask.dtype, fill_value=0)
 			contours, _ = cv2.findContours(mask.astype(np.uint8).copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-		  	cv2.drawContours(per_mask, contours, -1, 1, 1)
+			cv2.drawContours(per_mask, contours, -1, 1, 1)
 
 			feats = mahotas.features.zernike_moments(per_mask, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
 			#feats /= (np.sum(feats) + util.EPS)
@@ -592,39 +639,43 @@ class ShapeExtractor:
 			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
 			mask = masks[i].astype(np.float64)
 			per_mask = np.full(mask.shape, dtype=mask.dtype, fill_value=0)
-			contours, _ = cv2.findContours(mask.astype(np.uint8).copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-		  	
-		  	cv2.drawContours(per_mask, contours, -1, 1, 1)
 
-		  	if len(contours) > 0 and len(contours[0]) > 0:
-		  		np.append(contours[0], [contours[0][0]])
+			contours, _ = cv2.findContours(mask.astype(np.uint8).copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+			contours = sorted(contours, cmp=sort_by_len)
+			
+			cv2.drawContours(per_mask, [contours[0]], -1, 1, 1)
 
-		  	contours = np.array(contours[0])
-		  	dv = self.finite_derivative(contours)
-		  	d2v = self.finite_derivative(dv)
-		  	dv = dv.T
-		  	d2v = d2v.T
-		  	L = len(contours)
+			has_inner = 0
+			if len(contours) > 1 and len(contours[1]) > 25:
+				has_inner = 1
+			
+			contours = contours[0]
 
-		  	k = (dv[0] * d2v[1] - dv[1] * d2v[0]) / ((dv[0] ** 2 + dv[1] ** 2) ** 1.5 + util.EPS)
-		  	k /= (np.mean(np.absolute(k)) + util.EPS)
+			dv = self.finite_derivative(contours)
+			d2v = self.finite_derivative(dv)
+			dv = dv.T
+			d2v = d2v.T
+			L = len(contours)
 
-		  	curvature = np.sum(np.absolute(k)) / (float(L) + util.EPS)
+			k = (dv[0] * d2v[1] - dv[1] * d2v[0]) / ((dv[0] ** 2 + dv[1] ** 2) ** 1.5 + util.EPS)
+			k /= (np.mean(np.absolute(k)) + util.EPS)
 
-		  	deformation_energy = np.mean(k ** 2)
+			curvature = np.sum(np.absolute(k)) / (float(L) + util.EPS)
 
-		  	perimeter = cv2.arcLength(contours, True)
-		  	area = np.sum(mask)
-		  	compactness = perimeter ** 2 / (float(area) + util.EPS)
+			deformation_energy = np.mean(k ** 2)
 
-		  	hull = cv2.convexHull(contours)
-		  	hull_perimeter = cv2.arcLength(hull, True)
-		  	convexity = hull_perimeter / (perimeter + util.EPS)
+			perimeter = cv2.arcLength(contours, True)
+			area = np.sum(mask)
+			compactness = perimeter ** 2 / (float(area) + util.EPS)
 
-		  	hull_area = cv2.contourArea(hull)
-		  	solidity = hull_area / (float(area) + util.EPS)
+			hull = cv2.convexHull(contours)
+			hull_perimeter = cv2.arcLength(hull, True)
+			convexity = hull_perimeter / (perimeter + util.EPS)
 
-			feats = [curvature, deformation_energy, compactness, convexity, solidity]
+			hull_area = cv2.contourArea(hull)
+			solidity = hull_area / (float(area) + util.EPS)
+
+			feats = [curvature, deformation_energy, compactness, convexity, solidity, has_inner]
 
 			feature_vectors.append(np.array(feats))
 
@@ -639,14 +690,14 @@ class AllExtractor:
 	def __init__(self):
 		self.extractors = []
 		self.extractors.append(LBPExtractor())
-		self.extractors.append(HogIOExtractor())
+		self.extractors.append(HogExtractor())
 		self.extractors.append(HardieExtractor())
 		self.extractors.append(ZernikeExtractor())
 		self.extractors.append(ShapeExtractor())
 
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
 		fv_set = []
-
+		lce = equalize_hist(lce)
 		for extractor in self.extractors:
 			fv_set.append(extractor.extract(norm, lce, wmci, lung_mask, blobs, nod_masks))
 		fv = np.hstack(fv_set)
@@ -658,7 +709,7 @@ class Set1Extractor:
 		self.extractors = []
 		self.extractors.append(HardieExtractor())
 		self.extractors.append(LBPExtractor())
-		self.extractors.append(HogIOExtractor())
+		self.extractors.append(HogExtractor())
 		self.extractors.append(ZernikeExtractor())
 		self.extractors.append(ShapeExtractor())
 
@@ -670,15 +721,15 @@ class Set1Extractor:
 		fv = np.hstack(fv_set)
 		
 		return fv
-# Register extractors
 
 class OverfeatExtractor:
 	def __init__(self, mode=None):
-		overfeat.init('/home/juliomb/lnd-env/OverFeat/data/default/net_weight_0', 0)
+		#overfeat.init('/home/juliomb/lnd-env/OverFeat/data/default/net_weight_0', 0)
 		self.mode = mode
 
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
 		feature_vectors = []
+		'''
 		for i in range(len(blobs)):
 			x, y, r = blobs[i]
 			shift = 0 
@@ -707,10 +758,12 @@ class OverfeatExtractor:
 
 			feature_vectors.append(np.array(feats))
 
+		'''
 		return np.array(feature_vectors)
 
 
-extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(), 'hogio':HogIOExtractor(), \
-				'lbpio':LBPExtractor(), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
+# Register extractors
+extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(mode='32x32'), 'hogio':HogExtractor(mode='32x32_inner_outer'), \
+				'lbpio':LBPExtractor(method='uniform'), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
 				'all':AllExtractor(), 'set1':Set1Extractor(), 'overf':OverfeatExtractor(), \
 				'overfin':OverfeatExtractor(mode='inner')}

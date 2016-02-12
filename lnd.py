@@ -25,6 +25,7 @@ import argparse
 import jsrt
 
 #fppi range
+step = 10
 fppi_range = np.linspace(0.0, 10.0, 101)
 
 # baseline
@@ -149,6 +150,7 @@ def protocol_two_stages():
 	print "Final: sens_mean {}, sens_std {}, fppi_mean {}, fppi_stds_mean {}".format(sens.mean(), sens.std(), fppi_mean.mean(), fppi_std.mean())
 
 def protocol_froc_1(_model, fname):
+	print '# {}'.format(fname)
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
 	left_masks = jsrt.left_lung(set='jsrt140')
 	right_masks = jsrt.right_lung(set='jsrt140')
@@ -199,6 +201,9 @@ def protocol_froc_2(_model, fname):
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
 	ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf)
+	range_ops = ops[step * 2:step * 4 + 1]
+	print 'auc 2 - 4 fppis {}'.format(auc(range_ops.T[0], range_ops.T[1]))
+	
 
 	legend = []
 	legend.append('baseline')
@@ -261,6 +266,47 @@ def protocol_wmci_froc(_model, fname):
 
 	util.save_froc(op_set, _model.name, legend)
 	return op_set
+
+def protocol_generic_froc(_model, fnames, components, legend, kind='descriptor'):
+	paths, locs, rads = jsrt.jsrt(set='jsrt140')
+	left_masks = jsrt.left_lung(set='jsrt140')
+	right_masks = jsrt.right_lung(set='jsrt140')
+	size = len(paths)
+
+	blobs = []
+	for i in range(size):
+		blobs.append([locs[i][0], locs[i][1], rads[i]])
+	blobs = np.array(blobs)
+
+	data = DataProvider(paths, left_masks, right_masks)
+	Y = (140 > np.array(range(size))).astype(np.uint8)
+	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+	
+	op_set = []
+	op_set.append(baseline)
+	legend.insert(0, "baseline")
+
+	for i in range(len(components)):
+		print "Loading blobs & features ..."
+		feats = np.load('{}.fts.npy'.format(fnames[i]))
+		pred_blobs = np.load('{}_pred.blb.npy'.format(fnames[i]))
+
+		print legend[i+1]
+		if kind == 'descriptor':
+			_model.descriptor = components[i]
+		elif kind == 'selector':
+			_model.selector = components[i]
+		elif kind == 'classifier':
+			_model.classifier = components[i]
+
+		ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf)
+		op_set.append(ops)
+
+	op_set = np.array(op_set)
+	util.save_froc(op_set, _model.name, legend)
+
+	return op_set
+
 
 def protocol_selector_froc(_model, fname, selectors, legend):
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
@@ -344,6 +390,95 @@ def protocol_classifier_froc(_model, fname, classifiers, legend):
 
 	return op_set[1:]
 
+def hog_by_input_type(_model, fname, fts=False, clf=True):
+	descriptors = []
+	descriptors.append(model.HogExtractor(mode='sklearn_default', input='lce'))
+	descriptors.append(model.HogExtractor(mode='32x32', input='lce'))
+	descriptors.append(model.HogExtractor(mode='sklearn_default', input='norm'))
+	descriptors.append(model.HogExtractor(mode='32x32', input='norm'))
+	descriptors.append(model.HogExtractor(mode='sklearn_default', input='wmci'))
+	descriptors.append(model.HogExtractor(mode='32x32', input='wmci'))
+
+	labels = []
+	labels.append('sklearn default, lce')
+	labels.append('our impl 32x32, lce')
+	labels.append('sklearn default, norm')
+	labels.append('our impl 32x32, norm')
+	labels.append('sklearn default, wmci')
+	labels.append('our impl 32x32, wmci')
+
+	# extract
+	fnames = []
+	for descriptor in descriptors:
+		fnames.append('{}_{}_{}'.format(fname, descriptor.mode, descriptor.input))
+		if fts:
+			_model.extractor = descriptor
+			protocol_froc_1(_model, fnames[-1])
+
+	if clf:
+		protocol_generic_froc(_model, fnames, descriptors, labels, kind='descriptor')
+		
+def hog_froc(_model, fname, fts=False, clf=True):
+	descriptors = []
+	descriptors.append(model.HogExtractor(mode='sklearn_default'))
+	descriptors.append(model.HogExtractor(mode='sklearn_32x32'))
+	descriptors.append(model.HogExtractor(mode='32x32'))
+	descriptors.append(model.HogExtractor(mode='32x32_inner'))
+	descriptors.append(model.HogExtractor(mode='32x32_io'))
+
+	labels = []
+	labels.append('sklearn default')
+	labels.append('sklearn 32x32')
+	labels.append('our impl 32x32')
+	labels.append('our impl 32x32 inner')
+	labels.append('our impl 32x32 inner + outer')
+
+	# extract
+	fnames = []
+	for descriptor in descriptors:
+		fnames.append('{}_{}'.format(fname, descriptor.mode))
+		if fts:
+			_model.extractor = descriptor
+			protocol_froc_1(_model, fnames[-1])
+
+	if clf:
+		protocol_generic_froc(_model, fnames, descriptors, labels, kind='descriptor')
+
+def lbp_froc(_model, fname, fts=False, clf=True, mode='all'):
+	descriptors = []
+	descriptors.append(model.LBPExtractor(method='default', input='lce', mode=mode))
+	descriptors.append(model.LBPExtractor(method='uniform', input='lce', mode=mode))
+	descriptors.append(model.LBPExtractor(method='nri_uniform', input='lce', mode=mode))
+	descriptors.append(model.LBPExtractor(method='default', input='norm', mode=mode))
+	descriptors.append(model.LBPExtractor(method='uniform', input='norm', mode=mode))
+	descriptors.append(model.LBPExtractor(method='nri_uniform', input='norm', mode=mode))
+	descriptors.append(model.LBPExtractor(method='default', input='wmci', mode=mode))
+	descriptors.append(model.LBPExtractor(method='uniform', input='wmci', mode=mode))
+	descriptors.append(model.LBPExtractor(method='nri_uniform', input='wmci', mode=mode))
+
+	labels = []
+	labels.append('default_lce')
+	labels.append('uniform_lce')
+	labels.append('nri_uniform_lce')
+	labels.append('default_norm')
+	labels.append('uniform_norm')
+	labels.append('nri_uniform_norm')
+	labels.append('default_wmci')
+	labels.append('uniform_wmci')
+	labels.append('nri_uniform_wmci')
+	# extract
+	fnames = []
+	for descriptor in descriptors:
+		fnames.append('{}_{}_{}_{}'.format(fname, descriptor.mode, descriptor.method, descriptor.input))
+		if fts:
+			_model.extractor = descriptor
+			protocol_froc_1(_model, fnames[-1])
+
+	if clf:
+		protocol_generic_froc(_model, fnames, descriptors, labels, kind='descriptor')
+	
+	
+
 def protocol_clf_eval_froc(_model, fname):
 	classifiers  = []
 	classifiers.append(lda.LDA())
@@ -382,7 +517,6 @@ def protocol_svm_hp_search(_model, fname):
 	ops = protocol_classifier_froc(_model, fname, classifiers, legend)
 	
 	# compute the AUC from 2 to 4
-	step = 10
 	auc_grid = []
 	for i in range(ops.shape[0]):
 		range_ops = ops[i][step * 2:step * 4 + 1]
@@ -492,8 +626,8 @@ if __name__=="__main__":
 	parser.add_argument('--fts', help='Performs feature extraction.', action='store_true')
 	parser.add_argument('--clf', help='Performs classification.', action='store_true')
 	parser.add_argument('--hyp', help='Performs hyperparameter search. The target method to evaluate should be specified using -t.', action='store_true')
-	parser.add_argument('--cmpclf', help='Evaluate classifiers.', action='store_true')
-	parser.add_argument('--cnn', help='Evaluate ConvNet.', action='store_true')
+	parser.add_argument('--cmp', help='Compare results of different models via froc. Options: hog, hog-inps, lbp, clf.', default='none')
+	parser.add_argument('--cnn', help='Evaluate convnet.', action='store_true')
 	parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
 
 	args = parser.parse_args()
@@ -507,36 +641,64 @@ if __name__=="__main__":
 	print args.fts
 
 	# default: clf -d hardie
-	method = protocol_froc_2
-	if args.fts:
-		method = protocol_froc_1
-	elif args.clf:
+	if args.cmp != 'none':
+		if args.cmp == 'hog':
+			_model.name = 'data/hog'
+			if args.clf:
+				_model.clf = model.classifiers[args.classifier]
+			hog_froc(_model, 'hog', args.fts, args.clf)	
+		elif args.cmp == 'hog-inps':
+			_model.name = 'data/hog2'
+			if args.clf:
+				_model.clf = model.classifiers[args.classifier]
+			hog_by_input_type(_model, 'hog2', args.fts, args.clf)	
+		elif args.cmp == 'lbp':
+			_model.name = 'data/lbp-deafult'
+			if args.clf:
+				_model.clf = model.classifiers[args.classifier]
+			lbp_froc(_model, 'lbp', args.fts, args.clf, mode='default')	
+		elif args.cmp == 'lbp-inner':
+			_model.name = 'data/lbp-inner'
+			if args.clf:
+				_model.clf = model.classifiers[args.classifier]
+			lbp_froc(_model, 'lbp', args.fts, args.clf, mode='inner')	
+		elif args.cmp == 'lbp-io':
+			_model.name = 'data/lbp-io'
+			if args.clf:
+				_model.clf = model.classifiers[args.classifier]
+			lbp_froc(_model, 'lbp', args.fts, args.clf, mode='io')	
+		elif args.cmp == 'clf':
+			protocol_clf_eval_froc(_model, '{}'.format(extractor_key))
+	
+	else:
 		method = protocol_froc_2
-		_model.clf = model.classifiers[args.classifier]
-		_model.selector = model.reductors[args.reductor]
-		if args.reductor != 'none':
-			_model.name += '-{}'.format(args.reductor)
-		_model.name += '-{}'.format(args.classifier)
-			
-	elif args.hyp:
-		if args.target == 'wmci':
-			method = protocol_wmci_froc
-		if args.target == 'pca':
-			method = protocol_pca_froc
-		if args.target == 'lda':
-			method = protocol_lda_froc
-		if args.target == 'svm':
-			method = protocol_svm_hp_search
-		if args.target == 'rfe':
-			method = protocol_rfe_froc
-		if args.target == 'rlr':
-			method = protocol_rlr_froc
-		if args.target == 'rfe':
-			method = protocol_lda_froc
-	elif args.cmpclf:
-		method = protocol_clf_eval_froc
-	elif args.cnn:
-		method = protocol_cnn_froc
+		if args.fts:
+			method = protocol_froc_1
+		elif args.clf:
+			method = protocol_froc_2
+			_model.clf = model.classifiers[args.classifier]
+			_model.selector = model.reductors[args.reductor]
+			if args.reductor != 'none':
+				_model.name += '-{}'.format(args.reductor)
+			_model.name += '-{}'.format(args.classifier)
+				
+		elif args.hyp:
+			if args.target == 'wmci':
+				method = protocol_wmci_froc
+			if args.target == 'pca':
+				method = protocol_pca_froc
+			if args.target == 'lda':
+				method = protocol_lda_froc
+			if args.target == 'svm':
+				method = protocol_svm_hp_search
+			if args.target == 'rfe':
+				method = protocol_rfe_froc
+			if args.target == 'rlr':
+				method = protocol_rlr_froc
+			if args.target == 'rfe':
+				method = protocol_lda_froc
+		elif args.cnn:
+			method = protocol_cnn_froc
 
-	print _model.extractor
-	method(_model, '{}'.format(extractor_key))
+		print _model.extractor
+		method(_model, '{}'.format(extractor_key))

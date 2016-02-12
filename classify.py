@@ -189,7 +189,7 @@ def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs):
 	return X, Y
 
 
-def train(X, Y, clf, scaler, selector):
+def train(X, Y, clf, scaler, selector, weights=False):
 	iters = 1
 	trs = int(0.7 * len(Y))
 	tes = int(len(Y) - trs)
@@ -237,6 +237,13 @@ def train(X, Y, clf, scaler, selector):
 		print "after n_feats = {}".format(len(Xt[0]))
 
 	clf.fit(Xt, Y)
+	
+	if weights:
+		print 'Ploting weights'
+		svm_weights_selected = (clf.coef_ ** 2).sum(axis=0)
+		svm_weights_selected /= svm_weights_selected.max()
+		util.save_weights(svm_weights_selected, 'feat_w')
+	
 	return clf, scaler, selector
 
 if __name__ == '__main__':
