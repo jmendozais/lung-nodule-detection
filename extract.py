@@ -519,32 +519,12 @@ class LBPExtractor:
 		return lbpio(img, lung_mask, blobs, nod_masks, self.method, self.mode)
 
 class ZernikeExtractor:
-	def __init__(self):
+	def __init__(self, input='lce', mode='mask'):
 		self.radius = int(32 * 0.4)
+		self.input = input
+		self.mode = mode
 
-	def extract_whole(self, img, blobs, masks):
-		feature_vectors = []
-		for i in range(len(blobs)):
-			x, y, r = blobs[i]
-			shift = 0 
-			side = 2 * shift + 2 * r + 1
-
-			tl = (x - shift - r, y - shift - r)
-			ntl = (max(0, tl[0]), max(0, tl[1]))
-			br = (x + shift + r + 1, y + shift + r + 1)
-			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
-
-			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-			mask = masks[i].astype(np.float64)
-			imask = 1 - mask
-
-			feats = mahotas.features.zernike_moments(img_roi, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
-			#feats /= (np.sum(feats) + util.EPS)
-			feature_vectors.append(np.array(feats))
-
-		return np.array(feature_vectors)
-
-	def extract_inner(self, img, blobs, masks):
+	def zernike(self, img, blobs, masks, mode='mask'):
 		feature_vectors = []
 		for i in range(len(blobs)):
 			x, y, r = blobs[i]
@@ -559,61 +539,38 @@ class ZernikeExtractor:
 			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
 			mask = masks[i].astype(np.float64)
 
-			feats = mahotas.features.zernike_moments(mask * img_roi, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
-			#util.imshow('inner', mask * img_roi)
+			feats = []
+			if mode == 'nomask':
+				feats = mahotas.features.zernike_moments(img_roi, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
+			elif mode == 'mask':
+				feats = mahotas.features.zernike_moments(mask, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
+			elif mode == 'inner':
+				feats = mahotas.features.zernike_moments(mask * img_roi, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
+			elif mode == 'inner_outer':
+				imask = 1 - mask
+				fi = mahotas.features.zernike_moments(mask * img_roi, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
+				fo = mahotas.features.zernike_moments(imask * img_roi, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
+				feats = np.hstack((fi, fo))
+			elif mode == 'contour':
+				per_mask = np.full(mask.shape, dtype=mask.dtype, fill_value=0)
+				contours, _ = cv2.findContours(mask.astype(np.uint8).copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+				contours = sorted(contours, cmp=sort_by_len)
+				cv2.drawContours(per_mask, [contours[0]], -1, 1, 1)
+				feats = mahotas.features.zernike_moments(per_mask, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
+
 			#feats /= (np.sum(feats) + util.EPS)
 			feature_vectors.append(np.array(feats))
 
 		return np.array(feature_vectors)
-
-	def extract_contour(self, img, blobs, masks):
-		feature_vectors = []
-		for i in range(len(blobs)):
-			x, y, r = blobs[i]
-			shift = 0 
-			side = 2 * shift + 2 * r + 1
-
-			tl = (x - shift - r, y - shift - r)
-			ntl = (max(0, tl[0]), max(0, tl[1]))
-			br = (x + shift + r + 1, y + shift + r + 1)
-			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
-
-			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-			mask = masks[i].astype(np.float64)
-			imask = 1 - mask
-			per_mask = np.full(mask.shape, dtype=mask.dtype, fill_value=0)
-			contours, _ = cv2.findContours(mask.astype(np.uint8).copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-			cv2.drawContours(per_mask, contours, -1, 1, 1)
-
-			feats = mahotas.features.zernike_moments(per_mask, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
-			#feats /= (np.sum(feats) + util.EPS)
-			feature_vectors.append(np.array(feats))
-
-		return np.array(feature_vectors)
-
-	def extract_mask(self, img, blobs, masks):
-		feature_vectors = []
-		for i in range(len(blobs)):
-			x, y, r = blobs[i]
-			shift = 0 
-			side = 2 * shift + 2 * r + 1
-
-			tl = (x - shift - r, y - shift - r)
-			ntl = (max(0, tl[0]), max(0, tl[1]))
-			br = (x + shift + r + 1, y + shift + r + 1)
-			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
-
-			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-			mask = masks[i].astype(np.float64)
-			feats = mahotas.features.zernike_moments(mask, int(r * 0.8), cm=(img_roi.shape[0]/2, img_roi.shape[1]/2))
-			#feats /= (np.sum(feats) + util.EPS)
-			feature_vectors.append(np.array(feats))
-
-		return np.array(feature_vectors)
-
 
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-		return self.extract_mask(lce, blobs, nod_masks)
+		img = lce
+		if self.input == 'norm':
+			img = norm
+		elif self.input == 'wmci':
+			img = wmci
+
+		return self.zernike(img, blobs, nod_masks, mode=self.mode)
 
 class ShapeExtractor:
 	def finite_derivative(self, v):
@@ -639,11 +596,10 @@ class ShapeExtractor:
 
 			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
 			mask = masks[i].astype(np.float64)
-			per_mask = np.full(mask.shape, dtype=mask.dtype, fill_value=0)
 
+			per_mask = np.full(mask.shape, dtype=mask.dtype, fill_value=0)
 			contours, _ = cv2.findContours(mask.astype(np.uint8).copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
 			contours = sorted(contours, cmp=sort_by_len)
-			
 			cv2.drawContours(per_mask, [contours[0]], -1, 1, 1)
 
 			has_inner = 0
