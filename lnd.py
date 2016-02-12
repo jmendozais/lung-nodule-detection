@@ -467,7 +467,10 @@ def znk_froc(_model, fname, fts=False, clf=True):
 	descriptors = []
 	labels = []
 
-	for inp, mode in product(['lce', 'norm', 'wmci'], ['nomask', 'mask', 'inner', 'inner_outer', 'contour']):
+	labels.append('mask')
+	descriptors.append(model.ZernikeExtractor(input='lce', mode='mask'))
+
+	for inp, mode in product(['lce', 'norm', 'wmci'], ['nomask', 'inner', 'inner_outer', 'contour']):
 		descriptors.append(model.ZernikeExtractor(input=inp, mode=mode))
 		labels.append('{}_{}'.format(inp, mode))
 
