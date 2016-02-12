@@ -337,7 +337,7 @@ class HogExtractor:
 		self.mode = mode
 		self.input = input
 
-	def hog(img, mask, orientations=9, cell=(8,8)):
+	def hog(self, img, mask, orientations=9, cell=(8,8)):
 		mag, dx, dy = finite_derivatives(img)
 		phase = np.arctan2(dy, dx)
 		phase = phase.astype(np.float64)	

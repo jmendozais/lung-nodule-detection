@@ -397,7 +397,7 @@ def hog_impls(_model, fname, fts=False, clf=True):
 
 	for inp, mode in product(['lce', 'norm', 'wmci'], ['skimage_default', 'default']):
 		fnames.append('{}_{}_{}'.format(fname, inp, mode))
-        labels.append('{}_{}_{}'.format(fname, inp, mode))
+		labels.append('{}_{}_{}'.format(fname, inp, mode))
 		descriptors.append(model.HogExtractor(mode=mode, input=inp))
 		if fts:
 			_model.extractor = descriptors[-1]
