@@ -402,8 +402,8 @@ class BaselineModel:
 			#print('Test score
 		else:
 			print('Using data augmentation')
-			#X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
-			X_train, Y_train = bootstraping_augment(X_train, Y_train, ratio=1, batch_size=batch_size, rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
+			X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
+			#X_train, Y_train = bootstraping_augment(X_train, Y_train, ratio=1, batch_size=batch_size, rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
 			print 'Negatives: {}'.format(np.sum(Y_train.T[0]))
 			print 'Positives: {}'.format(np.sum(Y_train.T[1]))
 			model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
@@ -729,6 +729,8 @@ class BaselineModel:
 		data_blobs = []
 		data_probs = []
 		for i in range(len(feature_set)):
+			print 'predict proba one keras'
+			print feature_set[i].shape
 			blobs, probs = self.predict_proba_one_keras(blob_set[i], feature_set[i])
 
 			## candidate cue adjacency rule: 22 mm
@@ -777,7 +779,9 @@ class BaselineModel:
 
 		return np.array(data_blobs), np.array(data_probs)
 
-classifiers = {'svm':svm.SVC(probability=True, C=0.0373, gamma=0.002), 'lda':lda.LDA()}
-#classifiers = {'svm':svm.SVC(probability=True), 'lda':lda.LDA()}
+# optimized
+opt_classifiers = {'svm':svm.SVC(probability=True, C=0.0373, gamma=0.002), 'lda':lda.LDA()}
+# default
+classifiers = {'svm':svm.SVC(probability=True), 'lda':lda.LDA()}
 reductors = {'none':None, 'pca':decomposition.PCA(n_components=0.99999999999, whiten=True), 'lda':selection.SelectFromModel(lda.LDA())}
 

@@ -340,7 +340,7 @@ def protocol_classifier_froc(_model, fname, classifiers, legend):
 		op_set.append(ops)
 
 	op_set = np.array(op_set)
-	util.save_froc(op_set, '{}_ta'.format(_model.name), legend)
+	util.save_froc(op_set, '{}'.format(_model.name), legend)
 
 	return op_set[1:]
 
@@ -366,16 +366,18 @@ def protocol_clf_eval_froc(_model, fname):
 def protocol_svm_hp_search(_model, fname):
 	#C_set = np.logspace(-3, 4, 8)
 	#g_set = np.logspace(-3, 4, 8)
-	#C_set = np.logspace(-2, 2, 8)
-	#g_set = np.logspace(-4, -1, 8)
-	C_set = np.logspace(-2, 1, 10)
-	g_set = np.logspace(-4, -2, 9)
+	C_set = np.logspace(-2, 2, 9)
+	g_set = np.logspace(-4, -1, 10)
+	#C_set = np.logspace(-2, 1, 10)
+	#g_set = np.logspace(-4, -2, 9)
+	#C_set = np.logspace(-0.7, 0.0, 9)
+	#g_set = np.logspace(-3.5, -3.0, 9)
 	classifiers = []
 	legend = []
 	for C, gamma in product(C_set, g_set):
 		legend.append('C={}, g={}'.format(C, round(gamma, 5)))
 		print 'SVM C = {}, g= {}'.format(C, round(gamma, 5))
-		classifiers.append(svm.SVC(C=C, gamma=gamma, probability=True, max_iter=1000))
+		classifiers.append(svm.SVC(C=C, gamma=gamma, probability=True))
 
 	ops = protocol_classifier_froc(_model, fname, classifiers, legend)
 	
@@ -477,7 +479,7 @@ def protocol_cnn_froc(_model, fname):
 	legend.append('baseline')
 	legend.append('current')
 
-	util.save_froc([baseline, ops], '{}_ta'.format(_model.name), legend)
+	util.save_froc([baseline, ops], '{}_cnn'.format(_model.name), legend)
 
 	return ops
 
