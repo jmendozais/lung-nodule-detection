@@ -208,7 +208,7 @@ def save_froc(op_set, name, legend=None):
 
 	for i in range(len(op_set)):
 		ops = np.array(op_set[i]).T
-		plt.plot(ops[0], ops[1], line_format[i%14], marker='x', markersize=3)
+		plt.plot(ops[0], ops[1], line_format[i%28], marker='x', markersize=3)
 
 	plt.title(name)
 	plt.ylabel('Sensitivity')

@@ -346,7 +346,6 @@ def hog(img, mask, orientations=9, cell=(8,8)):
 		wroi = w[tl[0]:br[0], tl[1]:br[1]]
 		hist, _ = np.histogram(roi, bins=orientations, range=(-np.pi, np.pi), weights=wroi, density=True)
 		#hist /= (np.sum(hist) + util.EPS)
-
 		if np.sum(wroi) < util.EPS:
 			hist = np.zeros(hist.shape, dtype=hist.dtype)
 		
@@ -355,7 +354,7 @@ def hog(img, mask, orientations=9, cell=(8,8)):
 	return ans
 
 import matplotlib.pyplot as plt
-def hog_mask(img, lung_mask, blobs, masks, mode='default'):
+def hog_mask(img, lung_mask, blobs, masks, mode='default', cell=(8,8)):
 	feature_vectors = []
 	for i in range(len(blobs)):
 		x, y, r = blobs[i]
@@ -371,16 +370,14 @@ def hog_mask(img, lung_mask, blobs, masks, mode='default'):
 		img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
 		img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
 		mask = cv2.resize(masks[i], dsize, interpolation=cv2.INTER_CUBIC)
-		
-		feats = hog(img_roi, mask, orientations=9, cell=(32, 32))
-
 		if mode == 'default':
 			mask = np.ones(mask.shape, dtype=mask.dtype)
-			feats = hog(img_roi, mask, orientations=9, cell=(32, 32))
+			feats = hog(img_roi, mask, orientations=9, cell=cell)
 		elif mode == 'inner':
-			feats = hog(img_roi, mask, orientations=9, cell=(32, 32))
+			feats = hog(img_roi, mask, orientations=9, cell=cell)
 		elif mode == 'inner_outer':
-			feats_outer = hog(img_roi, 1-mask, orientations=9, cell=(32, 32))
+			feats = hog(img_roi, mask, orientations=9, cell=cell)
+			feats_outer = hog(img_roi, 1-mask, orientations=9, cell=cell)
 			feats = np.hstack((feats, feats_outer))
 			feats /= 2
 		
@@ -482,7 +479,7 @@ class HardieExtractor:
 		return hardie(norm, lce, wmci, lung_mask, blobs, nod_masks)
 
 class HogExtractor:
-	def __init__(self, mode='32x32', input='lce'):
+	def __init__(self, mode='default', input='norm'):
 		self.mode = mode
 		self.input = input
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
@@ -496,12 +493,18 @@ class HogExtractor:
 			return hog_skimage(img, lung_mask, blobs, nod_masks)
 		elif self.mode == 'skimage_32x32':
 			return hog_skimage(img, lung_mask, blobs, nod_masks, cell=(32,32))
-		elif self.mode == '32x32':
-			return hog_mask(img, lung_mask, blobs, nod_masks, mode='default')
+		elif self.mode == 'default':
+			return  hog_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(8,8))
+		elif self.mode == 'inner':
+			return  hog_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(8,8))
+		elif self.mode == 'io':
+			return  hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(8,8))
+		elif self.mode == '32x32_default':
+			return hog_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(32,32))
 		elif self.mode == '32x32_inner':
-			return hog_mask(img, lung_mask, blobs, nod_masks, mode='inner')
-		elif self.mode == '32x32_inner_outer':
-			return hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer')
+			return hog_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(32,32))
+		elif self.mode == '32x32_io':
+			return hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(32,32))
 
 class LBPExtractor:
 	def __init__(self, method='uniform', input='lce', mode='default'):
