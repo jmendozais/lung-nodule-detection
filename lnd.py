@@ -446,26 +446,12 @@ def hog_froc(_model, fname, fts=False, clf=True):
 
 def lbp_froc(_model, fname, fts=False, clf=True, mode='default'):
 	descriptors = []
-	descriptors.append(model.LBPExtractor(method='default', input='lce', mode=mode))
-	descriptors.append(model.LBPExtractor(method='uniform', input='lce', mode=mode))
-	descriptors.append(model.LBPExtractor(method='nri_uniform', input='lce', mode=mode))
-	descriptors.append(model.LBPExtractor(method='default', input='norm', mode=mode))
-	descriptors.append(model.LBPExtractor(method='uniform', input='norm', mode=mode))
-	descriptors.append(model.LBPExtractor(method='nri_uniform', input='norm', mode=mode))
-	descriptors.append(model.LBPExtractor(method='default', input='wmci', mode=mode))
-	descriptors.append(model.LBPExtractor(method='uniform', input='wmci', mode=mode))
-	descriptors.append(model.LBPExtractor(method='nri_uniform', input='wmci', mode=mode))
-
 	labels = []
-	labels.append('default_lce')
-	labels.append('uniform_lce')
-	labels.append('nri_uniform_lce')
-	labels.append('default_norm')
-	labels.append('uniform_norm')
-	labels.append('nri_uniform_norm')
-	labels.append('default_wmci')
-	labels.append('uniform_wmci')
-	labels.append('nri_uniform_wmci')
+
+	for inp, method in product(['lce, norm, wmci'], ['default', 'uniform', 'nri_uniform']):
+		descriptors.append(model.LBPExtractor(method=method, input=inp, mode=mode))
+		labels.append('{}_{}_{}'.format(inp, method, mode))
+
 	# extract
 	fnames = []
 	for descriptor in descriptors:
@@ -477,6 +463,24 @@ def lbp_froc(_model, fname, fts=False, clf=True, mode='default'):
 	if clf:
 		protocol_generic_froc(_model, fnames, descriptors, labels, kind='descriptor')
 	
+def znk_froc(_model, fname, fts=False, clf=True):
+	descriptors = []
+	labels = []
+
+	for inp, mode in product(['lce', 'norm', 'wmci'], ['nomask', 'mask', 'inner', 'inner_outer', 'contour']):
+		descriptors.append(model.ZernikeExtractor(input=inp, mode=mode))
+		labels.append('{}_{}'.format(inp, mode))
+
+	# extract
+	fnames = []
+	for descriptor in descriptors:
+		fnames.append('{}_{}_{}'.format(fname, descriptor.input, descriptor.mode))
+		if fts:
+			_model.extractor = descriptor
+			protocol_froc_1(_model, fnames[-1])
+
+	if clf:
+		protocol_generic_froc(_model, fnames, descriptors, labels, kind='descriptor')
 	
 
 def protocol_clf_eval_froc(_model, fname):
@@ -661,12 +665,17 @@ if __name__=="__main__":
 			_model.name = 'data/lbp-inner'
 			if args.clf:
 				_model.clf = model.classifiers[args.classifier]
-			lbp_froc(_model, 'lbp', args.fts, args.clf, mode='inner')	
+			lbp_froc(_model, 'lbp-inner', args.fts, args.clf, mode='inner')	
 		elif args.cmp == 'lbp-io':
 			_model.name = 'data/lbp-io'
 			if args.clf:
 				_model.clf = model.classifiers[args.classifier]
-			lbp_froc(_model, 'lbp', args.fts, args.clf, mode='io')	
+			lbp_froc(_model, 'lbp-io', args.fts, args.clf, mode='io')
+		elif args.cmp == 'znk':
+			_model.name = 'data/znk'
+			if args.clf:
+				_model.clf = model.classifiers[args.classifier]
+			znk_froc(_model, 'znk', args.fts, args.clf)		
 		elif args.cmp == 'clf':
 			protocol_clf_eval_froc(_model, '{}'.format(extractor_key))
 	
