@@ -8,6 +8,8 @@ from scipy.stats import skew, kurtosis
 import skimage.feature as feature
 import mahotas
 import overfeat
+import matplotlib.pyplot as plt
+
 
 import util
 
@@ -324,154 +326,6 @@ def hardie(norm, lce, wmci, lung_mask, blobs, masks):
 
 	return np.array(feature_vectors)
 
-def hog(img, mask, orientations=9, cell=(8,8)):
-	mag, dx, dy = finite_derivatives(img)
-	phase = np.arctan2(dy, dx)
-	phase = phase.astype(np.float64)	
-	#phase = np.abs(phase)
-
-	size = img.shape
-	size = (size[0] / cell[0], size[1] / cell[1])
-	w = mask.astype(np.float64)
-	w *= mag
-
-	if np.sum(w) > util.EPS:
-		w /= np.sum(w)
-
-	ans = np.array([])
-	for i, j in product(range(size[0]), range(size[1])):
-		tl = (i * cell[0], j * cell[1])
-		br = ((i + 1) * cell[0], (j + 1) * cell[1])
-		roi = phase[tl[0]:br[0], tl[1]:br[1]]
-		wroi = w[tl[0]:br[0], tl[1]:br[1]]
-		hist, _ = np.histogram(roi, bins=orientations, range=(-np.pi, np.pi), weights=wroi, density=True)
-		#hist /= (np.sum(hist) + util.EPS)
-		if np.sum(wroi) < util.EPS:
-			hist = np.zeros(hist.shape, dtype=hist.dtype)
-		
-		ans = np.hstack((ans, hist))
-	ans /= (np.sum(ans) + util.EPS)
-	return ans
-
-import matplotlib.pyplot as plt
-def hog_mask(img, lung_mask, blobs, masks, mode='default', cell=(8,8)):
-	feature_vectors = []
-	for i in range(len(blobs)):
-		x, y, r = blobs[i]
-		shift = 0 
-		side = 2 * shift + 2 * r + 1
-		dsize = (32, 32)
-
-		tl = (x - shift - r, y - shift - r)
-		ntl = (max(0, tl[0]), max(0, tl[1]))
-		br = (x + shift + r + 1, y + shift + r + 1)
-		nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
-
-		img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-		img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
-		mask = cv2.resize(masks[i], dsize, interpolation=cv2.INTER_CUBIC)
-		if mode == 'default':
-			mask = np.ones(mask.shape, dtype=mask.dtype)
-			feats = hog(img_roi, mask, orientations=9, cell=cell)
-		elif mode == 'inner':
-			feats = hog(img_roi, mask, orientations=9, cell=cell)
-		elif mode == 'inner_outer':
-			feats = hog(img_roi, mask, orientations=9, cell=cell)
-			feats_outer = hog(img_roi, 1-mask, orientations=9, cell=cell)
-			feats = np.hstack((feats, feats_outer))
-			feats /= 2
-		
-		'''
-		print len(feats), max(feats), min(feats), np.mean(feats), np.sum(feats)
-		plt.bar(range(len(feats)), feats)
-		plt.show()
-		util.imshow('roi', img_roi)
-		'''
-		feature_vectors.append(np.array(feats))
-
-	return np.array(feature_vectors)
-
-
-def hog_skimage(img, lung_mask, blobs, masks, cell=None):
-	feature_vectors = []
-	for i in range(len(blobs)):
-		x, y, r = blobs[i]
-		shift = 0 
-		side = 2 * shift + 2 * r + 1
-		dsize = (32, 32)
-
-		tl = (x - shift - r, y - shift - r)
-		ntl = (max(0, tl[0]), max(0, tl[1]))
-		br = (x + shift + r + 1, y + shift + r + 1)
-		nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
-
-		img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-		img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
-
-		#util.imshow('hog lce roi', lce_roi)
-		if cell != None:
-			feats = feature.hog(img_roi, orientations=9, pixels_per_cell=cell, cells_per_block=(1, 1), visualise=False, normalise=False)
-		else:
-			feats = feature.hog(img_roi, orientations=9, cells_per_block=(1, 1), visualise=False, normalise=False)
-		
-		'''
-		print feats
-		print len(feats), max(feats), min(feats), np.mean(feats), np.sum(feats)
-		plt.bar(range(len(feats)), feats)
-		plt.show()
-		util.imshow('roi', img_roi)
-		'''
-
-		feature_vectors.append(np.array(feats))
-
-	return np.array(feature_vectors)
-
-def lbpio(img, lung_mask, blobs, masks, method='uniform', mode='default'):
-	P = 9
-	R = 1
-	feature_vectors = []
-	for i in range(len(blobs)):
-		x, y, r = blobs[i]
-		shift = 0 
-		side = 2 * shift + 2 * r + 1
-
-		tl = (x - shift - r, y - shift - r)
-		ntl = (max(0, tl[0]), max(0, tl[1]))
-		br = (x + shift + r + 1, y + shift + r + 1)
-		nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
-
-		img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-		lbp = feature.local_binary_pattern(img_roi, P, R, method=method)
-
-		mask = masks[i].astype(np.float64)
-		imask = 1 - mask
-
-		bins = lbp.max() + 1
-		hi = []
-		ho = []
-		if mode == 'inner' or mode == 'inner_outer':
-			hi, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=mask.ravel(), density=True)
-			hi /= (np.sum(hi) + util.EPS)
-		if mode == 'outer' or mode == 'inner_outer':
-			ho, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=imask.ravel(), density=True)
-			ho /= (np.sum(hi) + util.EPS)
-		
-		#print "hi shape {} sum {}".format(hi.shape, util.EPS)
-		hist = []
-		if mode == 'inner_outer':
-			hist = np.hstack((hi, ho))
-			hist /= (np.sum(hist) + util.EPS)
-		elif mode == 'inner':
-			hist = hi
-		elif mode == 'outer':
-			hist = ho
-		elif mode == 'default':
-			hist, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), density=True)
-			hist /= (np.sum(hist) + util.EPS)
-
-		feature_vectors.append(np.array(hist))
-
-	return np.array(feature_vectors)
 
 from skimage.exposure import equalize_hist
 class HardieExtractor:
@@ -479,9 +333,95 @@ class HardieExtractor:
 		return hardie(norm, lce, wmci, lung_mask, blobs, nod_masks)
 
 class HogExtractor:
-	def __init__(self, mode='default', input='norm'):
+	def __init__(self, mode='default', input='wcmi'):
 		self.mode = mode
 		self.input = input
+
+	def hog(img, mask, orientations=9, cell=(8,8)):
+		mag, dx, dy = finite_derivatives(img)
+		phase = np.arctan2(dy, dx)
+		phase = phase.astype(np.float64)	
+		#phase = np.abs(phase)
+
+		size = img.shape
+		size = (size[0] / cell[0], size[1] / cell[1])
+		w = mask.astype(np.float64)
+		w *= mag
+
+		if np.sum(w) > util.EPS:
+			w /= np.sum(w)
+
+		ans = np.array([])
+		for i, j in product(range(size[0]), range(size[1])):
+			tl = (i * cell[0], j * cell[1])
+			br = ((i + 1) * cell[0], (j + 1) * cell[1])
+			roi = phase[tl[0]:br[0], tl[1]:br[1]]
+			wroi = w[tl[0]:br[0], tl[1]:br[1]]
+			hist, _ = np.histogram(roi, bins=orientations, range=(-np.pi, np.pi), weights=wroi, density=True)
+			#hist /= (np.sum(hist) + util.EPS)
+			if np.sum(wroi) < util.EPS:
+				hist = np.zeros(hist.shape, dtype=hist.dtype)
+			
+			ans = np.hstack((ans, hist))
+		ans /= (np.sum(ans) + util.EPS)
+		return ans
+
+	def hog_mask(self, img, lung_mask, blobs, masks, mode='default', cell=(8,8)):
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+			dsize = (32, 32)
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
+			mask = cv2.resize(masks[i], dsize, interpolation=cv2.INTER_CUBIC)
+			if mode == 'default':
+				mask = np.ones(mask.shape, dtype=mask.dtype)
+				feats = self.hog(img_roi, mask, orientations=9, cell=cell)
+			elif mode == 'inner':
+				feats = self.hog(img_roi, mask, orientations=9, cell=cell)
+			elif mode == 'inner_outer':
+				feats = self.hog(img_roi, mask, orientations=9, cell=cell)
+				feats_outer = self.hog(img_roi, 1-mask, orientations=9, cell=cell)
+				feats = np.hstack((feats, feats_outer))
+				feats /= 2
+
+			feature_vectors.append(np.array(feats))
+
+		return np.array(feature_vectors)
+
+
+	def hog_skimage(self, img, lung_mask, blobs, masks, cell=None):
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+			dsize = (32, 32)
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
+
+			if cell != None:
+				feats = feature.hog(img_roi, orientations=9, pixels_per_cell=cell, cells_per_block=(1, 1), visualise=False, normalise=False)
+			else:
+				feats = feature.hog(img_roi, orientations=9, cells_per_block=(1, 1), visualise=False, normalise=False)
+			feature_vectors.append(np.array(feats))
+
+		return np.array(feature_vectors)
+
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
 		img = lce
 		if self.input == 'norm':
@@ -490,27 +430,75 @@ class HogExtractor:
 			img = wmci
 
 		if self.mode == 'skimage_default':
-			return hog_skimage(img, lung_mask, blobs, nod_masks)
+			return self.hog_skimage(img, lung_mask, blobs, nod_masks)
 		elif self.mode == 'skimage_32x32':
-			return hog_skimage(img, lung_mask, blobs, nod_masks, cell=(32,32))
+			return self.hog_skimage(img, lung_mask, blobs, nod_masks, cell=(32,32))
 		elif self.mode == 'default':
-			return  hog_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(8,8))
+			return  self.hog_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(8,8))
 		elif self.mode == 'inner':
-			return  hog_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(8,8))
-		elif self.mode == 'io':
-			return  hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(8,8))
+			return  self.hog_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(8,8))
+		elif self.mode == 'inner_outer':
+			return  self.hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(8,8))
 		elif self.mode == '32x32_default':
-			return hog_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(32,32))
+			return self.hog_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(32,32))
 		elif self.mode == '32x32_inner':
-			return hog_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(32,32))
-		elif self.mode == '32x32_io':
-			return hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(32,32))
+			return self.hog_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(32,32))
+		elif self.mode == '32x32_inner_outer':
+			return self.hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(32,32))
 
 class LBPExtractor:
-	def __init__(self, method='uniform', input='lce', mode='default'):
+	# TODO set optimal model
+	def __init__(self, method='uniform', input='norm', mode='inner_outer'):
 		self.method = method
 		self.input = input
 		self.mode = mode
+
+	def lbpio(self, img, lung_mask, blobs, masks, method='uniform', mode='inner_outer'):
+		P = 9
+		R = 1
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			lbp = feature.local_binary_pattern(img_roi, P, R, method=method)
+
+			mask = masks[i].astype(np.float64)
+			imask = 1 - mask
+
+			bins = lbp.max() + 1
+			hi = []
+			ho = []
+			if mode == 'inner' or mode == 'inner_outer':
+				hi, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=mask.ravel(), density=True)
+				hi /= (np.sum(hi) + util.EPS)
+			if mode == 'outer' or mode == 'inner_outer':
+				ho, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=imask.ravel(), density=True)
+				ho /= (np.sum(hi) + util.EPS)
+			
+			#print "hi shape {} sum {}".format(hi.shape, util.EPS)
+			hist = []
+			if mode == 'inner_outer':
+				hist = np.hstack((hi, ho))
+				hist /= (np.sum(hist) + util.EPS)
+			elif mode == 'inner':
+				hist = hi
+			elif mode == 'outer':
+				hist = ho
+			elif mode == 'default':
+				hist, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), density=True)
+				hist /= (np.sum(hist) + util.EPS)
+
+			feature_vectors.append(np.array(hist))
+
+		return np.array(feature_vectors)
 
 	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
 		img = lce
@@ -519,15 +507,15 @@ class LBPExtractor:
 		if self.input == 'norm':
 			img = norm
 		
-		return lbpio(img, lung_mask, blobs, nod_masks, self.method, self.mode)
+		return self.lbpio(img, lung_mask, blobs, nod_masks, self.method, self.mode)
 
 class ZernikeExtractor:
-	def __init__(self, input='lce', mode='mask'):
+	def __init__(self, input='wmci', mode='nomask'):
 		self.radius = int(32 * 0.4)
 		self.input = input
 		self.mode = mode
 
-	def zernike(self, img, blobs, masks, mode='mask'):
+	def zernike(self, img, blobs, masks, mode='nomask'):
 		feature_vectors = []
 		for i in range(len(blobs)):
 			x, y, r = blobs[i]
@@ -723,7 +711,7 @@ class OverfeatExtractor:
 
 
 # Register extractors
-extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(mode='32x32'), 'hogio':HogExtractor(mode='32x32_inner_outer'), \
-				'lbpio':LBPExtractor(method='uniform', mode='inner_outer'), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
+extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(), 'hogio':HogExtractor(mode='inner_outer'), \
+				'lbp':LBPExtractor(), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
 				'all':AllExtractor(), 'set1':Set1Extractor(), 'overf':OverfeatExtractor(), \
 				'overfin':OverfeatExtractor(mode='inner')}

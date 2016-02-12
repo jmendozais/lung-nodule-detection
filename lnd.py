@@ -413,7 +413,7 @@ def hog_froc(_model, fname, fts=False, clf=True):
 	descriptors.append(model.HogExtractor(mode='skimage_32x32'))
 	descriptors.append(model.HogExtractor(mode='32x32'))
 	descriptors.append(model.HogExtractor(mode='32x32_inner'))
-	descriptors.append(model.HogExtractor(mode='32x32_io'))
+	descriptors.append(model.HogExtractor(mode='32x32_inner_outer'))
 
 	labels = []
 	labels.append('skimage default')
@@ -437,7 +437,7 @@ def lbp_froc(_model, fname, fts=False, clf=True, mode='default'):
 	descriptors = []
 	labels = []
 
-	for inp, method in product(['lce, norm, wmci'], ['default', 'uniform', 'nri_uniform']):
+	for inp, method in product(['lce', 'norm', 'wmci'], ['default', 'uniform', 'nri_uniform']):
 		descriptors.append(model.LBPExtractor(method=method, input=inp, mode=mode))
 		labels.append('{}_{}_{}'.format(inp, method, mode))
 
@@ -662,7 +662,7 @@ if __name__=="__main__":
 			_model.name = 'data/lbp-io'
 			if args.clf:
 				_model.clf = model.classifiers[args.classifier]
-			lbp_froc(_model, 'lbp-io', args.fts, args.clf, mode='io')
+			lbp_froc(_model, 'lbp-io', args.fts, args.clf, mode='inner_outer')
 		elif args.cmp == 'znk':
 			_model.name = 'data/znk'
 			if args.clf:
