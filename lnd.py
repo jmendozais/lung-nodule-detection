@@ -444,7 +444,7 @@ def hog_froc(_model, fname, fts=False, clf=True):
 	if clf:
 		protocol_generic_froc(_model, fnames, descriptors, labels, kind='descriptor')
 
-def lbp_froc(_model, fname, fts=False, clf=True, mode='all'):
+def lbp_froc(_model, fname, fts=False, clf=True, mode='default'):
 	descriptors = []
 	descriptors.append(model.LBPExtractor(method='default', input='lce', mode=mode))
 	descriptors.append(model.LBPExtractor(method='uniform', input='lce', mode=mode))
