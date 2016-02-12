@@ -437,13 +437,13 @@ class HogExtractor:
 			return  self.hog_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(8,8))
 		elif self.mode == 'inner':
 			return  self.hog_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(8,8))
-		elif self.mode == 'io':
+		elif self.mode == 'inner_outer':
 			return  self.hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(8,8))
 		elif self.mode == '32x32_default':
 			return self.hog_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(32,32))
 		elif self.mode == '32x32_inner':
 			return self.hog_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(32,32))
-		elif self.mode == '32x32_io':
+		elif self.mode == '32x32_inner_outer':
 			return self.hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(32,32))
 
 class LBPExtractor:
