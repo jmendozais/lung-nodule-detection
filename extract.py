@@ -429,7 +429,7 @@ def hog_skimage(img, lung_mask, blobs, masks, cell=None):
 
 	return np.array(feature_vectors)
 
-def lbpio(img, lung_mask, blobs, masks, method='uniform', mode='inner_outer'):
+def lbpio(img, lung_mask, blobs, masks, method='uniform', mode='default'):
 	P = 9
 	R = 1
 	feature_vectors = []
@@ -460,6 +460,7 @@ def lbpio(img, lung_mask, blobs, masks, method='uniform', mode='inner_outer'):
 			ho /= (np.sum(hi) + util.EPS)
 		
 		#print "hi shape {} sum {}".format(hi.shape, util.EPS)
+		hist = []
 		if mode == 'inner_outer':
 			hist = np.hstack((hi, ho))
 			hist /= (np.sum(hist) + util.EPS)
@@ -468,7 +469,7 @@ def lbpio(img, lung_mask, blobs, masks, method='uniform', mode='inner_outer'):
 		elif mode == 'outer':
 			hist = ho
 		elif mode == 'default':
-			hist, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins))
+			hist, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), density=True)
 			hist /= (np.sum(hist) + util.EPS)
 
 		feature_vectors.append(np.array(hist))
@@ -764,6 +765,6 @@ class OverfeatExtractor:
 
 # Register extractors
 extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(mode='32x32'), 'hogio':HogExtractor(mode='32x32_inner_outer'), \
-				'lbpio':LBPExtractor(method='uniform'), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
+				'lbpio':LBPExtractor(method='uniform', mode='inner_outer'), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
 				'all':AllExtractor(), 'set1':Set1Extractor(), 'overf':OverfeatExtractor(), \
 				'overfin':OverfeatExtractor(mode='inner')}
