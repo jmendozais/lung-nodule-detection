@@ -390,45 +390,34 @@ def protocol_classifier_froc(_model, fname, classifiers, legend):
 
 	return op_set[1:]
 
-def hog_by_input_type(_model, fname, fts=False, clf=True):
+def hog_impls(_model, fname, fts=False, clf=True):
 	descriptors = []
-	descriptors.append(model.HogExtractor(mode='sklearn_default', input='lce'))
-	descriptors.append(model.HogExtractor(mode='32x32', input='lce'))
-	descriptors.append(model.HogExtractor(mode='sklearn_default', input='norm'))
-	descriptors.append(model.HogExtractor(mode='32x32', input='norm'))
-	descriptors.append(model.HogExtractor(mode='sklearn_default', input='wmci'))
-	descriptors.append(model.HogExtractor(mode='32x32', input='wmci'))
-
 	labels = []
-	labels.append('sklearn default, lce')
-	labels.append('our impl 32x32, lce')
-	labels.append('sklearn default, norm')
-	labels.append('our impl 32x32, norm')
-	labels.append('sklearn default, wmci')
-	labels.append('our impl 32x32, wmci')
-
-	# extract
 	fnames = []
-	for descriptor in descriptors:
-		fnames.append('{}_{}_{}'.format(fname, descriptor.mode, descriptor.input))
+
+	for inp, mode in product(['lce', 'norm', 'wmci'], ['skimage_default', 'default']):
+		fnames.append('{}_{}_{}'.format(fname, inp, mode))
+		descriptors.append(model.HogExtractor(mode=mode, input=inp))
+		labels.append(fnames.append('{}_{}_{}'.format(fname, inp, mode)))
 		if fts:
-			_model.extractor = descriptor
-			protocol_froc_1(_model, fnames[-1])
+			_model.extractor = descriptors[-1]
+			protocol_froc_1(_model, fnames[-1])	
 
 	if clf:
 		protocol_generic_froc(_model, fnames, descriptors, labels, kind='descriptor')
 		
+# FIX: Dropout skimage impl and test type and modes
 def hog_froc(_model, fname, fts=False, clf=True):
 	descriptors = []
-	descriptors.append(model.HogExtractor(mode='sklearn_default'))
-	descriptors.append(model.HogExtractor(mode='sklearn_32x32'))
+	descriptors.append(model.HogExtractor(mode='skimage_default'))
+	descriptors.append(model.HogExtractor(mode='skimage_32x32'))
 	descriptors.append(model.HogExtractor(mode='32x32'))
 	descriptors.append(model.HogExtractor(mode='32x32_inner'))
 	descriptors.append(model.HogExtractor(mode='32x32_io'))
 
 	labels = []
-	labels.append('sklearn default')
-	labels.append('sklearn 32x32')
+	labels.append('skimage default')
+	labels.append('skimage 32x32')
 	labels.append('our impl 32x32')
 	labels.append('our impl 32x32 inner')
 	labels.append('our impl 32x32 inner + outer')
@@ -633,7 +622,7 @@ if __name__=="__main__":
 	parser.add_argument('--fts', help='Performs feature extraction.', action='store_true')
 	parser.add_argument('--clf', help='Performs classification.', action='store_true')
 	parser.add_argument('--hyp', help='Performs hyperparameter search. The target method to evaluate should be specified using -t.', action='store_true')
-	parser.add_argument('--cmp', help='Compare results of different models via froc. Options: hog, hog-inps, lbp, clf.', default='none')
+	parser.add_argument('--cmp', help='Compare results of different models via froc. Options: hog, hog-impls, lbp, clf.', default='none')
 	parser.add_argument('--cnn', help='Evaluate convnet.', action='store_true')
 	parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
 
@@ -654,11 +643,11 @@ if __name__=="__main__":
 			if args.clf:
 				_model.clf = model.classifiers[args.classifier]
 			hog_froc(_model, 'hog', args.fts, args.clf)	
-		elif args.cmp == 'hog-inps':
-			_model.name = 'data/hog2'
+		elif args.cmp == 'hog-impls':
+			_model.name = 'data/hog-impls'
 			if args.clf:
 				_model.clf = model.classifiers[args.classifier]
-			hog_by_input_type(_model, 'hog2', args.fts, args.clf)	
+			hog_impls(_model, 'hog-impls', args.fts, args.clf)	
 		elif args.cmp == 'lbp':
 			_model.name = 'data/lbp-deafult'
 			if args.clf:
