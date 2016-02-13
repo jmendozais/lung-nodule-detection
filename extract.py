@@ -333,7 +333,7 @@ class HardieExtractor:
 		return hardie(norm, lce, wmci, lung_mask, blobs, nod_masks)
 
 class HogExtractor:
-	def __init__(self, mode='default', input='wcmi'):
+	def __init__(self, mode='default', input='norm'):
 		self.mode = mode
 		self.input = input
 
@@ -448,7 +448,7 @@ class HogExtractor:
 
 class LBPExtractor:
 	# TODO set optimal model
-	def __init__(self, method='uniform', input='norm', mode='inner_outer'):
+	def __init__(self, method='uniform', input='norm', mode='default'):
 		self.method = method
 		self.input = input
 		self.mode = mode
@@ -655,7 +655,6 @@ class AllExtractor:
 class Set1Extractor:
 	def __init__(self):
 		self.extractors = []
-		self.extractors.append(HardieExtractor())
 		self.extractors.append(LBPExtractor())
 		self.extractors.append(HogExtractor())
 		self.extractors.append(ZernikeExtractor())
