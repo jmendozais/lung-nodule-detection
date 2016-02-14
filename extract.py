@@ -978,7 +978,7 @@ class Set2Extractor:
 		
 		return fv
 
-class Set3:
+class Set3Extractor:
 	def __init__(self):
 		self.extractors = []
 		self.extractors.append(HRGExtractor())
@@ -1038,5 +1038,5 @@ class OverfeatExtractor:
 # Register extractors
 extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(), 'hsog':HSOGExtractor(), 'hogio':HogExtractor(mode='inner_outer'), \
 				'lbp':LBPExtractor(), 'plbp': PLBPExtractor(), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
-				'all':AllExtractor(), 'set1':Set1Extractor(), 'set2':Set2Extractor(), 'set3':Set2Extractor(),'overf':OverfeatExtractor(), \
+				'all':AllExtractor(), 'set1':Set1Extractor(), 'set2':Set2Extractor(), 'set3':Set3Extractor(),'overf':OverfeatExtractor(), \
 				'overfin':OverfeatExtractor(mode='inner'), 'hrg':HRGExtractor(), 'hrgs':HRGExtractor(method='strenght')}
