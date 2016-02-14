@@ -643,7 +643,7 @@ def protocol_cnn_froc(_model, fname):
 if __name__=="__main__":	
 	parser = argparse.ArgumentParser(prog='lnd.py')
 	parser.add_argument('-b', '--blob-detector', help='Options: wmci(default), TODO hog, log.', default='wmci')
-	parser.add_argument('-d', '--descriptor', help='Options: hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='Hardie et al')
+	parser.add_argument('-d', '--descriptor', help='Options: hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='hardie')
 	parser.add_argument('-r', '--reductor', help='Feature reductor or selector. Options: none(default), pca, lda, rfe, rlr.', default='none')
 	parser.add_argument('-c', '--classifier', help='Options: lda(default), svm.', default='lda')
 	parser.add_argument('--fts', help='Performs feature extraction.', action='store_true')
