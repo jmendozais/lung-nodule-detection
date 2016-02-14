@@ -443,6 +443,23 @@ def hog_froc(_model, fname, fts=False, clf=True):
 	if clf:
 		protocol_generic_froc(_model, fnames, descriptors, labels, kind='descriptor')
 
+def hrg_froc(_model, fname, fts=False, clf=True):
+	descriptors = []
+	labels = []
+	fnames = []
+
+	for inp, mode in product(['lce', 'norm', 'wmci'], ['default', 'inner', 'inner_outer']):
+		fnames.append('{}_{}_{}'.format(fname, inp, mode))
+		labels.append('{}_{}_{}'.format(fname, inp, mode))
+		descriptors.append(model.HRGExtractor(mode=mode, input=inp))
+		if fts:
+			_model.extractor = descriptors[-1]
+			protocol_froc_1(_model, fnames[-1])	
+
+	if clf:
+		protocol_generic_froc(_model, fnames, descriptors, labels, kind='descriptor')
+		
+
 def lbp_froc(_model, fname, fts=False, clf=True, mode='default'):
 	descriptors = []
 	labels = []
@@ -678,6 +695,11 @@ if __name__=="__main__":
 			if args.clf:
 				_model.clf = model.classifiers[args.classifier]
 			znk_froc(_model, 'znk', args.fts, args.clf)		
+		elif args.cmp == 'hrg':
+			_model.name = 'data/hrg'
+			if args.clf:
+				_model.clf = model.classifiers[args.classifier]
+			hrg_froc(_model, 'hrg', args.fts, args.clf)
 		elif args.cmp == 'clf':
 			protocol_clf_eval_froc(_model, '{}'.format(extractor_key))
 	
