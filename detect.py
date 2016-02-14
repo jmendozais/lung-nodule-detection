@@ -173,6 +173,8 @@ def wmci(img, mask, threshold=0.5):
 		ans = np.maximum(tmp, ans)
 
 	coords = peak_local_max(ans, min_distance)
+
+	# Fix this, you should return the radio
 	blobs = []
 	for coord in coords:
 		if ans[coord[0], coord[1]] >= threshold:

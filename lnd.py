@@ -28,14 +28,24 @@ import jsrt
 step = 10
 fppi_range = np.linspace(0.0, 10.0, 101)
 
-# baseline
-baseline = np.array([[0.0, 0.0], [0.1, 0.2], [0.2, 0.3],[0.3, 0.38], [0.4, 0.415], [0.5, 0.46], [0.6, 0.48], [0.7, 0.51], [0.9, 0.53], [1.0, 0.57], [1.5, 0.67], [2.0, 0.72], [2.5, 0.75],[3.0, 0.78], [4.0, 0.79], [5.0, 0.81], [6.0, 0.82], [7.0, 0.85], [8.0, 0.86], [9.0, 0.895], [10.0, 0.93]])
-fun = interp1d(baseline.T[0], baseline.T[1], kind='linear', fill_value=0, bounds_error=False)
-baseline = np.array([fppi_range, fppi_range.copy()])
-baseline[1] = fun(baseline[0])
-baseline = baseline.T
+# Baselines
+hardie = np.array([[0.0, 0.0], [0.1, 0.2], [0.2, 0.3],[0.3, 0.38], [0.4, 0.415], [0.5, 0.46], [0.6, 0.48], [0.7, 0.51], [0.9, 0.53], [1.0, 0.57], [1.5, 0.67], [2.0, 0.72], [2.5, 0.75],[3.0, 0.78], [4.0, 0.79], [5.0, 0.81], [6.0, 0.82], [7.0, 0.85], [8.0, 0.86], [9.0, 0.895], [10.0, 0.93]])
+fun = interp1d(hardie.T[0], hardie.T[1], kind='linear', fill_value=0, bounds_error=False)
+hardie = np.array([fppi_range, fppi_range.copy()])
+hardie[1] = fun(hardie[0])
+hardie = hardie.T
 
+horvath = np.array([[0.0, 0.0], [0.5, 0.49], [1.0, 0.63], [1.5, 0.68], [2.0, 0.72], [2.5, 0.75], [3.0, 0.78], [3.5, 0.79], [4.0, 0.81], [10.0, 0.81]])
+fun = interp1d(horvath.T[0], horvath.T[1], kind='linear', fill_value=0, bounds_error=False)
+horvath = np.array([fppi_range, fppi_range.copy()])
+horvath[1] = fun(horvath[0])
+horvath = horvath.T
 
+vde = np.array([[0.0, 0.0], [0.5, 0.56], [1.0, 0.66], [1.5, 0.68], [2.0, 0.78], [2.5, 0.79], [3.0, 0.81], [3.5, 0.84], [4.0, 0.85], [5.0, 0.86], [10.0, 0.86]])
+fun = interp1d(vde.T[0], vde.T[1], kind='linear', fill_value=0, bounds_error=False)
+vde = np.array([fppi_range, fppi_range.copy()])
+vde[1] = fun(vde[0])
+vde = vde.T
 '''
 returns: Free Receiving Operating Curve obtained given a fold set
 '''
@@ -206,10 +216,10 @@ def protocol_froc_2(_model, fname):
 	
 
 	legend = []
-	legend.append('baseline')
+	legend.append('Hardie et al')
 	legend.append(_model.name)
 
-	util.save_froc([baseline, ops], '{}'.format(_model.name), legend)
+	util.save_froc([hardie, ops], '{}'.format(_model.name), legend)
 
 	return ops
 
@@ -241,7 +251,7 @@ def protocol_wmci_froc(_model, fname):
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 
 	op_set = []
-	op_set.append(baseline)
+	op_set.append(hardie)
 	detect_range = np.arange(0.3, 0.8, 0.1)
 	for detect_thold in detect_range:
 		selected_feats = []
@@ -260,7 +270,7 @@ def protocol_wmci_froc(_model, fname):
 
 	op_set = np.array(op_set)
 	legend = []
-	legend.append("baseline")
+	legend.append("hardie")
 	for thold in detect_range:
 		legend.append('wmci {}'.format(thold))
 
@@ -283,8 +293,8 @@ def protocol_generic_froc(_model, fnames, components, legend, kind='descriptor')
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 	
 	op_set = []
-	op_set.append(baseline)
-	legend.insert(0, "baseline")
+	op_set.append(hardie)
+	legend.insert(0, "hardie")
 
 	for i in range(len(components)):
 		print "Loading blobs & features ..."
@@ -335,8 +345,8 @@ def protocol_selector_froc(_model, fname, selectors, legend):
 	
 	op_set = []
 	
-	op_set.append(baseline)
-	legend.insert(0, "baseline")
+	op_set.append(hardie)
+	legend.insert(0, "hardie")
 
 	for i in range(len(selectors)):
 		print legend[i+1]
@@ -376,8 +386,8 @@ def protocol_classifier_froc(_model, fname, classifiers, legend):
 	
 	op_set = []
 
-	op_set.append(baseline)
-	legend.insert(0, "baseline")
+	op_set.append(hardie)
+	legend.insert(0, "hardie")
 
 	for i in range(len(classifiers)):
 		print legend[i+1]
@@ -606,17 +616,17 @@ def protocol_cnn_froc(_model, fname):
 	ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf)
 
 	legend = []
-	legend.append('baseline')
+	legend.append('Hardie et al')
 	legend.append('current')
 
-	util.save_froc([baseline, ops], '{}_cnn'.format(_model.name), legend)
+	util.save_froc([hardie, ops], '{}_cnn'.format(_model.name), legend)
 
 	return ops
 
 if __name__=="__main__":	
 	parser = argparse.ArgumentParser(prog='lnd.py')
 	parser.add_argument('-b', '--blob-detector', help='Options: wmci(default), TODO hog, log.', default='wmci')
-	parser.add_argument('-d', '--descriptor', help='Options: hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='hardie')
+	parser.add_argument('-d', '--descriptor', help='Options: hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='Hardie et al')
 	parser.add_argument('-r', '--reductor', help='Feature reductor or selector. Options: none(default), pca, lda, rfe, rlr.', default='none')
 	parser.add_argument('-c', '--classifier', help='Options: lda(default), svm.', default='lda')
 	parser.add_argument('--fts', help='Performs feature extraction.', action='store_true')

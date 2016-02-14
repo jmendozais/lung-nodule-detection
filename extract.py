@@ -53,7 +53,7 @@ def _mean_std_maxin_with_extended_mask(img, blob, mask):
 	shift = 35 
 	side = 2 * (shift + r) + 1
 
-	# Vectorize ROI		operations
+	# Vectorize ROI	operations
 	tl = (x - shift - r, y - shift - r)
 	ntl = (max(0, tl[0]), max(0, tl[1]))
 	br = (x + shift + r + 1, y + shift + r + 1)
@@ -63,7 +63,6 @@ def _mean_std_maxin_with_extended_mask(img, blob, mask):
 	ext_mask = np.full(roi.shape, dtype=np.uint8, fill_value=0)	
 	ext_mask[(tl[0] + shift - ntl[0]):(tl[0] + shift + 2 * r + 1 - ntl[0]), (tl[1] + shift - ntl[1]):(tl[1] + shift + 2 * r + 1 - ntl[1])] = mask
 
-	#util.imshow('mask', mask)
 	#util.show_nodule(roi, ext_mask)
 
 	ins = np.ma.array(data=roi, mask=1-ext_mask, fill_value=0)
@@ -84,6 +83,7 @@ def angle2(u, v):
 	ans += 2 * pi
 	return ans.data
 
+# FIX: The shift should be in relation with the bounding box of the segmentation. It means the mask.
 def _mean_std_maxin_with_extended_mask_phase_rgrad(mag, dx, dy, blob, mask):
 	result = []
 
@@ -119,7 +119,7 @@ def _mean_std_maxin_with_extended_mask_phase_rgrad(mag, dx, dy, blob, mask):
 	out = np.ma.array(data=phase, mask=ext_mask, fill_value=0)
 	phase_result = (ins.mean(), out.mean(), ins.std(), out.std())
 
-	rgrad = phase * roi
+	rgrad = np.cos(phase) * roi
 	ins = np.ma.array(data=rgrad, mask=1-ext_mask, fill_value=0)
 	out = np.ma.array(data=rgrad, mask=ext_mask, fill_value=0)
 	rgrad_result = (ins.mean(), out.mean(), ins.std(), out.std())
@@ -446,6 +446,219 @@ class HogExtractor:
 		elif self.mode == '32x32_inner_outer':
 			return self.hog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(32,32))
 
+
+# Histogram of Second Order Gradients
+# TODO: implement first order gradient magnitude with filter bank at diferente orientations
+class HSOGExtractor:
+	def __init__(self, mode='default', input='norm'):
+		self.mode = mode
+		self.input = input
+
+	def hsog(self, img, mask, orientations=9, cell=(8,8)):
+		mag, _, _ = finite_derivatives(img)
+		mag, dx, dy = finite_derivatives(mag)
+		phase = np.arctan2(dy, dx)
+		phase = phase.astype(np.float64)	
+		#phase = np.abs(phase)
+
+		size = img.shape
+		size = (size[0] / cell[0], size[1] / cell[1])
+		w = mask.astype(np.float64)
+		w *= mag
+
+		ans = np.array([])
+		for i, j in product(range(size[0]), range(size[1])):
+			tl = (i * cell[0], j * cell[1])
+			br = ((i + 1) * cell[0], (j + 1) * cell[1])
+			roi = phase[tl[0]:br[0], tl[1]:br[1]]
+			wroi = w[tl[0]:br[0], tl[1]:br[1]]
+			if np.sum(wroi) > util.EPS:
+				wroi /= np.sum(wroi)
+
+			hist, _ = np.histogram(roi, bins=orientations, range=(-np.pi, np.pi), weights=wroi, density=True)
+			#hist /= (np.sum(hist) + util.EPS)
+			if np.sum(wroi) < util.EPS:
+				hist = np.zeros(hist.shape, dtype=hist.dtype)
+			
+			ans = np.hstack((ans, hist))
+		ans /= (np.sum(ans) + util.EPS)
+		return ans
+
+	def hsog_mask(self, img, lung_mask, blobs, masks, mode='default', cell=(8,8)):
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+			dsize = (32, 32)
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
+			mask = cv2.resize(masks[i], dsize, interpolation=cv2.INTER_CUBIC)
+			if mode == 'default':
+				mask = np.ones(mask.shape, dtype=mask.dtype)
+				feats = self.hsog(img_roi, mask, orientations=9, cell=cell)
+			elif mode == 'inner':
+				feats = self.hsog(img_roi, mask, orientations=9, cell=cell)
+			elif mode == 'inner_outer':
+				feats = self.hsog(img_roi, mask, orientations=9, cell=cell)
+				feats_outer = self.hsog(img_roi, 1-mask, orientations=9, cell=cell)
+				feats = np.hstack((feats, feats_outer))
+				feats /= 2
+
+			feature_vectors.append(np.array(feats))
+
+		return np.array(feature_vectors)
+
+
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		img = lce
+		if self.input == 'norm':
+			img = norm
+		elif self.input == 'wmci':
+			img = wmci
+
+		if self.mode == 'default':
+			return  self.hsog_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(8,8))
+		elif self.mode == 'inner':
+			return  self.hsog_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(8,8))
+		elif self.mode == 'inner_outer':
+			return  self.hsog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(8,8))
+		elif self.mode == '32x32_default':
+			return self.hsog_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(32,32))
+		elif self.mode == '32x32_inner':
+			return self.hsog_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(32,32))
+		elif self.mode == '32x32_inner_outer':
+			return self.hsog_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(32,32))
+
+# Histogram of Radial Gradients
+
+class HRGExtractor:
+	def __init__(self, mode='default', input='norm', method='deviation'):
+		self.mode = mode
+		self.input = input
+		self.method = method
+		self.max = -1
+
+	def hist(self, phase, mag, mask, orientations=9, cell=(8,8)):
+		size = phase.shape
+		size = (size[0] / cell[0], size[1] / cell[1])
+		w = mask.astype(np.float64)
+		w *= mag
+
+
+		ans = np.array([])
+		for i, j in product(range(size[0]), range(size[1])):
+			tl = (i * cell[0], j * cell[1])
+			br = ((i + 1) * cell[0], (j + 1) * cell[1])
+			roi = phase[tl[0]:br[0], tl[1]:br[1]]
+			wroi = w[tl[0]:br[0], tl[1]:br[1]]
+
+			if np.sum(wroi) > util.EPS:
+				wroi /= np.sum(wroi)
+			if self.max < np.max(wroi * roi):
+				self.max = np.max(wroi * roi)
+			# deviation
+			range_ = (0, 2 * np.pi)
+			if self.method == 'strenght':
+				range_ = (0, 1)
+
+			h, _ = np.histogram(roi, bins=orientations, range=range_, weights=wroi, density=True)
+
+			if np.sum(wroi) < util.EPS:
+				h = np.zeros(h.shape, dtype=h.dtype)
+
+			ans = np.hstack((ans, h))
+		ans /= (np.sum(ans) + util.EPS)
+		return ans
+
+	def hrg(self, img, mask, dx, dy, mag, orientations=9, cell=(8,8)):
+		side = img.shape[0]
+		rx = -1 * np.linspace(-1 * (side/2), side/2, side)
+		ry = -1 * np.linspace(-1 * (side/2), side/2, side)
+		ry, rx = np.meshgrid(rx, ry)
+		phase = angle2((rx, ry), (dx, dy)) # (1)
+
+		# deviation
+		mag_ = np.ones(mag.shape, dtype=np.float)
+		if self.method == 'strenght':
+			mag_ = mag
+		#rgrad = np.cos(phase) * mag
+		return self.hist(phase, mag_, mask, orientations=9, cell=(8,8))
+
+	def hrg_mask(self, img, lung_mask, blobs, masks, mode='default', cell=(8,8)):
+		mag, dx, dy = finite_derivatives(img)
+
+		feature_vectors = []
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 #35
+			side = 2 * shift + 2 * r + 1
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			dx_roi = dx[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			dy_roi = dy[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			mag_roi = mag[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			ext_mask = np.full(roi.shape, dtype=np.uint8, fill_value=0)	
+			ext_mask[(tl[0] + shift - ntl[0]):(tl[0] + shift + 2 * r + 1 - ntl[0]), (tl[1] + shift - ntl[1]):(tl[1] + shift + 2 * r + 1 - ntl[1])] = masks[i]
+
+			dsize = (64, 64)
+			roi = cv2.resize(roi, dsize, interpolation=cv2.INTER_CUBIC)
+			mask = cv2.resize(ext_mask, dsize, interpolation=cv2.INTER_CUBIC)
+			dx_roi = cv2.resize(dx_roi, dsize, interpolation=cv2.INTER_CUBIC)
+			dy_roi = cv2.resize(dy_roi, dsize, interpolation=cv2.INTER_CUBIC)
+			mag_roi = cv2.resize(mag_roi, dsize, interpolation=cv2.INTER_CUBIC)
+
+			if mode == 'default':
+				mask = np.ones(mask.shape, dtype=mask.dtype)
+				feats = self.hrg(roi, mask, dx_roi, dy_roi, mag_roi, orientations=9, cell=cell)
+			elif mode == 'inner':
+				feats = self.hrg(roi, mask, dx_roi, dy_roi, mag_roi, orientations=9, cell=cell)
+			elif mode == 'inner_outer':
+				feats = self.hrg(roi, mask, dx_roi, dy_roi, mag_roi, orientations=9, cell=cell)
+				feats_outer = self.hrg(roi, 1-mask, dx_roi, dy_roi, mag_roi, orientations=9, cell=cell)
+				feats = np.hstack((feats, feats_outer))
+				feats /= 2
+
+			feature_vectors.append(np.array(feats))
+
+		return np.array(feature_vectors)
+
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		img = lce
+		if self.input == 'norm':
+			img = norm
+		elif self.input == 'wmci':
+			img = wmci
+
+		if self.mode == 'skimage_default':
+			return self.hrg_skimage(img, lung_mask, blobs, nod_masks)
+		elif self.mode == 'skimage_32x32':
+			return self.hrg_skimage(img, lung_mask, blobs, nod_masks, cell=(32,32))
+		elif self.mode == 'default':
+			return  self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(8,8))
+		elif self.mode == 'inner':
+			return  self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(8,8))
+		elif self.mode == 'inner_outer':
+			return  self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(8,8))
+		elif self.mode == '32x32_default':
+			return self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(32,32))
+		elif self.mode == '32x32_inner':
+			return self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(32,32))
+		elif self.mode == '32x32_inner_outer':
+			return self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(32,32))
+
+
 class LBPExtractor:
 	# TODO set optimal model
 	def __init__(self, method='uniform', input='norm', mode='default'):
@@ -469,6 +682,87 @@ class LBPExtractor:
 
 			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
 			lbp = feature.local_binary_pattern(img_roi, P, R, method=method)
+
+			mask = masks[i].astype(np.float64)
+			imask = 1 - mask
+
+			bins = lbp.max() + 1
+			hi = []
+			ho = []
+			if mode == 'inner' or mode == 'inner_outer':
+				hi, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=mask.ravel(), density=True)
+				hi /= (np.sum(hi) + util.EPS)
+			if mode == 'outer' or mode == 'inner_outer':
+				ho, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), weights=imask.ravel(), density=True)
+				ho /= (np.sum(hi) + util.EPS)
+			
+			#print "hi shape {} sum {}".format(hi.shape, util.EPS)
+			hist = []
+			if mode == 'inner_outer':
+				hist = np.hstack((hi, ho))
+				hist /= (np.sum(hist) + util.EPS)
+			elif mode == 'inner':
+				hist = hi
+			elif mode == 'outer':
+				hist = ho
+			elif mode == 'default':
+				hist, _ = np.histogram(lbp.ravel(), bins=bins, range=(0, bins), density=True)
+				hist /= (np.sum(hist) + util.EPS)
+
+			feature_vectors.append(np.array(hist))
+
+		return np.array(feature_vectors)
+
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		img = lce
+		if self.input == 'wmci':
+			img = wmci
+		if self.input == 'norm':
+			img = norm
+		
+		return self.lbpio(img, lung_mask, blobs, nod_masks, self.method, self.mode)
+
+# PhaseLBP
+class PLBPExtractor:
+	# TODO set optimal model
+	def __init__(self, method='uniform', input='norm', mode='default'):
+		self.method = method
+		self.input = input
+		self.mode = mode
+
+	def lbpio(self, img, lung_mask, blobs, masks, method='uniform', mode='inner_outer'):
+		P = 9
+		R = 1
+		feature_vectors = []
+
+		mag, dx, dy = finite_derivatives(img)
+
+		for i in range(len(blobs)):
+			x, y, r = blobs[i]
+			shift = 0 
+			side = 2 * shift + 2 * r + 1
+
+			tl = (x - shift - r, y - shift - r)
+			ntl = (max(0, tl[0]), max(0, tl[1]))
+			br = (x + shift + r + 1, y + shift + r + 1)
+			nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+			img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			dx_roi = dx[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			dy_roi = dy[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+			mag_roi = mag[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+
+			side = img_roi.shape[0]
+			rx = -1 * np.linspace(-1 * (side/2), side/2, side)
+			ry = -1 * np.linspace(-1 * (side/2), side/2, side)
+			ry, rx = np.meshgrid(rx, ry)
+			phase = angle2((rx, ry), (dx_roi, dy_roi)) 
+
+			util.imshow('roi', img_roi)
+			util.imshow('phase', phase)
+			util.imshow('mask', masks[i])
+
+			lbp = feature.local_binary_pattern(phase, P, R, method=method)
 
 			mask = masks[i].astype(np.float64)
 			imask = 1 - mask
@@ -669,6 +963,38 @@ class Set1Extractor:
 		
 		return fv
 
+class Set2Extractor:
+	def __init__(self):
+		self.extractors = []
+		self.extractors.append(HogExtractor())
+		self.extractors.append(HRGExtractor())
+
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		fv_set = []
+
+		for extractor in self.extractors:
+			fv_set.append(extractor.extract(norm, lce, wmci, lung_mask, blobs, nod_masks))
+		fv = np.hstack(fv_set)
+		
+		return fv
+
+class Set3:
+	def __init__(self):
+		self.extractors = []
+		self.extractors.append(HRGExtractor())
+		self.extractors.append(HogExtractor())
+		self.extractors.append(ZernikeExtractor())
+		self.extractors.append(ShapeExtractor())
+
+	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+		fv_set = []
+		lce = equalize_hist(lce)
+		for extractor in self.extractors:
+			fv_set.append(extractor.extract(norm, lce, wmci, lung_mask, blobs, nod_masks))
+		fv = np.hstack(fv_set)
+		
+		return fv
+
 class OverfeatExtractor:
 	def __init__(self, mode=None):
 		#overfeat.init('/home/juliomb/lnd-env/OverFeat/data/default/net_weight_0', 0)
@@ -710,7 +1036,7 @@ class OverfeatExtractor:
 
 
 # Register extractors
-extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(), 'hogio':HogExtractor(mode='inner_outer'), \
-				'lbp':LBPExtractor(), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
-				'all':AllExtractor(), 'set1':Set1Extractor(), 'overf':OverfeatExtractor(), \
-				'overfin':OverfeatExtractor(mode='inner')}
+extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(), 'hsog':HSOGExtractor(), 'hogio':HogExtractor(mode='inner_outer'), \
+				'lbp':LBPExtractor(), 'plbp': PLBPExtractor(), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
+				'all':AllExtractor(), 'set1':Set1Extractor(), 'set2':Set2Extractor(), 'set3':Set2Extractor(),'overf':OverfeatExtractor(), \
+				'overfin':OverfeatExtractor(mode='inner'), 'hrg':HRGExtractor(), 'hrgs':HRGExtractor(method='strenght')}
