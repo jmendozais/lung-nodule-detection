@@ -507,17 +507,17 @@ def protocol_clf_eval_froc(_model, fname):
 	classifiers.append(lda.LDA())
 	classifiers.append(svm.SVC(kernel='linear', probability=True))
 	classifiers.append(svm.SVC(kernel='rbf', probability=True))
-	classifiers.append(ensemble.RandomForestClassifier())
-	classifiers.append(ensemble.AdaBoostClassifier())
-	classifiers.append(ensemble.GradientBoostingClassifier())
+	#classifiers.append(ensemble.RandomForestClassifier())
+	#classifiers.append(ensemble.AdaBoostClassifier())
+	c#lassifiers.append(ensemble.GradientBoostingClassifier())
 
 	labels = []
 	labels.append('LDA')
 	labels.append('Linear SVC')
 	labels.append('RBF SVC')
-	labels.append('Random Forest')
-	labels.append('AdaBoost')
-	labels.append('Gradient Boosting')
+	#labels.append('Random Forest')
+	#labels.append('AdaBoost')
+	#labels.append('Gradient Boosting')
 
 	protocol_classifier_froc(_model, fname, classifiers, labels)
 
