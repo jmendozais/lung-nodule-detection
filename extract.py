@@ -539,23 +539,24 @@ class HSOGExtractor:
 # Histogram of Radial Gradients
 
 class HRGExtractor:
-	def __init__(self, mode='default', input='norm', method='deviation'):
+	def __init__(self, mode='default', input='norm', method='strength', cell=(8, 8)):
 		self.mode = mode
 		self.input = input
 		self.method = method
 		self.max = -1
+		self.cell = cell
 
-	def hist(self, phase, mag, mask, orientations=9, cell=(8,8)):
+	def hist(self, phase, mag, mask, orientations=9):
 		size = phase.shape
-		size = (size[0] / cell[0], size[1] / cell[1])
+		size = (size[0] / self.cell[0], size[1] / self.cell[1])
 		w = mask.astype(np.float64)
 		w *= mag
 
 
 		ans = np.array([])
 		for i, j in product(range(size[0]), range(size[1])):
-			tl = (i * cell[0], j * cell[1])
-			br = ((i + 1) * cell[0], (j + 1) * cell[1])
+			tl = (i * self.cell[0], j * self.cell[1])
+			br = ((i + 1) * self.cell[0], (j + 1) * self.cell[1])
 			roi = phase[tl[0]:br[0], tl[1]:br[1]]
 			wroi = w[tl[0]:br[0], tl[1]:br[1]]
 
@@ -565,8 +566,6 @@ class HRGExtractor:
 				self.max = np.max(wroi * roi)
 			# deviation
 			range_ = (0, 2 * np.pi)
-			if self.method == 'strenght':
-				range_ = (0, 1)
 
 			h, _ = np.histogram(roi, bins=orientations, range=range_, weights=wroi, density=True)
 
@@ -577,7 +576,7 @@ class HRGExtractor:
 		ans /= (np.sum(ans) + util.EPS)
 		return ans
 
-	def hrg(self, img, mask, dx, dy, mag, orientations=9, cell=(8,8)):
+	def hrg(self, img, mask, dx, dy, mag, orientations=9):
 		side = img.shape[0]
 		rx = -1 * np.linspace(-1 * (side/2), side/2, side)
 		ry = -1 * np.linspace(-1 * (side/2), side/2, side)
@@ -586,12 +585,13 @@ class HRGExtractor:
 
 		# deviation
 		mag_ = np.ones(mag.shape, dtype=np.float)
-		if self.method == 'strenght':
+		# strenght
+		if self.method == 'strength':
 			mag_ = mag
 		#rgrad = np.cos(phase) * mag
-		return self.hist(phase, mag_, mask, orientations=9, cell=(8,8))
+		return self.hist(phase, mag_, mask, orientations=9)
 
-	def hrg_mask(self, img, lung_mask, blobs, masks, mode='default', cell=(8,8)):
+	def hrg_mask(self, img, lung_mask, blobs, masks, mode='default'):
 		mag, dx, dy = finite_derivatives(img)
 
 		feature_vectors = []
@@ -621,12 +621,12 @@ class HRGExtractor:
 
 			if mode == 'default':
 				mask = np.ones(mask.shape, dtype=mask.dtype)
-				feats = self.hrg(roi, mask, dx_roi, dy_roi, mag_roi, orientations=9, cell=cell)
+				feats = self.hrg(roi, mask, dx_roi, dy_roi, mag_roi, orientations=9)
 			elif mode == 'inner':
-				feats = self.hrg(roi, mask, dx_roi, dy_roi, mag_roi, orientations=9, cell=cell)
+				feats = self.hrg(roi, mask, dx_roi, dy_roi, mag_roi, orientations=9)
 			elif mode == 'inner_outer':
-				feats = self.hrg(roi, mask, dx_roi, dy_roi, mag_roi, orientations=9, cell=cell)
-				feats_outer = self.hrg(roi, 1-mask, dx_roi, dy_roi, mag_roi, orientations=9, cell=cell)
+				feats = self.hrg(roi, mask, dx_roi, dy_roi, mag_roi, orientations=9)
+				feats_outer = self.hrg(roi, 1-mask, dx_roi, dy_roi, mag_roi, orientations=9)
 				feats = np.hstack((feats, feats_outer))
 				feats /= 2
 
@@ -641,22 +641,18 @@ class HRGExtractor:
 		elif self.input == 'wmci':
 			img = wmci
 
-		if self.mode == 'skimage_default':
-			return self.hrg_skimage(img, lung_mask, blobs, nod_masks)
-		elif self.mode == 'skimage_32x32':
-			return self.hrg_skimage(img, lung_mask, blobs, nod_masks, cell=(32,32))
-		elif self.mode == 'default':
-			return  self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(8,8))
+		if self.mode == 'default':
+			return  self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='default')
 		elif self.mode == 'inner':
-			return  self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(8,8))
+			return  self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner')
 		elif self.mode == 'inner_outer':
-			return  self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(8,8))
+			return  self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer')
 		elif self.mode == '32x32_default':
-			return self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='default', cell=(32,32))
+			return self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='default')
 		elif self.mode == '32x32_inner':
-			return self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner', cell=(32,32))
+			return self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner')
 		elif self.mode == '32x32_inner_outer':
-			return self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer', cell=(32,32))
+			return self.hrg_mask(img, lung_mask, blobs, nod_masks, mode='inner_outer')
 
 
 class LBPExtractor:
@@ -933,6 +929,7 @@ class AllExtractor:
 		self.extractors = []
 		self.extractors.append(LBPExtractor())
 		self.extractors.append(HogExtractor())
+		self.extractors.append(HRGExtractor())
 		self.extractors.append(HardieExtractor())
 		self.extractors.append(ZernikeExtractor())
 		self.extractors.append(ShapeExtractor())
@@ -1036,7 +1033,8 @@ class OverfeatExtractor:
 
 
 # Register extractors
-extractors = {'hardie':HardieExtractor(), 'hog':HogExtractor(), 'hsog':HSOGExtractor(), 'hogio':HogExtractor(mode='inner_outer'), \
+extractors = {'hardie':HardieExtractor(), \
+				'hog':HogExtractor(), 'hsog':HSOGExtractor(), 'hogio':HogExtractor(mode='inner_outer'), \
 				'lbp':LBPExtractor(), 'plbp': PLBPExtractor(), 'znk':ZernikeExtractor(), 'shape':ShapeExtractor(), \
 				'all':AllExtractor(), 'set1':Set1Extractor(), 'set2':Set2Extractor(), 'set3':Set3Extractor(),'overf':OverfeatExtractor(), \
-				'overfin':OverfeatExtractor(mode='inner'), 'hrg':HRGExtractor(), 'hrgs':HRGExtractor(method='strenght')}
+				'overfin':OverfeatExtractor(mode='inner'), 'hrg':HRGExtractor(), 'hrg16':HRGExtractor(cell=(16, 16))}

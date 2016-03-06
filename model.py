@@ -21,7 +21,7 @@ from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.layers.advanced_activations import LeakyReLU, PReLU
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.optimizers import SGD, Adadelta, Adagrad
-from keras.utils import np_utils, generic_utils
+from keras.utils import np_utils, generic_utils, layer_utils
 from six.moves import range
 
 import classify
@@ -31,6 +31,7 @@ from preprocess import *
 from segment import *
 from augment import *
 from util import *
+import neural
 
 import jsrt
 
@@ -89,33 +90,6 @@ def create_rois(data, blob_set, dsize=(32, 32), mode=None):
 
 import keras
 
-class PlateauScheduler(keras.callbacks.Callback):
-	def __init__(self):
-		self.prev_loss = 0
-		self.grads = np.full((4,), dtype=np.float32, fill_value=0.0)
-		self.grads[0] = -1
-	
-	def on_batch_begin(self, batch, logs={}):
-		self.losses = []
-
-	def on_batch_end(self, batch, logs={}):
-		self.losses.append(logs['loss'])
-
-	def on_epoch_end(self, epoch, logs={}):
-		loss = np.sum(self.losses)
-		if epoch > 0:
-			self.grads[epoch % len(self.grads)] = loss - self.prev_loss
-		self.prev_loss = loss
-		print loss
-		print self.grads
-		print np.mean(self.grads)
-		assert hasattr(self.model.optimizer, 'lr'), \
-		    'Optimizer must have a "lr" attribute.'
-		lr = self.model.optimizer.lr.get_value()
-		if np.mean(self.grads) > (0 - util.EPS) and lr > 1e-4:
-			print 'Updating lr {} ...'.format(lr / 10.0)
-			self.model.optimizer.lr.set_value(float(lr / 10.0))
-
 class StageScheduler(keras.callbacks.Callback):
 	def __init__(self, stages=[], decay=0.1):
 		sorted(stages)
@@ -159,10 +133,14 @@ class BaselineModel:
 		if path.isfile('{}_arch.json'.format(name)):
 			self.keras_model = model_from_json(open('{}_arch.json'.format(name)).read())
 			self.keras_model.load_weights('{}_weights.h5'.format(name))
-
-		# Data
-		if path.isfile('{}_fs.npy'.format(name)):
-			self.feature_set = np.load('{}_fs.npy'.format(name))
+		'''
+		if path.isfile('{}_fs.npy'.format(self.extractor.name)):
+			self.feature_set = np.load('{}_fs.npy'.format(self.extractor.name))
+		'''
+	def load_cnn(self, name):
+		if path.isfile('{}_arch.json'.format(name)):
+			self.keras_model = model_from_json(open('{}_arch.json'.format(name)).read())
+			self.keras_model.load_weights('{}_weights.h5'.format(name))
 
 	def save(self, name):
 		if self.extractor != None:
@@ -180,8 +158,10 @@ class BaselineModel:
 			open('{}_arch.json'.format(name), 'w').write(json_string)
 			self.keras_model.save_weights('{}_weights.h5'.format(name), overwrite=True)
 
+		'''
 		if self.feature_set != None:
-			np.save(self.feature_set, '{}_fs.npy'.format(name))
+			np.save(self.feature_set, '{}_fs.npy'.format(self.extractor.name))
+		'''
 
 	def detect_blobs(self, img, lung_mask, threshold=0.5):
 		sampled, lce, norm = preprocess(img, lung_mask)
@@ -255,15 +235,26 @@ class BaselineModel:
 
 	def predict_proba_one_keras(self, blobs, rois):
 		img_rows, img_cols = rois[0].shape
-		print 'img shape',img_rows, img_cols
 		X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
 		X = X.astype('float32')
+
+		print 'predict proba one keras'
+		print X.shape
 
 		probs = self.keras_model.predict_proba(X)
 		probs = probs.T[1]
 		blobs = np.array(blobs)
 
 		return blobs, probs
+
+	def extract_features_one_keras(self, rois, cut=3):
+		img_rows, img_cols = rois[0].shape
+		X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
+		X = X.astype('float32')
+
+		layers = len(self.keras_model.layers)
+		feats = neural.get_activations(self.keras_model, layers - cut, X)
+		return feats
 
 	def _classify(self, blobs, feature_vectors, thold=0.012):
 		blobs, probs = self.predict_proba_one(blobs, feature_vectors)
@@ -288,7 +279,7 @@ class BaselineModel:
 	def train_with_feature_set(self, feature_set, pred_blobs, real_blobs):
 		X, Y = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
 		clf, scaler, selector = classify.train(X, Y, self.clf, self.scaler, self.selector)
-		self.save(self.name)
+		#self.save(self.name)
 
 		return clf, scaler, selector
 
@@ -588,23 +579,31 @@ class BaselineModel:
 		self.keras_model = model
 
 
-	def train_with_feature_set_keras(self, feature_set, pred_blobs, real_blobs):
-		X_train, y_train = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
-		
-		img_rows, img_cols = feature_set[0][0].shape
+	def train_with_feature_set_keras(self, feats_tr, pred_blobs_tr, real_blobs_tr,
+										feats_test=None, pred_blobs_test=None, real_blobs_test=None,
+										model='shallow_1'):
+		img_rows, img_cols = feats_tr[0][0].shape
 		nb_classes = 2
-		X_train = X_train.reshape(X_train.shape[0], 1, img_rows, img_cols)
-		X_train = X_train.astype('float32')
-		# convert class vectors to binary class matrices
-		Y_train = np_utils.to_categorical(y_train, nb_classes)
-		
-		self.fit_cifar(X_train, Y_train)
 
-		self.save(self.name)
-		return self.keras_model
+		X_tr, y_tr = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr)
+		X_tr = X_tr.reshape(X_tr.shape[0], 1, img_rows, img_cols)
+		X_tr = X_tr.astype('float32')
+		Y_tr= np_utils.to_categorical(y_tr, nb_classes)
+
+		X_test, Y_test = None, None
+		if feats_test != None:
+			X_test, y_test = classify.create_training_set_from_feature_set(feats_test, pred_blobs_test, real_blobs_test)
+			X_test = X_test.reshape(X_test.shape[0], 1, img_rows, img_cols)
+			X_test = X_test.astype('float32')
+			Y_test = np_utils.to_categorical(y_test, nb_classes)
+		
+		self.keras_model, history = neural.fit(X_tr, Y_tr, X_test, Y_test, model)
+
+		#self.save(self.name)
+		return history
 
 	def predict_proba(self, data):
-		self.load(self.name)
+		#self.load(self.name)
 
 		data_blobs = []
 		data_probs = []
@@ -691,7 +690,7 @@ class BaselineModel:
 		return np.array(data_blobs)
 
 	def predict_proba_from_feature_set(self, feature_set, blob_set):
-		self.load(self.name)
+		#self.load(self.name)
 		DIST2 = 987.755
 		
 		data_blobs = []
@@ -722,14 +721,12 @@ class BaselineModel:
 		return np.array(data_blobs), np.array(data_probs)
 
 	def predict_proba_from_feature_set_keras(self, feature_set, blob_set):
-		self.load(self.name)
+		#self.load(self.name)
 		DIST2 = 987.755
 
 		data_blobs = []
 		data_probs = []
 		for i in range(len(feature_set)):
-			print 'predict proba one keras'
-			print feature_set[i].shape
 			blobs, probs = self.predict_proba_one_keras(blob_set[i], feature_set[i])
 
 			## candidate cue adjacency rule: 22 mm
@@ -752,6 +749,21 @@ class BaselineModel:
 			data_probs.append(np.array(filtered_probs))
 
 		return np.array(data_blobs), np.array(data_probs)
+
+	def extract_features_from_keras_model(self, roi_set, cut=3):
+		#self.load(self.name)
+		data_feats = []
+
+		print '[',
+		for i in range(len(roi_set)):
+			if i % (len(roi_set)/10) == 0:
+				print '.',
+				sys.stdout.flush()
+			feats = self.extract_features_one_keras(roi_set[i], cut)
+			data_feats.append(np.array(feats))
+		print ']'
+
+		return np.array(data_feats)
 
 	# Join filter and eval on the same function and vectorize
 	def filter_by_proba(self, blob_set, prob_set, thold = 0.012):

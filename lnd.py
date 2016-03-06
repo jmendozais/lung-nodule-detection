@@ -52,6 +52,8 @@ returns: Free Receiving Operating Curve obtained given a fold set
 
 
 def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, folds):
+	print 'feature shape {}'.format(feats[0].shape)
+
 	fold = 0
 	valid = True
 	frocs = []
@@ -65,7 +67,7 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 			blobs_te.append([bl])
 		blobs_te = np.array(blobs_te)
 
-		print 'Train ...'
+		print 'Train with {}...'.format(_model.clf)
 		_model.train_with_feature_set(feats[tr_idx], pred_blobs[tr_idx], blobs[tr_idx])
 		print 'Predict ...'
 		blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set(feats[te_idx], pred_blobs[te_idx])
@@ -74,16 +76,17 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
 
 		frocs.append(froc)
 		fold += 1
+		sys.stdout.flush()
 	
 	av_froc = eval.average_froc(frocs, fppi_range)
 	return av_froc
 
-def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds):
-	fold = 0
+def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model):
+	fold = 1
 	valid = True
 	frocs = []
 	for tr_idx, te_idx in folds:	
-		print "Fold {}".format(fold + 1),
+		print "Fold {}".format(fold),
 		data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
 		paths_te = paths[te_idx]
 		blobs_te = []
@@ -92,12 +95,81 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 			blobs_te.append([bl])
 		blobs_te = np.array(blobs_te)
 
-		_model.train_with_feature_set_keras(rois[tr_idx], pred_blobs[tr_idx], blobs[tr_idx])
+		history = _model.train_with_feature_set_keras(rois[tr_idx], pred_blobs[tr_idx], blobs[tr_idx], 
+											rois[te_idx], pred_blobs[te_idx], blobs[te_idx], 
+											model=network_model)
+		if fold == 1:
+			model.layer_utils.model_summary(_model.keras_model)			
+
 		blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois[te_idx], pred_blobs[te_idx])
 
 		froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
 		frocs.append(froc)
 
+		_model.save('data/{}_fold_{}'.format(network_model, fold))
+		util.save_loss(history, 'data/{}_fold_{}'.format(network_model, fold))
+		fold += 1
+
+	av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
+
+	return av_froc
+
+def extract_features_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, rois, folds, network_model, cut):
+	fold = 1
+	valid = True
+	frocs = []
+	for tr_idx, te_idx in folds:	
+		print "Fold {}".format(fold),
+		data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+		paths_te = paths[te_idx]
+		blobs_te = []
+
+		for bl in blobs[te_idx]:
+			blobs_te.append([bl])
+		blobs_te = np.array(blobs_te)
+
+		print 'load model ...'
+		_model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
+		print 'extract ...'
+		network_feats = _model.extract_features_from_keras_model(rois, cut)
+		print 'save ...'
+		np.save('data/{}_fold_{}.fts.npy'.format(network_model, fold), network_feats)
+
+def get_froc_on_folds_hybrid(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, rois, folds, network_model):
+	fold = 1
+	valid = True
+	frocs = []
+	for tr_idx, te_idx in folds:	
+		print "Fold {}".format(fold),
+		data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+		paths_te = paths[te_idx]
+		blobs_te = []
+
+		for bl in blobs[te_idx]:
+			blobs_te.append([bl])
+		blobs_te = np.array(blobs_te)
+
+		_model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
+		network_feats = np.load('data/{}_folds_{}.fts.npy'.format(network_model, fold))
+
+		# stack features
+		assert len(feats) == len(network_feats)
+
+		hybrid_feats = []
+		for i in range(len(feats)):
+			hybrid_feats.append(np.hstack([feats[i], network_feats[i]]))
+
+		hybrid_feats = np.array(hybrid_feats)	
+		print 'hybrid feats shape {}'.format(hybrid_feats[0].shape)
+		print 'Train with {}...'.format(_model.clf)
+		_model.train_with_feature_set(hybrid_feats[tr_idx], pred_blobs[tr_idx], blobs[tr_idx])
+		print 'Predict ...'
+		blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set(hybrid_feats[te_idx], pred_blobs[te_idx])
+		print 'Get froc ...'
+
+		# Append froc
+		froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
+		frocs.append(froc)
 		fold += 1
 
 	av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
@@ -182,8 +254,8 @@ def protocol_froc_1(_model, fname):
 		av_cpi += len(tmp)
 	print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
-	np.save('{}.fts.npy'.format(fname), feats)
-	np.save('{}_pred.blb.npy'.format(fname), pred_blobs)
+	np.save('data/{}.fts.npy'.format(fname), feats)
+	np.save('data/{}_pred.blb.npy'.format(fname), pred_blobs)
 
 def protocol_froc_2(_model, fname):
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
@@ -199,8 +271,8 @@ def protocol_froc_2(_model, fname):
 
 	print "Loading blobs & features ..."
 	data = DataProvider(paths, left_masks, right_masks)
-	feats = np.load('{}.fts.npy'.format(fname))
-	pred_blobs = np.load('{}_pred.blb.npy'.format(fname))
+	feats = np.load('data/{}.fts.npy'.format(fname))
+	pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
 
 	av_cpi = 0
 	for tmp in pred_blobs:
@@ -239,8 +311,8 @@ def protocol_wmci_froc(_model, fname):
 	feats, pred_blobs, proba = _model.extract_feature_set_proba(data)
 
 	'''
-	feats = np.load('{}.fts.npy'.format(fname))
-	pred_blobs = np.load('{}_pred.blb.npy'.format(fname))
+	feats = np.load('data/{}.fts.npy'.format(fname))
+	pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
 	'''
 
 	av_cpi = 0
@@ -277,7 +349,7 @@ def protocol_wmci_froc(_model, fname):
 	util.save_froc(op_set, _model.name, legend)
 	return op_set
 
-def protocol_generic_froc(_model, fnames, components, legend, kind='descriptor'):
+def protocol_generic_froc(_model, fnames, components, legend, kind='descriptor', mode='feats'):
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
 	left_masks = jsrt.left_lung(set='jsrt140')
 	right_masks = jsrt.right_lung(set='jsrt140')
@@ -298,8 +370,8 @@ def protocol_generic_froc(_model, fnames, components, legend, kind='descriptor')
 
 	for i in range(len(components)):
 		print "Loading blobs & features ..."
-		feats = np.load('{}.fts.npy'.format(fnames[i]))
-		pred_blobs = np.load('{}_pred.blb.npy'.format(fnames[i]))
+		feats = np.load('data/{}.fts.npy'.format(fnames[i]))
+		pred_blobs = np.load('data/{}_pred.blb.npy'.format(fnames[i]))
 
 		print legend[i+1]
 		if kind == 'descriptor':
@@ -332,8 +404,8 @@ def protocol_selector_froc(_model, fname, selectors, legend):
 	print "Loading	 blobs & features ..."
 	data = DataProvider(paths, left_masks, right_masks)
 
-	feats = np.load('{}.fts.npy'.format(fname))
-	pred_blobs = np.load('{}_pred.blb.npy'.format(fname))
+	feats = np.load('data/{}.fts.npy'.format(fname))
+	pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
 
 	av_cpi = 0
 	for tmp in pred_blobs:
@@ -373,8 +445,8 @@ def protocol_classifier_froc(_model, fname, classifiers, legend):
 	print "Loading	 blobs & features ..."
 	data = DataProvider(paths, left_masks, right_masks)
 
-	feats = np.load('{}.fts.npy'.format(fname))
-	pred_blobs = np.load('{}_pred.blb.npy'.format(fname))
+	feats = np.load('data/{}.fts.npy'.format(fname))
+	pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
 
 	av_cpi = 0
 	for tmp in pred_blobs:
@@ -394,6 +466,10 @@ def protocol_classifier_froc(_model, fname, classifiers, legend):
 		_model.clf = classifiers[i]
 		ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf) 
 		op_set.append(ops)
+		
+		# Somewhat free memory
+		classifiers[i] = None
+		_model.clf = None
 
 	op_set = np.array(op_set)
 	util.save_froc(op_set, '{}'.format(_model.name), legend)
@@ -509,7 +585,7 @@ def protocol_clf_eval_froc(_model, fname):
 	classifiers.append(svm.SVC(kernel='rbf', probability=True))
 	#classifiers.append(ensemble.RandomForestClassifier())
 	#classifiers.append(ensemble.AdaBoostClassifier())
-	c#lassifiers.append(ensemble.GradientBoostingClassifier())
+	#lassifiers.append(ensemble.GradientBoostingClassifier())
 
 	labels = []
 	labels.append('LDA')
@@ -522,10 +598,10 @@ def protocol_clf_eval_froc(_model, fname):
 	protocol_classifier_froc(_model, fname, classifiers, labels)
 
 def protocol_svm_hp_search(_model, fname):
-	#C_set = np.logspace(-3, 4, 8)
-	#g_set = np.logspace(-3, 4, 8)
-	C_set = np.logspace(-2, 2, 9)
-	g_set = np.logspace(-4, -1, 10)
+	C_set = np.logspace(-3, 4, 8)
+	g_set = np.logspace(-3, -1, 9)
+	#C_set = np.logspace(-2, 2, 9)
+	#g_set = np.logspace(-4, -1, 10)
 	#C_set = np.logspace(-2, 1, 10)
 	#g_set = np.logspace(-4, -2, 9)
 	#C_set = np.logspace(-0.7, 0.0, 9)
@@ -535,7 +611,7 @@ def protocol_svm_hp_search(_model, fname):
 	for C, gamma in product(C_set, g_set):
 		legend.append('C={}, g={}'.format(C, round(gamma, 5)))
 		print 'SVM C = {}, g= {}'.format(C, round(gamma, 5))
-		classifiers.append(svm.SVC(C=C, gamma=gamma, probability=True))
+		classifiers.append(svm.SVC(C=C, gamma=gamma, probability=True, cache_size=600, max_iter=10000))
 
 	ops = protocol_classifier_froc(_model, fname, classifiers, legend)
 	
@@ -605,7 +681,7 @@ def protocol_rfe_froc(_model, fname):
 
 	protocol_selector_froc(_model, fname, selectors, labels)
 
-def protocol_cnn_froc(_model, fname):
+def protocol_cnn_froc(detections_source, fname, network_model):
 	paths, locs, rads = jsrt.jsrt(set='jsrt140')
 	left_masks = jsrt.left_lung(set='jsrt140')
 	right_masks = jsrt.right_lung(set='jsrt140')
@@ -619,7 +695,7 @@ def protocol_cnn_froc(_model, fname):
 
 	print "Loading dataset ..."
 	data = DataProvider(paths, left_masks, right_masks)
-	pred_blobs = np.load('{}_pred.blb.npy'.format(fname))
+	pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
 	rois = model.create_rois(data, pred_blobs)
 
 	av_cpi = 0
@@ -630,7 +706,7 @@ def protocol_cnn_froc(_model, fname):
 	Y = (140 > np.array(range(size))).astype(np.uint8)
 	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
 	
-	ops = get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf)
+	ops = get_froc_on_folds_keras(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, network_model)
 
 	legend = []
 	legend.append('Hardie et al')
@@ -639,6 +715,44 @@ def protocol_cnn_froc(_model, fname):
 	util.save_froc([hardie, ops], '{}_cnn'.format(_model.name), legend)
 
 	return ops
+
+def hybrid(detections_source, fname, network_model):
+	paths, locs, rads = jsrt.jsrt(set='jsrt140')
+	left_masks = jsrt.left_lung(set='jsrt140')
+	right_masks = jsrt.right_lung(set='jsrt140')
+
+	size = len(paths)
+
+	blobs = []
+	for i in range(size):
+		blobs.append([locs[i][0], locs[i][1], rads[i]])
+	blobs = np.array(blobs)
+
+	print "Loading dataset ..."
+	data = DataProvider(paths, left_masks, right_masks)
+	feats = np.load('data/{}.fts.npy'.format(fname))
+	pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+	rois = model.create_rois(data, pred_blobs)
+
+	av_cpi = 0
+	for tmp in pred_blobs:
+		av_cpi += len(tmp)
+	print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
+
+	Y = (140 > np.array(range(size))).astype(np.uint8)
+	skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+	
+	ops = get_froc_on_folds_hybrid(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, feats, rois, skf, network_model)
+
+	legend = []
+	legend.append('Hardie et al')
+	legend.append('current')
+
+	util.save_froc([hardie, ops], '{}_hybrid'.format(_model.name), legend)
+
+	return ops
+
+
 
 if __name__=="__main__":	
 	parser = argparse.ArgumentParser(prog='lnd.py')
@@ -650,59 +764,47 @@ if __name__=="__main__":
 	parser.add_argument('--clf', help='Performs classification.', action='store_true')
 	parser.add_argument('--hyp', help='Performs hyperparameter search. The target method to evaluate should be specified using -t.', action='store_true')
 	parser.add_argument('--cmp', help='Compare results of different models via froc. Options: hog, hog-impls, lbp, clf.', default='none')
-	parser.add_argument('--cnn', help='Evaluate convnet.', action='store_true')
+	parser.add_argument('--cnn', help='Evaluate convnet. Options: shallow_1, shallow_2.', default='none')
+	parser.add_argument('--hybrid', help='Evaluate hybrid approach: convnet + descriptor.', action='store_true')
 	parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
 
 	args = parser.parse_args()
 	opts = vars(args)
 	extractor_key = args.descriptor
 	_model = model.BaselineModel("data/default")
-	_model.extractor = model.extractors[extractor_key]
 	_model.name = 'data/{}'.format(extractor_key)
-
-	print args.clf
-	print args.fts
+	_model.extractor = model.extractors[args.descriptor]
 
 	# default: clf -d hardie
 	if args.cmp != 'none':
+		if args.clf:
+			_model.clf = model.classifiers[args.classifier]
+		_model.name = 'data/{}'.format(args.cmp)
+
 		if args.cmp == 'hog':
-			_model.name = 'data/hog'
-			if args.clf:
-				_model.clf = model.classifiers[args.classifier]
 			hog_froc(_model, 'hog', args.fts, args.clf)	
 		elif args.cmp == 'hog-impls':
-			_model.name = 'data/hog-impls'
-			if args.clf:
-				_model.clf = model.classifiers[args.classifier]
 			hog_impls(_model, 'hog-impls', args.fts, args.clf)	
 		elif args.cmp == 'lbp':
-			_model.name = 'data/lbp-deafult'
-			if args.clf:
-				_model.clf = model.classifiers[args.classifier]
 			lbp_froc(_model, 'lbp', args.fts, args.clf, mode='default')	
 		elif args.cmp == 'lbp-inner':
-			_model.name = 'data/lbp-inner'
-			if args.clf:
-				_model.clf = model.classifiers[args.classifier]
 			lbp_froc(_model, 'lbp-inner', args.fts, args.clf, mode='inner')	
 		elif args.cmp == 'lbp-io':
-			_model.name = 'data/lbp-io'
-			if args.clf:
-				_model.clf = model.classifiers[args.classifier]
 			lbp_froc(_model, 'lbp-io', args.fts, args.clf, mode='inner_outer')
 		elif args.cmp == 'znk':
-			_model.name = 'data/znk'
-			if args.clf:
-				_model.clf = model.classifiers[args.classifier]
 			znk_froc(_model, 'znk', args.fts, args.clf)		
 		elif args.cmp == 'hrg':
-			_model.name = 'data/hrg'
-			if args.clf:
-				_model.clf = model.classifiers[args.classifier]
 			hrg_froc(_model, 'hrg', args.fts, args.clf)
 		elif args.cmp == 'clf':
+			_model.name = '{}_{}'.format(_model.name, extractor_key)
 			protocol_clf_eval_froc(_model, '{}'.format(extractor_key))
-	
+			
+	elif args.hybrid:
+		assert args.cnn != 'none'
+		_model.clf = model.classifiers[args.classifier]
+		hybrid(_model, '{}'.format(extractor_key), args.cnn)
+	elif args.cnn != 'none':
+		protocol_cnn_froc(_model, '{}'.format(extractor_key), args.cnn)
 	else:
 		method = protocol_froc_2
 		if args.fts:
@@ -730,8 +832,7 @@ if __name__=="__main__":
 				method = protocol_rlr_froc
 			if args.target == 'rfe':
 				method = protocol_lda_froc
-		elif args.cnn:
-			method = protocol_cnn_froc
+			_model.name = '{}_{}'.format(_model.name, args.target)
 
 		print _model.extractor
 		method(_model, '{}'.format(extractor_key))

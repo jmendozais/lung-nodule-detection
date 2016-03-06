@@ -206,7 +206,17 @@ def froc(real, pred, probs, data=None):
 				fppi[idx] += 1
 
 		froc.append([np.mean(fppi), tp / p])
-		print "last operating point: {}".format((np.mean(fppi), tp / p))
+
+		targets = [2., 4., 10.]
+		ops = []
+		for i in range(len(targets)):
+			best_op = froc[0]
+			for op in froc:
+				if abs(op[0] - targets[i] + 0.5) <= 0.5:
+					best_op = op
+			ops.append(best_op)
+		
+		print "fppi operating point: {}".format(ops)
 
 		return np.array(froc)	
 			
