@@ -82,20 +82,20 @@ def filter_by_margin(blobs, mask, margin=30):
 	return np.array(ans)
 
 # Common blob detectors	
-def log_(img, mask):
-	blobs_log = blob_log(img, min_sigma=4,  max_sigma=32, num_sigma=10, log_scale=True, threshold=0.001, overlap=0.5)
+def log_(img, mask, threshold=0.001, proba=False):
+	blobs_log = blob_log(img, min_sigma=4,  max_sigma=32, num_sigma=10, log_scale=True, threshold=threshold, overlap=0.5)
 	if len(blobs_log) > 0:
 		blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
 	return filter_by_margin(filter_by_size(filter_by_masks(blobs_log, mask)), mask)
 
-def dog(img, mask):
-	blobs_dog = blob_dog(img, max_sigma=20, threshold=0.05)
+def dog(img, mask, threshold=0.05, proba=False):
+	blobs_dog = blob_dog(img, max_sigma=20, threshold=threshold)
 	if len(blobs_dog) > 0:
 		blobs_dog[:, 2] = blobs_dog[:, 2] * sqrt(2)
 	return filter_by_margin(filter_by_size(filter_by_masks(blobs_dog, mask)), mask)
 
-def doh(img, mask):
-	blobs_doh = blob_doh(1 - img, min_sigma=4, num_sigma=10, max_sigma=30, threshold=0.0005)
+def doh(img, mask, threshold=0.0005, proba=False):
+	blobs_doh = blob_doh(1 - img, min_sigma=4, num_sigma=10, max_sigma=30, threshold=threshold)
 	return filter_by_margin(filter_by_size(filter_by_masks(blobs_doh, mask)), mask)
 
 # wmci detector
