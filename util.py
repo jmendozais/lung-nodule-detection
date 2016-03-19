@@ -200,8 +200,6 @@ def save_froc(op_set, name, legend=None, unique=False, with_std=False):
     ax = plt.gca()
     ax.grid(True)
 
-    op_set = np.array(op_set)
-
     line_format = ['b.-', 'g.-', 'r.-', 'c.-', 'm.-', 'y.-', 'k.-', 
                                  'b.--', 'g.--', 'r.--', 'c.--', 'm.--', 'y.--', 'k.--',
                                  'b.-.', 'g.-.', 'r.-.', 'c.-.', 'm.-.', 'y.-.', 'k.-.',
@@ -209,10 +207,13 @@ def save_froc(op_set, name, legend=None, unique=False, with_std=False):
 
     for i in range(len(op_set)):
         ops = np.array(op_set[i]).T
-        if with_std:
-            plt.plot(ops[0], ops[1], line_format[i%28], marker='x', markersize=3)
+        if with_std and i > 0:
+            y_lower = ops[1] - ops[2]
+            plt.errorbar(ops[0], ops[1], fmt=line_format[i%28], yerr=[y_lower, 2 * ops[2]], marker='x', markersize=3)
         else:
-            plt.plot(ops[0], ops[1], line_format[i%28], yerr=ops[2], marker='x', markersize=3)
+            plt.plot(ops[0], ops[1], line_format[i%28], marker='x', markersize=3)
+
+    plt.ylim([0, 1.])
 
     plt.ylabel('Sensitivity')
     plt.xlabel('Average FPPI')
@@ -251,6 +252,7 @@ def save_grid(scores, name, labels, ranges, title):
     plt.clf()
 
 def save_weights(weights, name):
+    weights = np.swapaxes(weights, 0, 1)
     print weights.shape
     mean1 = np.mean(weights[0], axis=0)
     std1 = np.std(weights[0], axis=0)
@@ -258,16 +260,18 @@ def save_weights(weights, name):
     std2 = np.std(weights[1], axis=0)
 
     idx = np.arange(len(mean1))
-    plt.bar(idx + 0.3, mean1, width=0.3, yerr=std1, label='coef_', color='b')
-    plt.bar(idx + 0.6, mean2, width=0.3, yerr=std2, label='anova', color='r')
+    plt.figure(figsize=(16, 12))
+    plt.bar(idx + 0.3, mean1, edgecolor='none', width=0.3, yerr=std1, label='coef_', color='b', error_kw = {'elinewidth':0.3})
+    plt.bar(idx + 0.6, mean2, edgecolor='none', width=0.3, yerr=std2, label='anova', color='g', error_kw = {'elinewidth':0.3})
     plt.title("Feature weights")
     plt.xlabel('Feature number')
     plt.xticks(np.arange(0, len(mean1), 10))
     plt.yticks(())
     plt.axis('tight')
     plt.legend(loc='upper right')
-    plt.savefig('data/{}_{}.jpg'.format(name, time.clock()), dpi=1000)
+    plt.savefig('data/{}.jpg'.format(name), dpi=1000)
     plt.clf()
+    plt.figure(figsize=None)
 
 def save_loss(history, name):
     train_loss = history['loss']    
