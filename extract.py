@@ -883,9 +883,13 @@ class ShapeExtractor:
             contours = sorted(contours, cmp=sort_by_len)
             cv2.drawContours(per_mask, [contours[0]], -1, 1, 1)
 
+            
+            ''' Removes is constant for some folds
+
             has_inner = 0
             if len(contours) > 1 and len(contours[1]) > 25:
                 has_inner = 1
+            '''
             
             contours = contours[0]
 
@@ -913,7 +917,7 @@ class ShapeExtractor:
             hull_area = cv2.contourArea(hull)
             solidity = hull_area / (float(area) + util.EPS)
 
-            feats = [curvature, deformation_energy, compactness, convexity, solidity, has_inner]
+            feats = [curvature, deformation_energy, compactness, convexity, solidity ]
 
             feature_vectors.append(np.array(feats))
 
@@ -931,23 +935,24 @@ class FooExtractor:
         return fv
 
 class AllExtractor:
-	def __init__(self):
-		self.extractors = []
-		self.extractors.append(LBPExtractor())
-		self.extractors.append(HogExtractor())
-		#self.extractors.append(HRGExtractor())
-		self.extractors.append(HardieExtractor())
-		self.extractors.append(ZernikeExtractor())
-		self.extractors.append(ShapeExtractor())
+    def __init__(self):
+        self.extractors = []
+        self.extractors.append(LBPExtractor())
+        self.extractors.append(HogExtractor())
+        #self.extractors.append(HRGExtractor())
+        self.extractors.append(HardieExtractor())
+        self.extractors.append(ZernikeExtractor())
+        self.extractors.append(ShapeExtractor())
 
-	def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
-		fv_set = []
-		lce = equalize_hist(lce)
-		for extractor in self.extractors:
-			fv_set.append(extractor.extract(norm, lce, wmci, lung_mask, blobs, nod_masks))
-		fv = np.hstack(fv_set)
-		
-		return fv
+    def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
+        fv_set = []
+        lce = equalize_hist(lce)
+        for extractor in self.extractors:
+            fv_set.append(extractor.extract(norm, lce, wmci, lung_mask, blobs, nod_masks))
+            print fv_set[-1][0].shape
+        fv = np.hstack(fv_set)
+        
+        return fv
 
 class Set1Extractor:
     def __init__(self):
