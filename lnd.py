@@ -1172,7 +1172,7 @@ if __name__=="__main__":
 
     elif args.cmp_cnn_dp:
         networks = ['LND-A-5P', 'LND-A-5P-LDP']
-        network_labels = ['LND-A-5P, 0.25 dp', 'LND-A-5P, layer * 0.1 dp']
+        network_labels = ['LND-A-5P, 0.25 dp', 'LND-A-5P, 1.5 + layer * 0.05 dp']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/dps')
 
     elif args.cmp_cnn_clf_width:

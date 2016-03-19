@@ -51,12 +51,9 @@ def convpool_fs(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size
 
     return model
 
-def convpool_fs_ldp(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64),  init='orthogonal', batch_norm=False, activation='relu'):
+def convpool_fs_ldp(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64),  init='orthogonal', batch_norm=False, activation='relu', nb_dp=5, dp_init=0.15, dp_inc=0.05):
     assert nb_modules == len(nb_filters)
     
-    nb_dp = 5
-    dp_init = 0.15
-    dp_inc = 0.05
     for i in range(nb_modules):
         if i == 0:
             x_conv_pool(model, module_depth, nb_filters[i], nb_conv=conv_size[i], input_shape=input_shape, init=init, activation=activation)
@@ -138,8 +135,8 @@ def standard_cnn(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_siz
     mlp_softmax(model, nb_dense, dense_units, nb_classes, init, batch_norm, activation)
     return model
 
-def standard_cnn_ldp(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu'):
-    convpool_fs_ldp(model, nb_modules, module_depth,  nb_filters, conv_size, input_shape,  init, batch_norm, activation)
+def standard_cnn_ldp(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', nb_dp=5, dp_init=0.15, dp_inc=0.05):
+    convpool_fs_ldp(model, nb_modules, module_depth,  nb_filters, conv_size, input_shape,  init, batch_norm, activation, nb_dp=nb_dp, dp_init=dp_init, dp_inc=dp_inc)
     model.add(Flatten())
     mlp_softmax(model, nb_dense, dense_units, nb_classes, init, batch_norm, activation)
     return model
@@ -278,9 +275,15 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1'):
         schedule=[20, 30, 35]
         hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
 
-    elif model == 'LND-A-5P-LDP':
+    elif model == 'LND-A-5P-LDP1':
         keras_model = Sequential()
         keras_model = standard_cnn_ldp(keras_model, nb_modules=5, module_depth=1, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[30, 40, 45]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=50, batch_size=32, lr=0.001)
+
+    elif model == 'LND-A-5P-LDP2':
+        keras_model = Sequential()
+        keras_model = standard_cnn_ldp(keras_model, nb_modules=5, module_depth=1, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal', nb_dp=5, dp_init=0.1, dp_inc=0.1)
         schedule=[30, 40, 45]
         hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=50, batch_size=32, lr=0.001)
 
