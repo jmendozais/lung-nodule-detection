@@ -196,7 +196,7 @@ def show_blob(path, img, blob):
 
     imshow(path, img_roi)
 
-def save_froc(op_set, name, legend=None):
+def save_froc(op_set, name, legend=None, unique=False, with_std=False):
     ax = plt.gca()
     ax.grid(True)
 
@@ -209,22 +209,23 @@ def save_froc(op_set, name, legend=None):
 
     for i in range(len(op_set)):
         ops = np.array(op_set[i]).T
-        plt.plot(ops[0], ops[1], line_format[i%28], marker='x', markersize=3)
+        if with_std:
+            plt.plot(ops[0], ops[1], line_format[i%28], marker='x', markersize=3)
+        else:
+            plt.plot(ops[0], ops[1], line_format[i%28], yerr=ops[2], marker='x', markersize=3)
 
-    plt.title(name)
     plt.ylabel('Sensitivity')
     plt.xlabel('Average FPPI')
+
     if legend != None:
         assert len(legend) == len(op_set)
         plt.legend(legend, loc=4, fontsize='small')
 
-    name='{}_{}'.format(name, time.clock())
+    if not unique:
+        name='{}_{}'.format(name, time.clock())
+
     plt.savefig('{}_froc.jpg'.format(name))
     plt.clf()
-
-    file = open('{}_ops.txt'.format(name), "wb")
-    writer = csv.writer(file, delimiter=",")
-    writer.writerows(op_set)
 
 class MidpointNormalize(Normalize):
     def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
@@ -251,25 +252,32 @@ def save_grid(scores, name, labels, ranges, title):
 
 def save_weights(weights, name):
     print weights.shape
-    plt.bar(np.arange(len(weights)), weights,
-            label='Weight', color='b')
+    mean1 = np.mean(weights[0], axis=0)
+    std1 = np.std(weights[0], axis=0)
+    mean2 = np.mean(weights[1], axis=0)
+    std2 = np.std(weights[1], axis=0)
+
+    idx = np.arange(len(mean1))
+    plt.bar(idx + 0.3, mean1, width=0.3, yerr=std1, label='coef_', color='b')
+    plt.bar(idx + 0.6, mean2, width=0.3, yerr=std2, label='anova', color='r')
     plt.title("Feature weights")
     plt.xlabel('Feature number')
+    plt.xticks(np.arange(0, len(mean1), 10))
     plt.yticks(())
     plt.axis('tight')
     plt.legend(loc='upper right')
-    plt.savefig('{}_{}.jpg'.format(name, time.clock()))
+    plt.savefig('data/{}_{}.jpg'.format(name, time.clock()), dpi=1000)
     plt.clf()
 
 def save_loss(history, name):
     train_loss = history['loss']    
     test_loss = history['val_loss'] 
-    plt.plot(train_loss, linewidth = 3, label = 'train loss')
-    plt.plot(test_loss, linewidth = 3, label = 'test loss')
+    plt.plot(train_loss, linewidth = 1, label = 'train loss')
+    plt.plot(test_loss, linewidth = 1, label = 'test loss')
     plt.legend(loc = 2)
-    plt.twinx()
+    #plt.twinx()
     plt.grid()
-    #plt.ylim([.9,1])
+    plt.ylim([0, 0.8])
     plt.legend(loc = 1)
     plt.savefig('{}.jpg'.format(name))
     plt.clf()

@@ -20,8 +20,7 @@ def get_activations(model, layer, X_batch):
     activations = get_activations(X_batch) # same result as above
     return activations
 
-# Blocks 
-
+# Feature blocks 
 def x_conv_pool(model, depth=2, nb_filters=64, nb_conv=3, nb_pool=2, init='orthogonal', input_shape=None, activation='relu', batch_norm=False, **junk):
     for i in range(depth):
         if input_shape != None:
@@ -38,20 +37,76 @@ def x_conv_pool(model, depth=2, nb_filters=64, nb_conv=3, nb_pool=2, init='ortho
             model.add(Activation(activation))
     model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
 
-def standard_cnn(model, nb_modules=1, module_depth=2,  nb_filters=[64], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu'):
+def convpool_fs(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64),  init='orthogonal', batch_norm=False, activation='relu'):
     assert nb_modules == len(nb_filters)
-    assert nb_dense  == len(dense_units)
 
     for i in range(nb_modules):
         if i == 0:
-            x_conv_pool(model, module_depth, nb_filters[i], input_shape=input_shape, init=init, activation=activation)
+            x_conv_pool(model, module_depth, nb_filters[i], nb_conv=conv_size[i], input_shape=input_shape, init=init, activation=activation)
         else:
-            x_conv_pool(model, module_depth, nb_filters[i], activation=activation)
+            x_conv_pool(model, module_depth, nb_filters[i], nb_conv=conv_size[i], activation=activation)
 
         if batch_norm is False:
             model.add(Dropout(0.25))
 
-    model.add(Flatten())
+    return model
+
+def convpool_fs_ldp(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64),  init='orthogonal', batch_norm=False, activation='relu'):
+    assert nb_modules == len(nb_filters)
+    
+    nb_dp = 5
+    dp_init = 0.15
+    dp_inc = 0.05
+    for i in range(nb_modules):
+        if i == 0:
+            x_conv_pool(model, module_depth, nb_filters[i], nb_conv=conv_size[i], input_shape=input_shape, init=init, activation=activation)
+        else:
+            x_conv_pool(model, module_depth, nb_filters[i], nb_conv=conv_size[i], activation=activation)
+
+        if batch_norm is False:
+            if i >= nb_modules - nb_dp:
+                model.add(Dropout(dp_init + (i + nb_dp - nb_modules) * dp_inc))
+
+    return model
+
+
+def allcnn_module(model, depth=2, nb_filters=64, nb_conv=3, subsample=2, init='orthogonal', input_shape=None, activation='relu', batch_norm=False, **junk):
+    for i in range(depth):
+        if input_shape != None:
+            model.add(Convolution2D(nb_filters, nb_conv, nb_conv, border_mode='same', init=init, input_shape=input_shape))
+        else:
+            model.add(Convolution2D(nb_filters, nb_conv, nb_conv, border_mode='same', init=init ))
+
+        if batch_norm:
+            model.add(BatchNormalization())
+
+        if activation == 'leaky_relu':
+            model.add(LeakyReLU(alpha=.333))
+        else:
+            model.add(Activation(activation))
+
+    model.add(Convolution2D(nb_filters, subsample, subsample, border_mode='valid', init=init, subsample=(subsample, subsample)))
+    if activation == 'leaky_relu':
+        model.add(LeakyReLU(alpha=.333))
+    else:
+        model.add(Activation(activation))
+
+def allcnn_fs(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64),  init='orthogonal', batch_norm=False, activation='relu'):
+    assert nb_modules == len(nb_filters)
+    for i in range(nb_modules):
+        if i == 0:
+            allcnn_module(model, module_depth, nb_filters[i], nb_conv=conv_size[i], input_shape=input_shape, init=init, activation=activation, subsample=2)
+        else:
+            allcnn_module(model, module_depth, nb_filters[i], nb_conv=conv_size[i], activation=activation, subsample=2)
+
+        if batch_norm is False:
+            model.add(Dropout(0.25))
+
+    return model
+
+# Classification blocks
+
+def mlp_softmax(model, nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu'):
     for i in range(nb_dense):
         model.add(Dense(dense_units[i], init=init))
         if activation == 'leaky_relu':
@@ -62,6 +117,31 @@ def standard_cnn(model, nb_modules=1, module_depth=2,  nb_filters=[64], input_sh
 
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
+
+def nin_softmax(model, nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu'):
+    for i in range(nb_dense):
+        model.add(Dense(dense_units[i], init=init))
+        if activation == 'leaky_relu':
+            model.add(LeakyReLU(alpha=.333))
+        else:
+            model.add(Activation(activation))
+        model.add(Dropout(0.5))
+
+    model.add(Dense(nb_classes))
+    model.add(Activation('softmax'))
+
+# Models 
+
+def standard_cnn(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu'):
+    convpool_fs(model, nb_modules, module_depth,  nb_filters, conv_size, input_shape,  init, batch_norm, activation)
+    model.add(Flatten())
+    mlp_softmax(model, nb_dense, dense_units, nb_classes, init, batch_norm, activation)
+    return model
+
+def standard_cnn_ldp(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu'):
+    convpool_fs_ldp(model, nb_modules, module_depth,  nb_filters, conv_size, input_shape,  init, batch_norm, activation)
+    model.add(Flatten())
+    mlp_softmax(model, nb_dense, dense_units, nb_classes, init, batch_norm, activation)
     return model
 
 class StageScheduler(keras.callbacks.Callback):
@@ -106,10 +186,6 @@ def shallow_1(input_shape):
     model = Sequential()
     return standard_cnn(model, nb_modules=1, nb_filters=[64], nb_dense=1, dense_units=[256], input_shape=input_shape)
 
-def shallow_2(input_shape):
-    model = Sequential()
-    return standard_cnn(model, nb_modules=2, nb_filters=[64, 128], nb_dense=1, dense_units=[512], input_shape=input_shape)
-
 def shallow_3(input_shape):
     model = Sequential()
     return standard_cnn(model, nb_modules=3, nb_filters=[64, 128, 192], nb_dense=1, dense_units=[512], input_shape=input_shape)
@@ -137,9 +213,10 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1'):
         schedule=[20,40]
         hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule)
     elif model == 'shallow_2':
-        keras_model = shallow_2(input_shape)
-        schedule=[20,40]
-        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule)
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=2, nb_filters=[64, 128], conv_size=[7, 7], nb_dense=2, dense_units=[512, 128], input_shape=input_shape)
+        schedule=[15, 25, 30]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=35, lr=0.001)
     elif model == 'shallow_3':
         keras_model = shallow_3(input_shape)
         schedule=[20,40]
@@ -172,5 +249,113 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1'):
         keras_model = shallow_bn(input_shape)
         schedule=[20,40]
         hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule)
+    elif model == 'LND-A':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=3, module_depth=1, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 128], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
 
+    elif model == 'LND-A-2P':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=2, module_depth=1, nb_filters=[32, 64], conv_size=[3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+
+    elif model == 'LND-A-3P':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=3, module_depth=1, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+
+    elif model == 'LND-A-4P':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=4, module_depth=1, nb_filters=[32, 64, 96, 128], conv_size=[3, 3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+
+    elif model == 'LND-A-5P':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=5, module_depth=1, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+
+    elif model == 'LND-A-5P-LDP':
+        keras_model = Sequential()
+        keras_model = standard_cnn_ldp(keras_model, nb_modules=5, module_depth=1, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[30, 40, 45]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=50, batch_size=32, lr=0.001)
+
+    elif model == 'LND-A-ALLCNN-5P':
+        keras_model = Sequential()
+
+        allcnn_fs(keras_model, nb_modules=5, module_depth=1,  nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], input_shape=input_shape,  init='orthogonal')
+        keras_model.add(Flatten())
+        mlp_softmax(keras_model, nb_dense=2, dense_units=[512, 256], nb_classes=2, init='orthogonal')
+
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+
+    elif model == 'LND-A-5P-64':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=5, module_depth=1, nb_filters=[64, 64*2, 64*3, 64*4, 64*5], conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+
+    elif model == 'LND-A-5P-96':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=5, module_depth=1, nb_filters=[96, 96*2, 96*3, 96*4, 96*5], conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[35, 45, 50]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=55, batch_size=64, lr=0.001)
+
+    elif model == 'LND-A-5P-C2':
+        init = 'orthogonal'
+        activation = 'relu'
+        keras_model = Sequential()
+
+        convpool_fs(keras_model, nb_modules=5, module_depth=1, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], input_shape=input_shape, init=init, activation=activation)
+        keras_model.add(Convolution2D(196, 2, 2, border_mode='valid', init=init))
+        if activation == 'leaky_relu':
+            keras_model.add(LeakyReLU(alpha=.333))
+        else:
+            keras_model.add(Activation(activation))
+        keras_model.add(Dropout(0.25))
+        keras_model.add(Flatten())
+
+        mlp_softmax(keras_model, nb_dense=2, dense_units=[512, 256], init=init)
+
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+    elif model == 'LND-B':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=3, module_depth=2, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 128], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+
+    elif model == 'LND-C':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=3, module_depth=3, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 128], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+
+    elif model == 'LND-C-5P':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=5, module_depth=3, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+
+    elif model == 'LND-D':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=3, module_depth=4, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 128], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+    elif model == 'LND-C-256':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=3, module_depth=3, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+    elif model == 'LND-C-512':
+        keras_model = Sequential()
+        keras_model = standard_cnn(keras_model, nb_modules=3, module_depth=3, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal')
+        schedule=[20, 30, 35]
+        hist = fit_model(keras_model, X_train, Y_train, X_val, Y_val, schedule=schedule, nb_epoch=40, batch_size=32, lr=0.001)
+    
     return keras_model, hist
