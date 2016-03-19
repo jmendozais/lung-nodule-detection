@@ -10,6 +10,8 @@ from sklearn.externals import joblib
 from sklearn import preprocessing
 from sklearn.metrics import confusion_matrix
 from sklearn.base import clone
+from sklearn.feature_selection import SelectPercentile, f_classif
+
 
 import matplotlib.pyplot as plt
 

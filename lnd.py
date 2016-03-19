@@ -272,6 +272,7 @@ def protocol_froc_2(_model, fname):
 	print "Loading blobs & features ..."
 	data = DataProvider(paths, left_masks, right_masks)
 	feats = np.load('data/{}.fts.npy'.format(fname))
+	print feats[0].shape
 	pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
 
 	av_cpi = 0
@@ -598,8 +599,13 @@ def protocol_clf_eval_froc(_model, fname):
 	protocol_classifier_froc(_model, fname, classifiers, labels)
 
 def protocol_svm_hp_search(_model, fname):
-	C_set = np.logspace(-3, 4, 8)
-	g_set = np.logspace(-3, -1, 9)
+	# Stage 1
+	#C_set = np.logspace(-3, 4, 8)
+	#g_set = np.logspace(-3, -1, 9)
+	# Stage 2
+	C_set = np.logspace(-1, 1, 9)
+	g_set = np.logspace(-2.25, -1.75, 9)
+
 	#C_set = np.logspace(-2, 2, 9)
 	#g_set = np.logspace(-4, -1, 10)
 	#C_set = np.logspace(-2, 1, 10)

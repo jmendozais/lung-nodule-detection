@@ -258,7 +258,7 @@ def save_weights(weights, name):
     plt.yticks(())
     plt.axis('tight')
     plt.legend(loc='upper right')
-    plt.savefig('{}_{}.jpg'.format(name, time.clock()))
+    plt.savefig('{}_{}.jpg'.format(name, time.clock()), dpi=1000)
     plt.clf()
 
 def save_loss(history, name):

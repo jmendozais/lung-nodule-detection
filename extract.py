@@ -929,7 +929,7 @@ class AllExtractor:
 		self.extractors = []
 		self.extractors.append(LBPExtractor())
 		self.extractors.append(HogExtractor())
-		self.extractors.append(HRGExtractor())
+		#self.extractors.append(HRGExtractor())
 		self.extractors.append(HardieExtractor())
 		self.extractors.append(ZernikeExtractor())
 		self.extractors.append(ShapeExtractor())
@@ -1031,6 +1031,56 @@ class OverfeatExtractor:
 		'''
 		return np.array(feature_vectors)
 
+# Extractor adapters
+
+class ExtractorAdapter:
+    def __init__(self, extractor, **kwargs):
+        self.extractor = extractor
+        self.kwargs = kwargs
+    def extract(self, img):
+        return self.extractor(img, **self.kwargs)
+
+class SpatialPoolingAdapter:
+    def __init__(self, feature_extractor, levels=2):
+        self.feature_extractor = feature_extractor
+        self.levels = 2
+    def _extract(self, img, level):
+        if level == 0:
+            return []
+        print "level {}".format(level)
+        feats = np.array([])
+        print len(feats)
+        rows, cols = img.shape
+        feats = np.concatenate((feats, self._extract(img[0:int(rows/2), 0:int(cols/2)], level-1)))
+        feats = np.concatenate((feats, self._extract(img[0:int(rows/2), int(cols/2):cols], level-1)))
+        feats = np.concatenate((feats, self._extract(img[int(rows/2):rows, 0:int(cols/2)], level-1)))
+        feats = np.concatenate((feats, self._extract(img[int(rows/2):rows, int(cols/2):cols], level-1)))
+        return feats
+    def extract(self, img):
+        return self._extract(img, self.levels)
+
+class SpatialPyramidAdapter:
+    def __init__(self, feature_extractor, levels=2):
+        self.feature_extractor = feature_extractor
+        self.levels = 2
+    def _extract(self, img, level):
+        if level == 0:
+            return []
+        print "level {}".format(level)
+        feats = self.feature_extractor(img)
+        print len(feats)
+        rows, cols = img.shape
+        feats = np.concatenate((feats, self._extract(img[0:int(rows/2), 0:int(cols/2)], level-1)))
+        feats = np.concatenate((feats, self._extract(img[0:int(rows/2), int(cols/2):cols], level-1)))
+        feats = np.concatenate((feats, self._extract(img[int(rows/2):rows, 0:int(cols/2)], level-1)))
+        feats = np.concatenate((feats, self._extract(img[int(rows/2):rows, int(cols/2):cols], level-1)))
+        return feats
+    def extract(self, img):
+        return self._extract(img, self.levels)
+
+# LBP
+_lbp = ExtractorAdapter(LBPExtractor().extract)
+_lbp = SpatialPoolingAdapter(LBPExtractor().extract, levels=3)
 
 # Register extractors
 extractors = {'hardie':HardieExtractor(), \
