@@ -132,7 +132,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 
         fold += 1
 
-    av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101), with_std=True)
+    av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
 
     return av_froc
 
@@ -387,6 +387,7 @@ def protocol_froc_2(_model, fname, save_fw=False):
     print "Loading blobs & features ..."
     data = DataProvider(paths, left_masks, right_masks)
     feats = np.load('data/{}.fts.npy'.format(fname))
+    
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
 
     av_cpi = 0
@@ -406,7 +407,7 @@ def protocol_froc_2(_model, fname, save_fw=False):
     legend.append('Hardie et al')
     legend.append(_model.name)
 
-    util.save_froc([hardie, ops], '{}'.format(_model.name), legend)
+    util.save_froc([hardie, ops], '{}'.format(_model.name), legend, with_std=True)
 
     return ops
 
@@ -885,7 +886,7 @@ def protocol_cnn_froc(detections_source, fname, network_model):
     legend.append('Hardie et al')
     legend.append('current')
 
-    util.save_froc([hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=True)
+    util.save_froc([hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
 
     return ops
 
@@ -1228,6 +1229,7 @@ if __name__=="__main__":
         method = protocol_froc_2
         if args.fts:
             method = protocol_froc_1
+
         elif args.clf:
             method = protocol_froc_2
             _model.clf = model.classifiers[args.classifier]
