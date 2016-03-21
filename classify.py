@@ -241,13 +241,17 @@ def train(X, Y, clf, scaler, selector, weights=False):
     
     if weights:
         print 'Ploting weights'
+
         selector = SelectPercentile(f_classif, percentile=10)
         selector.fit(Xt, Y)
-        scores = -np.log10(selector.pvalues_)
-        scores /= scores.max()
+        pvalues = selector.pvalues_
+        pvalues[np.isnan(pvalues)] = 1.
+        scores = -np.log10(pvalues)
+        scores /= (scores.max() + util.EPS)
 
         weights_selected = (clf.coef_ ** 2).sum(axis=0)
         weights_selected /= weights_selected.max()
+
         return clf, scaler, selector, np.array([weights_selected, scores])
     else:   
         return clf, scaler, selector
