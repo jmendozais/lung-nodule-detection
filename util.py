@@ -275,10 +275,21 @@ def save_weights(weights, name):
 
 def save_loss(history, name):
     train_loss = history['loss']    
+    train_loss_detail = history['loss_detail']
     test_loss = history['val_loss'] 
-    plt.plot(train_loss, linewidth = 1, label = 'train loss')
-    plt.plot(test_loss, linewidth = 1, label = 'test loss')
+
+    print "loss shapes"
+    print len(train_loss_detail), len(train_loss), len(test_loss)
+
+    trx_init = len(train_loss) * 1.0 / len(train_loss_detail)
+    trx = np.linspace(trx_init, len(train_loss), len(train_loss_detail));
+    tex = np.linspace(1, len(test_loss), len(test_loss))
+
+    plt.plot(trx, train_loss_detail, alpha=0.5, label = 'train loss by batch')
+    plt.plot(tex, train_loss, label = 'train loss')
+    plt.plot(tex, test_loss, label = 'test loss')
     plt.legend(loc = 2)
+
     #plt.twinx()
     plt.grid()
     plt.ylim([0, 0.8])

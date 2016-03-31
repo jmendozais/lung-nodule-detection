@@ -2,6 +2,9 @@ import cv2
 import sys
 
 import skimage.io as io
+from skimage.exposure import equalize_hist
+from skimage.restoration import denoise_nl_means
+
 from sklearn import lda
 from sklearn import svm
 from sklearn import decomposition
@@ -49,44 +52,6 @@ def input(img_path, ll_path, lr_path):
     lung_mask.astype(np.uint8)
 
     return img, lung_mask
-
-def create_rois(data, blob_set, dsize=(32, 32), mode=None):
-    # Create image set
-    img_set = []
-    for i in range(len(data)):
-        img, lung_mask = data.get(i)
-        sampled, lce, norm = preprocess(img, lung_mask)
-        img_set.append(lce)
-
-    # Create roi set
-    roi_set = []
-    for i in range(len(img_set)):
-        img = img_set[i]
-        rois = []
-        masks = []
-        if mode == 'mask':
-            _, masks = adaptive_distance_thold(img, blob_set[i])
-        
-        for j in range(len(blob_set[i])):
-            x, y, r = blob_set[i][j]
-            shift = 0 
-            side = 2 * shift + 2 * r + 1
-
-            tl = (x - shift - r, y - shift - r)
-            ntl = (max(0, tl[0]), max(0, tl[1]))
-            br = (x + shift + r + 1, y + shift + r + 1)
-            nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
-
-            roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-            roi = cv2.resize(roi, dsize, interpolation=cv2.INTER_CUBIC)
-
-            if mode == 'mask':
-                mask = cv2.resize(masks[j], dsize, interpolation=cv2.INTER_CUBIC)
-                roi *= mask.astype(np.float64)
-
-            rois.append(roi)
-        roi_set.append(np.array(rois))
-    return np.array(roi_set)
 
 def adjacency_rule(blobs, probs):
     # candidate cue adjacency rule: 22 mm
@@ -143,21 +108,27 @@ class BaselineModel:
             self.clf = joblib.load('{}_clf.pkl'.format(name))
         if path.isfile('{}_scaler.pkl'.format(name)):
             self.scaler = joblib.load('{}_scaler.pkl'.format(name))
-        if path.isfile('{}self.keras__selector.pkl'.format(name)):
+        if path.isfile('{}_selector.pkl'.format(name)):
             self.selector = joblib.load('{}_selector.pkl'.format(name))
         if path.isfile('{}_transform.pkl'.format(name)):
             self.transform = joblib.load('{}_transform.pkl'.format(name))
         if path.isfile('{}_arch.json'.format(name)):
+            self.keras_model.load(name)
+            '''
             self.keras_model = model_from_json(open('{}_arch.json'.format(name)).read())
             self.keras_model.load_weights('{}_weights.h5'.format(name))
+            '''
         '''
         if path.isfile('{}_fs.npy'.format(self.extractor.name)):
             self.feature_set = np.load('{}_fs.npy'.format(self.extractor.name))
         '''
     def load_cnn(self, name):
         if path.isfile('{}_arch.json'.format(name)):
+            self.keras_model.load(name)
+            '''
             self.keras_model = model_from_json(open('{}_arch.json'.format(name)).read())
             self.keras_model.load_weights('{}_weights.h5'.format(name))
+            '''
 
     def save(self, name):
         if self.extractor != None:
@@ -171,14 +142,71 @@ class BaselineModel:
         if self.transform != None:
             joblib.dump(self.transform, '{}_transform.pkl'.format(name))
         if self.keras_model != None:
+            self.keras_model.save(name)
+            '''
             json_string = self.keras_model.to_json()
             open('{}_arch.json'.format(name), 'w').write(json_string)
             self.keras_model.save_weights('{}_weights.h5'.format(name), overwrite=True)
+            '''
 
         '''
         if self.feature_set != None:
             np.save(self.feature_set, '{}_fs.npy'.format(self.extractor.name))
         '''
+    def preprocess_rois(self, rois):
+        if self.preprocessor == 'heq':
+            for i in range(len(rois)):
+                rois[i] = equalize_hist(rois[i])
+        elif self.preprocessor == 'nlm':
+            for i in range(len(rois)):
+                rois[i] = denoise_nl_means(rois[i])
+
+    def create_rois(self, data, blob_set, dsize=(32, 32), mode=None):
+        # Create image set
+        img_set = []
+        for i in range(len(data)):
+            img, lung_mask = data.get(i)
+            sampled, lce, norm = preprocess(img, lung_mask)
+            img_set.append(lce)
+
+        print 'preproc: {}'.format(self.preprocessor)
+        # Create roi set
+        roi_set = []
+        for i in range(len(img_set)):
+            img = img_set[i]
+            rois = []
+            masks = []
+            if mode == 'mask':
+                _, masks = adaptive_distance_thold(img, blob_set[i])
+            
+            for j in range(len(blob_set[i])):
+                x, y, r = blob_set[i][j]
+                shift = 0 
+                side = 2 * shift + 2 * r + 1
+
+                tl = (x - shift - r, y - shift - r)
+                ntl = (max(0, tl[0]), max(0, tl[1]))
+                br = (x + shift + r + 1, y + shift + r + 1)
+                nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+                roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+                roi = cv2.resize(roi, dsize, interpolation=cv2.INTER_CUBIC)
+
+                if mode == 'mask':
+                    mask = cv2.resize(masks[j], dsize, interpolation=cv2.INTER_CUBIC)
+                    roi *= mask.astype(np.float64)
+
+                rois.append(roi)
+
+            self.preprocess_rois(rois)
+            '''
+            for i in range(len(rois)):
+                util.imwrite('after_heq_{}.jpg'.format(i), rois[i])
+            '''
+            roi_set.append(np.array(rois))
+
+        return np.array(roi_set)
+
 
     def detect_blobs(self, img, lung_mask, threshold=0.5):
         sampled, lce, norm = preprocess(img, lung_mask)
@@ -269,10 +297,11 @@ class BaselineModel:
         X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
         X = X.astype('float32')
 
-        print 'predict proba one keras'
+        print 'Predict proba one keras'
         print X.shape
 
         probs = self.keras_model.predict_proba(X)
+
         probs = probs.T[1]
         blobs = np.array(blobs)
 
@@ -283,14 +312,14 @@ class BaselineModel:
         X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
         X = X.astype('float32')
 
-        layers = len(self.keras_model.layers)
+        layers = len(self.keras_model.network.layers)
 
         feats = np.array([])
 
         if layer < 0:
-            feats = neural.get_activations(self.keras_model, layers - 1, X)
+            feats = neural.get_activations(self.keras_model.network, layers - 1, X)
         else:
-            feats = neural.get_activations(self.keras_model, layer, X)
+            feats = neural.get_activations(self.keras_model.network, layer, X)
 
         return feats
 
@@ -319,123 +348,6 @@ class BaselineModel:
 
         return classify.train(X, Y, self.clf, self.scaler, self.selector, feat_weight)
         
-    def fit_mnist(self, X_train, Y_train, batch_size=128, nb_epoch=12):
-        np.random.seed(1337)  # for reproducibility
-        batch_size = 128
-        nb_classes = 2#10
-        nb_epoch = 12
-        # input image dimensions
-        img_rows, img_cols = 28, 28
-        # number of convolutional filters to use
-        nb_filters = 32
-        # size of pooling area for max pooling
-        nb_pool = 2
-        # convolution kernel size
-        nb_conv = 3
-        # augment
-        data_augmentation = True
-
-        #print('X_train shape:', X_train.shape)
-        #print(X_train.shape[0], 'train samples')
-
-        _init = 'orthogonal'
-        self.keras_model = Sequential()
-
-        self.keras_model.add(Convolution2D(nb_filters, nb_conv, nb_conv,
-                                border_mode='valid',
-                                input_shape=(1, img_rows, img_cols), init=_init))
-        self.keras_model.add(Activation('relu'))
-        self.keras_model.add(Convolution2D(nb_filters, nb_conv, nb_conv, init=_init))
-        self.keras_model.add(Activation('relu'))
-        self.keras_model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
-        self.keras_model.add(Dropout(0.25))
-
-        self.keras_model.add(Flatten())
-        self.keras_model.add(Dense(128))
-        self.keras_model.add(Activation('relu'))
-        self.keras_model.add(Dropout(0.5))
-        self.keras_model.add(Dense(nb_classes))
-        self.keras_model.add(Activation('softmax'))
-
-        # TODO: validation
-        self.keras_model.compile(loss='categorical_crossentropy', optimizer='adadelta')
-
-        #self.keras_model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, show_accuracy=True, verbose=1) # , validation_data=(X_test, Y_test))
-
-        lr_scheduler = StageScheduler([50, 70])
-        if not data_augmentation:
-            print('Not using data augmentation or normalization')
-            self.keras_model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
-            #score = model.evaluate(X_test, Y_test, batch_size=batch_size)
-            #print('Test score:', score)
-
-        else:
-            print('Using data augmentation')
-            X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
-
-            self.keras_model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
-
-
-    def fit_cifar(self, X_train, Y_train):
-        np.random.seed(1337)  # for reproducibility
-        batch_size = 32
-        nb_classes = 2
-        nb_epoch = 60
-        data_augmentation = True
-
-        # input image dimensions
-        img_rows, img_cols = X_train[0][0].shape
-        # the CIFAR10 images are RGB
-        img_channels = 1
-
-        #print('X_train shape:', X_train.shape)
-        #print(X_train.shape[0], 'train samples')
-
-        _init = 'he_normal'
-        model = Sequential()
-
-        model.add(Convolution2D(32, 3, 3, border_mode='same',
-                    input_shape=(img_channels, img_rows, img_cols), init=_init))
-        model.add(Activation('relu'))
-        model.add(Convolution2D(32, 3, 3, init=_init))
-        model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        model.add(Dropout(0.25))
-
-        model.add(Convolution2D(64, 3, 3, border_mode='same', init=_init))
-        model.add(Activation('relu'))
-        model.add(Convolution2D(64, 3, 3, init=_init))
-        model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        model.add(Dropout(0.25))
-
-        model.add(Flatten())
-        model.add(Dense(512))
-        model.add(Activation('relu'))
-        model.add(Dropout(0.5))
-        model.add(Dense(nb_classes))
-        model.add(Activation('softmax'))
-
-        # let's train the model using SGD + momentum (how original).
-        sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-        model.compile(loss='categorical_crossentropy', optimizer=sgd)
-
-        lr_scheduler = StageScheduler([30, 50])
-        if not data_augmentation:
-            print('Not using data augmentation or normalization')
-            model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
-            #score = model.evaluate(X_test, Y_test, batch_size=batch_size)
-            #print('Test score
-        else:
-            print('Using data augmentation')
-            X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
-            #X_train, Y_train = bootstraping_augment(X_train, Y_train, ratio=1, batch_size=batch_size, rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
-            print 'Negatives: {}'.format(np.sum(Y_train.T[0]))
-            print 'Positives: {}'.format(np.sum(Y_train.T[1]))
-            model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
-
-        self.keras_model = model
-
     def fit_vgg(self, X_train, Y_train):
         np.random.seed(1337)  # for reproducibility
         batch_size = 32
@@ -633,7 +545,7 @@ class BaselineModel:
             X_test = X_test.astype('float32')
             Y_test = np_utils.to_categorical(y_test, nb_classes)
         
-        self.keras_model, history = neural.fit(X_tr, Y_tr, X_test, Y_test, model)
+        self.keras_model, history = neural.fit2(X_tr, Y_tr, X_test, Y_test, model)
 
         #self.save(self.name)
         return history

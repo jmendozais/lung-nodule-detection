@@ -116,7 +116,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
                                             rois[te_idx], pred_blobs[te_idx], blobs[te_idx], 
                                             model=network_model)
         if fold == 1:
-            model.layer_utils.model_summary(_model.keras_model)         
+            model.layer_utils.model_summary(_model.keras_model.network)         
 
         blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois[te_idx], pred_blobs[te_idx])
 
@@ -152,7 +152,7 @@ def extract_features_cnn(_model, fname, network_model, layer):
     print "Loading blobs ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = model.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = _model.create_rois(data, pred_blobs, dsize=(64, 64))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
     folds = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
@@ -173,7 +173,7 @@ def extract_features_cnn(_model, fname, network_model, layer):
         print 'load model ...'
         _model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
         if fold == 1:
-            model.layer_utils.model_summary(_model.keras_model)         
+            model.layer_utils.model_summary(_model.keras_model.network)         
         print 'extract ...'
         network_feats = _model.extract_features_from_keras_model(rois, layer)
         print 'save ...'
@@ -198,7 +198,7 @@ def froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs,
         _model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
 
         if fold == 1:
-            model.layer_utils.model_summary(_model.keras_model)         
+            model.layer_utils.model_summary(_model.keras_model.network)         
 
         print "predict ..."
         blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois[te_idx], pred_blobs[te_idx])
@@ -228,7 +228,7 @@ def classify_cnn(_model, fname, network_model, layer):
     print "Loading blobs ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = model.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = _model.create_rois(data, pred_blobs, dsize=(64, 64))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
     folds = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
@@ -870,7 +870,7 @@ def protocol_cnn_froc(detections_source, fname, network_model):
     print "Loading dataset ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = model.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = detections_source.create_rois(data, pred_blobs, dsize=(64, 64))
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -907,7 +907,7 @@ def hybrid(detections_source, fname, network_model, layer):
     data = DataProvider(paths, left_masks, right_masks)
     feats = np.load('data/{}.fts.npy'.format(fname))
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = model.create_rois(data, pred_blobs)
+    rois = detections_source.create_rois(data, pred_blobs)
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -942,7 +942,7 @@ def compare_cnn_models(detections_source, fname, nw_names, nw_labels, exp_name):
     print "Loading dataset ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = model.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = detections_source.create_rois(data, pred_blobs, dsize=(64, 64))
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -983,7 +983,7 @@ def compare_cnn_sklearn_clfs(detections_source, fname, network):
     print "Loading dataset ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = model.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = detections_source.create_rois(data, pred_blobs, dsize=(64, 64), pre='histeq')
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -1036,7 +1036,7 @@ def compare_cnn_hybrid(detections_source, fname, network):
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
     feats = np.load('data/{}.fts.npy'.format(fname))
-    rois = model.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = detections_source.create_rois(data, pred_blobs, dsize=(64, 64))
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -1088,7 +1088,7 @@ def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
     feats = np.load('data/{}.fts.npy'.format(fname))
-    rois = model.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = detections_source.create_rois(data, pred_blobs, dsize=(64, 64))
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -1118,6 +1118,7 @@ def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
 
 if __name__=="__main__":    
     parser = argparse.ArgumentParser(prog='lnd.py')
+    parser.add_argument('-p', '--preprocessor', help='Options: heq, nlm, cs.', default='none')
     parser.add_argument('-b', '--blob_detector', help='Options: wmci(default), TODO hog, log.', default='wmci')
     parser.add_argument('--eval-wmci', help='Measure sensitivity and fppi without classification', action='store_true')
     parser.add_argument('-d', '--descriptor', help='Options: hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='hardie')
@@ -1135,6 +1136,10 @@ if __name__=="__main__":
     parser.add_argument('--fw', help='Plot the importance of individual features ( selected clf coef vs anova ) ', action='store_true')
 
     # Deep learning evals 
+
+    # TODO: Add augment suffix to network model name
+    parser.add_argument('-a', '--augment', help='Augmentation configurations: bt, zcabt, xbt', default='bt')
+
     parser.add_argument('--cmp-cnn', help='Compare all LND-X models.', action='store_true')
     parser.add_argument('--cmp-cnn-mp', help='Compare # of pooling stages with LND-A model', action='store_true')
     parser.add_argument('--cmp-cnn-nfm', help='Compare # of feature maps with LND-A-5P model', action='store_true')
@@ -1151,8 +1156,13 @@ if __name__=="__main__":
     _model = model.BaselineModel("data/default")
     _model.name = 'data/{}'.format(extractor_key)
     _model.extractor = model.extractors[args.descriptor]
+    _model.preprocessor = args.preprocessor
+    
+    #TODO
+    _model.augment = args.augment
 
     # default: clf -d hardie
+         
     if args.eval_wmci:
         eval_wmci_and_postprocessing(_model, extractor_key)
 
@@ -1172,13 +1182,14 @@ if __name__=="__main__":
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/fmaps')
 
     elif args.cmp_cnn_dp:
-        networks = ['LND-A-5P', 'LND-A-5P-LDP']
-        network_labels = ['LND-A-5P, 0.25 dp', 'LND-A-5P, 1.5 + layer * 0.05 dp']
+        networks = ['LND-A-5P', 'LND-A-5P-LDP', 'LND-A-5P-LDP2']
+        network_labels = ['LND-A-5P, 0.25 dp', 'LND-A-5P, 0.15 + layer * 0.05 dp', 'LND-A-5P, 0.1 + layer * 0.1 dp']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/dps')
 
     elif args.cmp_cnn_clf_width:
-        networks = ['LND-X-128', 'LND-X-256']
-        compare_cnn_models(_model, '{}'.format(extractor_key), networks)
+        networks = ['LND-A-5P', 'LND-A-5P-MLP512', 'LND-A-5P-MLP1024']
+        network_labels = ['LND-A-5P with MPL(512-256)', 'LND-A-5P with MPL(512, 512)', 'LND-A-5P with MPL(1024, 1024)']
+        compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/widths')
 
     elif args.cmp_cnn_skl:
         assert args.cnn != 'none'
