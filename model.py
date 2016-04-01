@@ -99,6 +99,7 @@ class BaselineModel:
         self.extractor = HardieExtractor()
         self.feature_set = None
         self.keras_model = None
+        self.roi_size = 64
 
     def load(self, name):
         # Model
@@ -161,7 +162,9 @@ class BaselineModel:
             for i in range(len(rois)):
                 rois[i] = denoise_nl_means(rois[i])
 
-    def create_rois(self, data, blob_set, dsize=(32, 32), mode=None):
+    def create_rois(self, data, blob_set, mode=None):
+        dsize = (int(self.roi_size * 1.15), int(self.roi_size * 1.15))
+        print 'dsize: {} rsize: {}'.format(dsize, self.roi_size)
         # Create image set
         img_set = []
         for i in range(len(data)):
@@ -194,7 +197,7 @@ class BaselineModel:
 
                 if mode == 'mask':
                     mask = cv2.resize(masks[j], dsize, interpolation=cv2.INTER_CUBIC)
-                    roi *= mask.astype(np.float64)
+                    roi *= mask.astype(np.float32)
 
                 rois.append(roi)
 
@@ -206,7 +209,6 @@ class BaselineModel:
             roi_set.append(np.array(rois))
 
         return np.array(roi_set)
-
 
     def detect_blobs(self, img, lung_mask, threshold=0.5):
         sampled, lce, norm = preprocess(img, lung_mask)

@@ -31,7 +31,8 @@ import argparse
 
 import jsrt
 
-#fppi range
+# Globals
+
 step = 10
 fppi_range = np.linspace(0.0, 10.0, 101)
 
@@ -152,7 +153,7 @@ def extract_features_cnn(_model, fname, network_model, layer):
     print "Loading blobs ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = _model.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = _model.create_rois(data, pred_blobs)
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
     folds = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
@@ -228,7 +229,7 @@ def classify_cnn(_model, fname, network_model, layer):
     print "Loading blobs ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = _model.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = _model.create_rois(data, pred_blobs)
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
     folds = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
@@ -870,7 +871,7 @@ def protocol_cnn_froc(detections_source, fname, network_model):
     print "Loading dataset ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = detections_source.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = detections_source.create_rois(data, pred_blobs)
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -942,7 +943,7 @@ def compare_cnn_models(detections_source, fname, nw_names, nw_labels, exp_name):
     print "Loading dataset ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = detections_source.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = detections_source.create_rois(data, pred_blobs)
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -983,7 +984,7 @@ def compare_cnn_sklearn_clfs(detections_source, fname, network):
     print "Loading dataset ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = detections_source.create_rois(data, pred_blobs, dsize=(64, 64), pre='histeq')
+    rois = detections_source.create_rois(data, pred_blobs, pre='histeq')
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -1036,7 +1037,7 @@ def compare_cnn_hybrid(detections_source, fname, network):
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
     feats = np.load('data/{}.fts.npy'.format(fname))
-    rois = detections_source.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = detections_source.create_rois(data, pred_blobs)
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -1088,7 +1089,7 @@ def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
     feats = np.load('data/{}.fts.npy'.format(fname))
-    rois = detections_source.create_rois(data, pred_blobs, dsize=(64, 64))
+    rois = detections_source.create_rois(data, pred_blobs)
 
     av_cpi = 0
     for tmp in pred_blobs:
@@ -1149,6 +1150,8 @@ if __name__=="__main__":
     parser.add_argument('--cmp-cnn-skl', help='Compare the best LND-X model replacing its nn-clf stage by conventional classification algorithms(svm, lda).', action='store_true')
     parser.add_argument('--cmp-cnn-hybrid', help='Compare best cnn-clf with handcrafted-features(-d).', action='store_true')
     parser.add_argument('--hyp-cnn-lsvm-hybrid', help='Compare the performance of hybrid model ( cnn feats + hrg16 ) with linear svm clf varying the C parameter.', action='store_true')
+    parser.add_argument('--roi-size', help='Layer index used to extract feature from cnn model.', default=64, type=int)
+
     
     args = parser.parse_args()
     opts = vars(args)
@@ -1157,6 +1160,7 @@ if __name__=="__main__":
     _model.name = 'data/{}'.format(extractor_key)
     _model.extractor = model.extractors[args.descriptor]
     _model.preprocessor = args.preprocessor
+    _model.roi_size = args.roi_size
     
     #TODO
     _model.augment = args.augment

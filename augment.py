@@ -259,6 +259,7 @@ class ImageDataGenerator:
         translation_range=(0.,0.), 
         flip=False,
         zoom_range=(1.,1.),
+        output_shape=(64, 64),
 
         batch_size=32,
         ratio=1.,
@@ -268,10 +269,24 @@ class ImageDataGenerator:
         self.translation_range = translation_range
         self.flip = flip
         self.zoom_range = zoom_range
+        self.output_shape = output_shape
 
         self.batch_size = batch_size
         self.ratio = ratio
         self.mode = mode
+
+    def build_centering_transform(self, image_shape, target_shape=(50, 50)):
+        rows, cols = image_shape
+        trows, tcols = target_shape
+        shift_x = (cols - tcols) / 2.0
+        shift_y = (rows - trows) / 2.0
+        return transform.SimilarityTransform(translation=(shift_x, shift_y))
+
+    def build_center_uncenter_transforms(self, image_shape):
+        center_shift = np.array([image_shape[1], image_shape[0]]) / 2.0 - 0.5 # need to swap rows and cols here apparently! confusing!
+        tform_uncenter = transform.SimilarityTransform(translation=-center_shift)
+        tform_center = transform.SimilarityTransform(translation=center_shift)
+        return tform_center, tform_uncenter
     
     def build_augmentation_transform(self, zoom=(1.0, 1.0), rotation=0, shear=0, translation=(0, 0), flip=False): 
         if flip:
@@ -313,16 +328,40 @@ class ImageDataGenerator:
 
     def fast_warp(self, img, tf, output_shape=(50, 50), mode='constant', order=1):
         m = tf.params # tf._matrix is
-        assert len(img) == 1, 'Input shape should be 1xMxN'
-        img = transform._warps_cy._warp_fast(img[0], m, output_shape=output_shape, mode=mode, order=order)
-        return np.array([img])
+        img = transform._warps_cy._warp_fast(img, m, output_shape=output_shape, mode=mode, order=order)
+        return img
 
     def perturb(self, x):
+        assert len(x) == 1, 'Input shape should be 1xMxN'
+        x = x[0]
+        
+        if abs(self.translation_range[0]) < 1.:
+            side = max(x.shape)
+            self.translation_range = (self.translation_range[0] * side, self.translation_range[1] * side)
+
+        tform_centering = self.build_centering_transform(x.shape, self.output_shape)
+        tform_center, tform_ucenter = self.build_center_uncenter_transforms(x.shape)
         tform_augment = self.random_perturbation_transform(
             zoom_range=self.zoom_range, rotation_range=self.rotation_range,
             shear_range=(0., 0.), translation_range=self.translation_range, 
             do_flip=self.flip)
-        return self.fast_warp(x, tform_augment, output_shape=x.shape, mode='constant').astype('float32')
+        tform_augment = tform_ucenter + tform_augment + tform_center
+        x = self.fast_warp(x, tform_centering + tform_augment, output_shape=self.output_shape, mode='constant').astype('float32')
+        return np.array([x])
+
+    def centering_crop(self, X):
+        assert len(X) > 0
+        assert len(X[0]) == 1
+
+        new_X = []
+        tform_centering = self.build_centering_transform(X[0][0].shape, self.output_shape)
+        for i in range(len(X)):
+            assert len(X[i]) == 1
+            x = self.fast_warp(X[i][0], tform_centering, output_shape=self.output_shape, mode='constant').astype('float32')
+            x = np.array([x])
+            new_X.append(x)
+
+        return np.array(new_X)
 
     def augment(self, X, y):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
@@ -371,14 +410,22 @@ class ImageDataGenerator:
             y = np.copy(ay)
 
         # transform
+        new_X = []
         for i in range(X.shape[0]):
+            '''
             x = X[i]
             if y[i][1] > 0:
                # x = random_transform(x.astype("float32"), self.rotation_range, self.width_shift_range, self.height_shift_range, self.horizontal_flip, self.vertical_flip)
-                x = self.perturb(x.astype("float32"))
-            X[i] = x
+            '''
+            if y[i][1] > 0:
+                x = self.perturb(X[i].astype("float32"))
+            else:
+                x = self.centering_crop([x])
+                x = x[0]
 
-        return X, y
+            new_X.append(x)
+
+        return np.array(new_X), y
 
 def bootstraping_augment(X, y, ratio=0.1, batch_size=32,
         featurewise_center=False, # set input mean to 0 over the dataset
@@ -484,8 +531,7 @@ def standardize(x, featurewise_center, featurewise_std_normalization, samplewise
 
         return x
 
-
-
+# Test
 if __name__ == '__main__':
     fname = '501.49_roi.jpg' 
     import cv2
@@ -494,9 +540,14 @@ if __name__ == '__main__':
     print 'shape {}'.format(img.shape)
     img = np.array([img])
 
-    augment_params = {'ratio':1, 'batch_size':32, 'rotation_range':(-15,15), 'translation_range':(-0.1, 0.1), 'flip':True, 'mode':'balance_batch'}
+    augment_params = {'output_shape':(50, 50), 'ratio':1, 'batch_size':32, 'rotation_range':(-15,15), 'translation_range':(-0.1, 0.1), 'flip':True, 'mode':'balance_batch'}
     gen = ImageDataGenerator(**augment_params)
 
     for i in range(10):
+        print 'RND_{}_{}'.format(i, fname)
         rnd_img = gen.perturb(img)
-        util.imwrite('RND_{}_idx{}'.format(fname, i), rnd_img[0])
+        util.imwrite('RND_{}_{}'.format(i, fname), rnd_img[0])
+
+    ans = gen.centering_crop([img])
+    util.imwrite('CENTERING_CROP_{}'.format(fname), ans[0][0])
+    

@@ -462,10 +462,13 @@ class NetModel:
         joblib.dump(self.preproc_params, '{}_pre.pkl'.format(name))
 
     def fit(self, X_train, Y_train, X_test=None, Y_test=None):
+        print 'Augment ...'
         X_train, Y_train = self.generator.augment(X_train, Y_train)
+        print 'Preprocess ...'
         X_train = self.preprocessor.fit_transform(X_train, Y_train)
 
-        print "Fit ..."
+        print 'Fit network  ...'
+        print 'input shape: {}'.format(X_train.shape)
         sgd = SGD(lr=self.training_params['lr'], 
                 decay=self.training_params['decay'],
                 momentum=self.training_params['momentum'], 
@@ -478,8 +481,9 @@ class NetModel:
 
         batch_size = self.training_params['batch_size']
         nb_epoch = self.training_params['nb_epoch']
-
         loss_bw_history = LossHistory()
+
+        print 'predict input shape:{}'.format(X_train.shape) 
         history = None
         if X_test is None:
             print 'train & val 0.1'
@@ -492,8 +496,9 @@ class NetModel:
         return history.history
 
     def predict_proba(self, X):
+        X = self.generator.centering_crop(X)
         X = self.preprocessor.transform(X)
-        print X.shape
+        print 'predict input shape:{}'.format(X.shape)
         return self.network.predict_proba(X)
 
 def fit2(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1'):
@@ -504,27 +509,35 @@ def fit2(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1'):
     print 'X-train shape: {}'.format(X_train.shape)
 
     hist = None
+
     if model == 'LND-A':
         network = standard_cnn(Sequential(), nb_modules=3, module_depth=1, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 128], input_shape=input_shape, init='orthogonal')
         schedule=[20, 30, 35]
         train_params = {'schedule':schedule, 'nb_epoch':3, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':1e-6}
-        augment_params = {'ratio':1, 'batch_size':32, 'rotation_range':(-15,15), 'translation_range':(-0.1, 0.1), 'flip':True, 'mode':'balance_batch'}
+        augment_params = {'output_shape':(64, 64), 'ratio':1, 'batch_size':32, 'rotation_range':(-15,15), 'translation_range':(-0.1, 0.1), 'flip':True, 'mode':'balance_batch'}
         preproc_params = {}
         net_model = NetModel(network, train_params, augment_params, preproc_params)
-        hist = net_model.fit(X_train, Y_train, X_val, Y_val)
+
     elif model == 'LND-A-5P':   
         network = standard_cnn(Sequential(), nb_modules=5, module_depth=1, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
-        schedule=[20, 30, 35]
-        train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':1e-6}
-        augment_params = {'ratio':1, 'batch_size':32, 'rotation_range':(-15,15), 'translation_range':(-0.1, 0.1), 'flip':True, 'mode':'balance_batch'}
+        schedule=[25, 35, 40]
+        train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':1e-6}
+        augment_params = {'output_shape':(64, 64), 'ratio':1, 'batch_size':32, 'rotation_range':(-5, 5), 'translation_range':(-0.05, 0.05), 'flip':True, 'mode':'balance_batch'}
         preproc_params = {}
         net_model = NetModel(network, train_params, augment_params, preproc_params)
-        hist = net_model.fit(X_train, Y_train, X_val, Y_val)
+
+    elif model == 'LND-A-6P':   
+        network = standard_cnn(Sequential(), nb_modules=6, module_depth=1, nb_filters=[32, 64, 96, 128, 160, 192], conv_size=[3, 3, 3, 3, 3,3], nb_dense=2, dense_units=[512, 256], input_shape=input_shape, init='orthogonal')
+        schedule=[25, 35, 40]
+        train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':1e-6}
+        augment_params = {'output_shape':(128, 128), 'ratio':1, 'batch_size':32, 'rotation_range':(-5, 5), 'translation_range':(-0.05, 0.05), 'flip':True, 'mode':'balance_batch'}
+        preproc_params = {}
+        net_model = NetModel(network, train_params, augment_params, preproc_params)
+
     else:
         print "Model config not found."
     
+    hist = net_model.fit(X_train, Y_train, X_val, Y_val)
     return net_model, hist
  
 ''' .... '''
-
-
