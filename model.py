@@ -125,6 +125,7 @@ class BaselineModel:
         '''
     def load_cnn(self, name):
         if path.isfile('{}_arch.json'.format(name)):
+            self.keras_model = neural.NetModel()
             self.keras_model.load(name)
             '''
             self.keras_model = model_from_json(open('{}_arch.json'.format(name)).read())
@@ -184,6 +185,7 @@ class BaselineModel:
             
             for j in range(len(blob_set[i])):
                 x, y, r = blob_set[i][j]
+                r = int(r * 1.15)
                 shift = 0 
                 side = 2 * shift + 2 * r + 1
 
@@ -547,7 +549,7 @@ class BaselineModel:
             X_test = X_test.astype('float32')
             Y_test = np_utils.to_categorical(y_test, nb_classes)
         
-        self.keras_model, history = neural.fit2(X_tr, Y_tr, X_test, Y_test, model)
+        self.keras_model, history = neural.fit(X_tr, Y_tr, X_test, Y_test, model)
 
         #self.save(self.name)
         return history

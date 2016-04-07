@@ -125,7 +125,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
         frocs.append(froc)
 
         _model.save('data/{}_fold_{}'.format(network_model, fold))
-        util.save_loss(history, 'data/{}_fold_{}'.format(network_model, fold))
+        util.save_loss_acc(history, 'data/{}_fold_{}'.format(network_model, fold))
 
         legend_ = ['Fold {}'.format(i + 1) for i in range(len(frocs))]
         frocs_.append(eval.average_froc([froc], np.linspace(0.0, 10.0, 101)))
@@ -139,7 +139,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 
 def extract_features_cnn(_model, fname, network_model, layer):
     print "Extract cnn features"
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -156,7 +156,7 @@ def extract_features_cnn(_model, fname, network_model, layer):
     rois = _model.create_rois(data, pred_blobs)
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    folds = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     fold = 1
     valid = True
@@ -213,9 +213,9 @@ def froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs,
     return av_froc
 
 
-def classify_cnn(_model, fname, network_model, layer):
-    print "Extract cnn features"
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+def classify_cnn(_model, fname, network_model):
+    print "classify with cnn"
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -232,9 +232,9 @@ def classify_cnn(_model, fname, network_model, layer):
     rois = _model.create_rois(data, pred_blobs)
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    folds = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
-    return froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, network_model)
+    return froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model)
 
 def get_froc_on_folds_hybrid(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, rois, folds, network_model, use_feats=False, layer=-1):
     fold = 1
@@ -293,7 +293,7 @@ def get_froc_on_folds_hybrid(_model, paths, left_masks, right_masks, blobs, pred
     return av_froc
 
 def protocol_two_stages():
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
     size = len(paths)
@@ -311,7 +311,7 @@ def protocol_two_stages():
     feats, pred_blobs = model.extract_feature_set(data)
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
     fold = 0
 
     sens = []
@@ -349,7 +349,7 @@ def protocol_two_stages():
 
 def protocol_froc_1(_model, fname):
     print '# {}'.format(fname)
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
     size = len(paths)
@@ -374,7 +374,7 @@ def protocol_froc_1(_model, fname):
     np.save('data/{}_pred.blb.npy'.format(fname), pred_blobs)
 
 def protocol_froc_2(_model, fname, save_fw=False):
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -397,10 +397,11 @@ def protocol_froc_2(_model, fname, save_fw=False):
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     print "save_fw {}".format(save_fw)
     ops = get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, skf, save_fw, fname)
+    step=1
     range_ops = ops[step * 2:step * 4 + 1]
     print 'auc 2 - 4 fppis {}'.format(auc(range_ops.T[0], range_ops.T[1]))
     
@@ -413,7 +414,7 @@ def protocol_froc_2(_model, fname, save_fw=False):
     return ops
 
 def eval_wmci_and_postprocessing(_model, fname):
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -439,7 +440,7 @@ def eval_wmci_and_postprocessing(_model, fname):
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    folds = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     fold = 0
     valid = True
@@ -467,7 +468,7 @@ def eval_wmci_and_postprocessing(_model, fname):
     print 'all last opt {}'.format(last_opt)
 
 def protocol_wmci_froc(_model, fname):
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
     size = len(paths)
@@ -491,7 +492,7 @@ def protocol_wmci_froc(_model, fname):
         av_cpi += len(tmp)
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     op_set = []
     op_set.append(hardie)
@@ -521,7 +522,7 @@ def protocol_wmci_froc(_model, fname):
     return op_set
 
 def protocol_generic_froc(_model, fnames, components, legend, kind='descriptor', mode='feats'):
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
     size = len(paths)
@@ -533,7 +534,7 @@ def protocol_generic_froc(_model, fnames, components, legend, kind='descriptor',
 
     data = DataProvider(paths, left_masks, right_masks)
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
     
     op_set = []
     op_set.append(hardie)
@@ -562,7 +563,7 @@ def protocol_generic_froc(_model, fnames, components, legend, kind='descriptor',
 
 
 def protocol_selector_froc(_model, fname, selectors, legend):
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
     size = len(paths)
@@ -584,7 +585,7 @@ def protocol_selector_froc(_model, fname, selectors, legend):
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
     
     op_set = []
     
@@ -603,7 +604,7 @@ def protocol_selector_froc(_model, fname, selectors, legend):
     return op_set
 
 def protocol_classifier_froc(_model, fname, classifiers, legend):
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
     size = len(paths)
@@ -625,7 +626,7 @@ def protocol_classifier_froc(_model, fname, classifiers, legend):
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
     
     op_set = []
 
@@ -857,7 +858,7 @@ Deep learning protocols
 '''
 
 def protocol_cnn_froc(detections_source, fname, network_model):
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -879,7 +880,7 @@ def protocol_cnn_froc(detections_source, fname, network_model):
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
     
     ops = get_froc_on_folds_keras(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, network_model)
 
@@ -893,7 +894,7 @@ def protocol_cnn_froc(detections_source, fname, network_model):
 
 def hybrid(detections_source, fname, network_model, layer):
     print 'CNN features with sklearn classifier'
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -916,7 +917,7 @@ def hybrid(detections_source, fname, network_model, layer):
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
     
     ops = get_froc_on_folds_hybrid(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, feats, rois, skf, network_model, use_feats=False, layer=layer)
 
@@ -929,7 +930,7 @@ def hybrid(detections_source, fname, network_model, layer):
     return ops
 
 def compare_cnn_models(detections_source, fname, nw_names, nw_labels, exp_name):
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -951,7 +952,7 @@ def compare_cnn_models(detections_source, fname, nw_names, nw_labels, exp_name):
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     op_set = []
     op_set.append(hardie)
@@ -967,10 +968,9 @@ def compare_cnn_models(detections_source, fname, nw_names, nw_labels, exp_name):
     util.save_froc(op_set, exp_name, legend)
     return ops
 # Layer map
-layer_idx_by_network = {'LND-A':[14, 17], 'LND-B':[20, 23], 'LND-C':[26, 29]}
+layer_idx_by_network = {'LND-A':[14, 17], 'LND-B':[20, 23], 'LND-C':[26, 29], 'LND-A-5P':[22, 25]}
 def compare_cnn_sklearn_clfs(detections_source, fname, network):
-
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -992,7 +992,7 @@ def compare_cnn_sklearn_clfs(detections_source, fname, network):
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     op_set = []
     op_set.append(hardie)
@@ -1022,7 +1022,7 @@ def compare_cnn_sklearn_clfs(detections_source, fname, network):
     return ops
 
 def compare_cnn_hybrid(detections_source, fname, network):
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -1045,7 +1045,7 @@ def compare_cnn_hybrid(detections_source, fname, network):
 
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     op_set = []
     op_set.append(hardie)
@@ -1074,7 +1074,7 @@ def compare_cnn_hybrid(detections_source, fname, network):
     return ops
 
 def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
-    paths, locs, rads = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -1097,7 +1097,7 @@ def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
 
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(Y, n_folds=10, shuffle=True, random_state=113)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     legend = ['Hardie et al', '{} only'.format(network)]
     op_set = []
@@ -1142,6 +1142,8 @@ if __name__=="__main__":
     parser.add_argument('-a', '--augment', help='Augmentation configurations: bt, zcabt, xbt', default='bt')
 
     parser.add_argument('--cmp-cnn', help='Compare all LND-X models.', action='store_true')
+    parser.add_argument('--cmp-cnn-pre', help='Compare preprocessing method on LND-A-5P.', action='store_true')
+    parser.add_argument('--cmp-cnn-reg', help='Compare regularization methods on LND-A-5P.', action='store_true')
     parser.add_argument('--cmp-cnn-mp', help='Compare # of pooling stages with LND-A model', action='store_true')
     parser.add_argument('--cmp-cnn-nfm', help='Compare # of feature maps with LND-A-5P model', action='store_true')
     parser.add_argument('--cmp-cnn-dp', help='Compare dropout percent arrangements on LND-A-5P model', action='store_true')
@@ -1174,6 +1176,16 @@ if __name__=="__main__":
         networks = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P-C2', 'LND-A-ALLCNN-5P', 'LND-C-5P']
         network_labels = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P, 2x2 conv on top', 'ALLCNN-A, 5 maxpool', 'LND-C, 5 maxpool']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, networks, 'data/models')
+
+    elif args.cmp_cnn_pre:
+        networks = ['LND-A-5P', 'LND-A-5P-FWC', 'LND-A-5P-RS-11', 'LND-A-5P-ZCA']
+        network_labels = ['LND-A-5P', 'LND-A-5P, feat. centering.', 'LND-A-5P, feat. rescaling [-1, 1]', 'LND-A-5P, ZCA']
+        compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/pre')
+
+    elif args.cmp_cnn_reg:
+        networks = ['LND-A-5P', 'LND-A-5P-L2']
+        network_labels = ['LND-A-5P', 'LND-A-5P, L2 regularization.']
+        compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/reg')
 
     elif args.cmp_cnn_mp:
         networks = ['LND-A-3P', 'LND-A-4P', 'LND-A-5P']

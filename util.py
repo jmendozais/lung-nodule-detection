@@ -209,7 +209,7 @@ def save_froc(op_set, name, legend=None, unique=False, with_std=False):
         ops = np.array(op_set[i]).T
         if with_std and i > 0:
             y_lower = ops[1] - ops[2]
-            plt.errorbar(ops[0], ops[1], fmt=line_format[i%28], yerr=[y_lower, 2 * ops[2]], marker='x', markersize=3)
+            plt.errorbar(ops[0], ops[1], fmt=line_format[i%28], yerr=ops[2], marker='x', markersize=3)
         else:
             plt.plot(ops[0], ops[1], line_format[i%28], marker='x', markersize=3)
 
@@ -253,7 +253,6 @@ def save_grid(scores, name, labels, ranges, title):
 
 def save_weights(weights, name):
     weights = np.swapaxes(weights, 0, 1)
-    print weights.shape
     mean1 = np.mean(weights[0], axis=0)
     std1 = np.std(weights[0], axis=0)
     mean2 = np.mean(weights[1], axis=0)
@@ -296,3 +295,35 @@ def save_loss(history, name):
     plt.legend(loc = 1)
     plt.savefig('{}.jpg'.format(name))
     plt.clf()
+
+def save_acc(history, name):
+    train_acc = history['acc']    
+    test_acc = history['val_acc'] 
+
+    tex = np.linspace(1, len(test_acc), len(test_acc))
+    plt.plot(tex, train_acc, label = 'train acc')
+    plt.plot(tex, test_acc, label = 'test acc')
+    plt.legend(loc = 2)
+
+    #plt.twinx()
+    plt.grid()
+    plt.ylim([0., 1.])
+    plt.legend(loc = 4)
+    plt.savefig('{}.jpg'.format(name))
+    plt.clf()
+
+def save_loss_acc(history, name):
+    save_loss(history, name + '_loss')
+    save_acc(history, name + '_acc')
+
+if __name__ == '__main__':
+    import jsrt
+    from sklearn.cross_validation import StratifiedKFold
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+
+    for tr, te in folds:
+        print 'tr'
+        print subs[tr]
+        print 'te'
+        print subs[te]
