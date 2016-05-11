@@ -277,6 +277,21 @@ def average_froc(frocs, fppi_range):
     av_froc = np.array(av_froc).T
 
     return av_froc
+
+def sublety_stratified_kfold(y, sublety):
+    nidx = np.arange(len(y))[y == 0]
+    pidx = np.arange(len(y))[y == 1]
+    pfolds = StratifiedKFold(sublety[pidx], n_folds=10, shuffle=True, random_state=113)
+    nfolds = KFold(y, n_folds=10, shuffle=True, random_state=113)
+    pfolds = [x for x in pfolds]
+    nfolds = [x for x in nfolds]
+    folds = []
+    for i in range(len(pfolds)):
+        tr = np.concatenate(pfolds[i][0], nfolds[i][0])
+        te = np.concatenate(pfolds[i][1], nfolds[i][1])
+        folds.append((tr, te))
+
+    return folds
     
 if __name__ == "__main__":
     real_path = sys.argv[1]

@@ -155,6 +155,7 @@ def jsrt(set=None):
   npaths = []
   nloc = []
   rads = []
+  subs = []
   for i in range(len(paths)):
     count = 1 if siz[i][0] != -1 else 0
     if set == 'jsrt140':
@@ -169,11 +170,13 @@ def jsrt(set=None):
     if count > 0:
       nloc.append([int(round(loc[i][1] * xfactor)), int(round(loc[i][0] * yfactor))])
       rads.append(int(round(xfactor * max(siz[i][1], siz[i][0]))))
+      subs.append(sub[i])
     else:
       nloc.append([-1, -1])
       rads.append(-1)
+      subs.append(-1)
   
-  return np.array(npaths), np.array(nloc), np.array(rads)
+  return np.array(npaths), np.array(nloc), np.array(rads), np.array(subs)
 
 def left_lung(set=None):
   f = open(LMPATH)

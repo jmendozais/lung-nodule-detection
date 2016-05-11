@@ -7,7 +7,7 @@ import cv2
 from scipy.stats import skew, kurtosis
 import skimage.feature as feature
 import mahotas
-import overfeat
+#import overfeat
 import matplotlib.pyplot as plt
 
 
