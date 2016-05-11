@@ -22,6 +22,8 @@ from sklearn import preprocessing
 from sklearn.metrics import auc
 import matplotlib.pyplot as plt
 
+#from keras.utils import visualize_util
+
 from data import DataProvider
 import model
 import eval
@@ -118,6 +120,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
                                             model=network_model)
         if fold == 1:
             model.layer_utils.model_summary(_model.keras_model.network)         
+            #visualize_util.plot(_model.keras_model.network, to_file='data/{}.png'.format(network_model))
 
         blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois[te_idx], pred_blobs[te_idx])
 
@@ -209,6 +212,7 @@ def froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs,
         frocs.append(froc)
         fold += 1
 
+    print frocs[0].shape
     av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
     return av_froc
 
@@ -234,7 +238,17 @@ def classify_cnn(_model, fname, network_model):
     Y = (140 > np.array(range(size))).astype(np.uint8)
     folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
-    return froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model)
+    ops = froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model)
+
+    legend = []
+    legend.append('Hardie et al')
+    legend.append(network_model)
+
+    util.save_froc([hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+
+    return ops
+
+
 
 def get_froc_on_folds_hybrid(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, rois, folds, network_model, use_feats=False, layer=-1):
     fold = 1
@@ -352,7 +366,19 @@ def protocol_froc_1(_model, fname):
     paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
+    '''
+    paths, locs, rads, subs = jsrt.jsrt(set=None)
+    print "Lens"
+    print len(paths)
+    left_masks = jsrt.left_lung(set=None)
+    print len(left_masks)
+    right_masks = jsrt.right_lung(set=None)
+    print len(right_masks)
+    '''
+
     size = len(paths)
+
+
 
     # blobs detection
     blobs = []
@@ -377,7 +403,6 @@ def protocol_froc_2(_model, fname, save_fw=False):
     paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
-
     size = len(paths)
 
     blobs = []
@@ -858,6 +883,11 @@ Deep learning protocols
 '''
 
 def protocol_cnn_froc(detections_source, fname, network_model):
+    '''
+    paths, locs, rads, subs = jsrt.jsrt(set=None)
+    left_masks = jsrt.left_lung(set=None)
+    right_masks = jsrt.right_lung(set=None)
+    '''
     paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
@@ -968,7 +998,7 @@ def compare_cnn_models(detections_source, fname, nw_names, nw_labels, exp_name):
     util.save_froc(op_set, exp_name, legend)
     return ops
 # Layer map
-layer_idx_by_network = {'LND-A':[14, 17], 'LND-B':[20, 23], 'LND-C':[26, 29], 'LND-A-5P':[22, 25]}
+layer_idx_by_network = {'LND-A':[14, 17], 'LND-B':[20, 23], 'LND-C':[26, 29], 'LND-A-5P':[22, 25], 'LND-A-5P-ZMUV':[22, 25]}
 def compare_cnn_sklearn_clfs(detections_source, fname, network):
     paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
@@ -1178,8 +1208,8 @@ if __name__=="__main__":
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, networks, 'data/models')
 
     elif args.cmp_cnn_pre:
-        networks = ['LND-A-5P', 'LND-A-5P-FWC', 'LND-A-5P-RS-11', 'LND-A-5P-ZCA']
-        network_labels = ['LND-A-5P', 'LND-A-5P, feat. centering.', 'LND-A-5P, feat. rescaling [-1, 1]', 'LND-A-5P, ZCA']
+        networks = ['LND-A-5P', 'LND-A-5P-GCN', 'LND-A-5P-ZCA', 'LND-A-5P-ZMUV']
+        network_labels = ['LND-A-5P', 'LND-A-5P with GCN', 'LND-A-5P with ZCA', 'LND-A-5P with ZMUV']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/pre')
 
     elif args.cmp_cnn_reg:
@@ -1247,7 +1277,7 @@ if __name__=="__main__":
         if args.fts:
             extract_features_cnn(_model, extractor_key, args.cnn, args.layer)
         # perform classification stage convnet only.
-        if args.clf:
+        elif args.clf:
             classify_cnn(_model, extractor_key, args.cnn)
         # perform detection pipeline with convnet model only
         else:

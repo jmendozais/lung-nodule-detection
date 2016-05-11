@@ -289,6 +289,9 @@ def save_loss(history, name):
     plt.plot(tex, test_loss, label = 'test loss')
     plt.legend(loc = 2)
 
+    plt.ylabel('Loss')
+    plt.xlabel('Epochs')
+
     #plt.twinx()
     plt.grid()
     plt.ylim([0, 0.8])
@@ -304,6 +307,9 @@ def save_acc(history, name):
     plt.plot(tex, train_acc, label = 'train acc')
     plt.plot(tex, test_acc, label = 'test acc')
     plt.legend(loc = 2)
+
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epochs')
 
     #plt.twinx()
     plt.grid()

@@ -31,7 +31,8 @@ class Preprocessor:
         zca_whitening=False,
         zca_fudge=10e-7,
         data_rescaling=False,
-        data_rescaling_range=[0, 1]
+        data_rescaling_range=[0, 1],
+        zmuv=False
         ):
 
         self.samplewise_center = samplewise_center
@@ -44,6 +45,7 @@ class Preprocessor:
         self.zca_fudge = zca_fudge
         self.data_rescaling = data_rescaling
         self.data_rescaling_range = data_rescaling_range
+        self.zmuv=zmuv
 
     def fit_transform(self, X, Y):
         X = np.copy(X)
@@ -89,6 +91,12 @@ class Preprocessor:
             self.dmax = mp.amax(X)
             X = (X - self.dmin) / (self.dmax - self.dmin)
             X = X * (self.data_rescaling_range[1] + self.data_rescaling_range[0]) + self.data_rescaling_range[0]
+
+        if self.zmuv:
+            self.zmuv_mean = X.mean()
+            self.zmuv_std = X.std()
+            X -= self.zmuv_mean
+            X /= self.zmuv_std + util.EPS
             
         return X
             
@@ -123,6 +131,10 @@ class Preprocessor:
         if self.data_rescaling:
             X = (X - self.dmin) / (self.dmax - self.dmin)
             X = X * (self.data_rescaling_range[1] + self.data_rescaling_range[0]) + self.data_rescaling_range[0]
+
+        if self.zmuv:
+            X -= self.zmuv_mean
+            X /= self.zmuv_std + util.EPS
             
         return X
 
@@ -262,7 +274,7 @@ class ImageDataGenerator:
                 aX[2*begin:2*begin + chunk] = negatives[begin:end]
                 ay[2*begin:2*begin + chunk] = np.full((chunk,) + l_neg.shape, dtype=l_neg.dtype, fill_value=l_neg)
             
-                b_idx = np.random.uniform(size=(chunk,))
+                b_idx = self.rng.uniform(size=(chunk,))
                 b_idx = np.floor(b_idx * positives.shape[0]).astype(np.int)
                 aX[2*begin + chunk:2*(begin + chunk)] = positives[b_idx]
                 ay[2*begin + chunk:2*(begin + chunk)] = np.full((end - begin,) + l_pos.shape, dtype=l_pos.dtype, fill_value=l_pos)
@@ -279,7 +291,7 @@ class ImageDataGenerator:
                     aX = np.append(aX, aXi, axis=0)
                     ayi = np.full((factor,) + y[i].shape, dtype=y[i].dtype, fill_value=y[i])
                     ay = np.append(ay, ayi, axis=0)
-            seed = random.randint(1, 10e6) 
+            seed = self.rng.randint(1, 10e6) 
             np.random.seed(seed) 
             np.random.shuffle(aX) 
             np.random.seed(seed)
@@ -291,6 +303,7 @@ class ImageDataGenerator:
         new_X = []
         for i in range(X.shape[0]):
             x = self.perturb(X[i].astype("float32"))
+
             '''
             # Check rois on two first batchs
             if i < 64:

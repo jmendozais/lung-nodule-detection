@@ -1,9 +1,11 @@
 from os import path
 
 import pickle
-import numpy as np
-import theano
 
+import numpy as np
+np.random.seed(1000000007) # for reproducibility
+
+import theano
 import keras
 from keras.models import Sequential
 from keras.models import model_from_json
@@ -14,10 +16,8 @@ from keras.optimizers import SGD, Adadelta, Adagrad
 from keras.utils import np_utils, generic_utils
 from keras.regularizers import WeightRegularizer
 from six.moves import range
-
 from augment import ImageDataGenerator, Preprocessor
 from sklearn.externals import joblib
-
 # Utils 
 
 def get_activations(model, layer, X_batch):
@@ -42,18 +42,26 @@ def convpool_block(model, depth=2, nb_filters=64, nb_conv=3, nb_pool=2, init='or
         else:
             model.add(Activation(activation))
     model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
+    return model
 
-def convpool_fs(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64),  init='orthogonal', batch_norm=False, activation='relu', regularizer=None):
+def convpool_fs(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64),  init='orthogonal', batch_norm=False, activation='relu', regularizer=None, dropout=0.25):
     assert nb_modules == len(nb_filters)
+    prevent_coadapt = dropout == 0.5
+    if prevent_coadapt:
+        print "prevent co-adaptation with dropout ..."
+        model.add(Dropout(0.2, input_shape=input_shape))
 
     for i in range(nb_modules):
         if i == 0:
-            convpool_block(model, module_depth, nb_filters[i], nb_conv=conv_size[i], input_shape=input_shape, init=init, activation=activation, regularizer=regularizer)
+            if prevent_coadapt:
+                convpool_block(model, module_depth, nb_filters[i], nb_conv=conv_size[i], init=init, activation=activation, regularizer=regularizer)
+            else:
+                convpool_block(model, module_depth, nb_filters[i], nb_conv=conv_size[i], input_shape=input_shape, init=init, activation=activation, regularizer=regularizer)
         else:
             convpool_block(model, module_depth, nb_filters[i], nb_conv=conv_size[i], activation=activation, regularizer=regularizer)
 
         if batch_norm is False:
-            model.add(Dropout(0.25))
+            model.add(Dropout(dropout))
 
     return model
 
@@ -201,13 +209,13 @@ class NetModel:
 
         # Preprocessor
         if path.isfile('{}_pre.pkl'.format(name)):
-            self.preprocessor = joblib.load('{}_preobj.pkl'.format(name))
+            self.preprocessor = joblib.load('{}_pre.pkl'.format(name))
         else:
             self.preprocessor = Preprocessor()
 
         # Generator
         if path.isfile('{}_gen.pkl'.format(name)):
-            self.generator = joblib.load('{}_genobj.pkl'.format(name))
+            self.generator = joblib.load('{}_gen.pkl'.format(name))
         else:
             self.generator = ImageDataGenerator()
 
@@ -274,6 +282,7 @@ Configurations
 '''
 
 default_augment_params = {'output_shape':(64, 64), 'ratio':1, 'batch_size':32, 'rotation_range':(-5, 5), 'translation_range':(-0.05, 0.05), 'flip':True, 'mode': 'balance_batch', 'zoom_range':(1.0, 1.2)}
+default_preproc_params = {'zmuv':True}
 
 def lnd_a(input_shape):
     network = standard_cnn(Sequential(), nb_modules=3, module_depth=1, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 128], input_shape=input_shape, init='orthogonal')
@@ -284,8 +293,14 @@ def lnd_a_5p(input_shape):
     mlp_softmax(network, nb_dense=2, dense_units=[512, 512], nb_classes=2, init='orthogonal', activation='relu')
     return network
 
-def lnd_a_5p_l2(input_shape):
-    regularizer = WeightRegularizer(l1=0., l2=0.0005) 
+def lnd_a_5p_do(input_shape):
+    network = convpool_fs(Sequential(), nb_modules=5, module_depth=1, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], input_shape=input_shape, init='orthogonal', activation='relu', dropout=0.5)
+    network.add(Flatten())
+    mlp_softmax(network, nb_dense=2, dense_units=[512, 512], nb_classes=2, init='orthogonal', activation='relu')
+    return network
+
+def lnd_a_5p_reg(input_shape, l1=0., l2=0.):
+    regularizer = WeightRegularizer(l1=l1, l2=l2) 
     network = convpool_fs(Sequential(), nb_modules=5, module_depth=1, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], input_shape=input_shape, init='orthogonal', activation='relu', regularizer=regularizer)
     network.add(Flatten())
     mlp_softmax(network, nb_dense=2, dense_units=[512, 512], nb_classes=2, init='orthogonal', activation='relu', regularizer=regularizer)
@@ -295,6 +310,18 @@ def lnd_a_6p(input_shape):
     network = convpool_fs(Sequential(), nb_modules=6, module_depth=1, nb_filters=[32, 64, 96, 128, 160, 192], conv_size=[3, 3, 3, 3, 3,3], input_shape=input_shape, init='orthogonal', activation='leaky_relu')
     network.add(Flatten())
     mlp_softmax(network, nb_dense=2, dense_units=[512, 512], nb_classes=2, init='orthogonal', activation='leaky_relu')
+    return network
+
+def lnd_a_5p_1rc7(input_shape):
+    init = 'orthogonal'
+    activation = 'relu'
+
+    network = Sequential()
+    convpool_block(network, 3, 32, nb_conv=3, input_shape=input_shape, init=init, activation=activation)
+    network.add(Dropout(0.25))
+    convpool_fs(network, nb_modules=4, module_depth=1, nb_filters=[64, 96, 128, 160], conv_size=[3, 3, 3, 3], init=init, activation=activation)
+    network.add(Flatten())
+    mlp_softmax(network, nb_dense=2, dense_units=[512, 512], nb_classes=2, init=init, activation=activation)
     return network
 
 def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1'):
@@ -315,6 +342,32 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1'):
         network = lnd_a_5p(input_shape)
         schedule=[25, 35, 40]
         train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        net_model = NetModel(network, train_params, default_augment_params)
+
+    elif model == 'LND-A-5P-1RC7':   
+        network = lnd_a_5p_1rc7(input_shape)
+        schedule=[25, 35, 40]
+        train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
+
+    elif model == 'LND-A-5P-DO':   
+        network = lnd_a_5p_do(input_shape)
+        schedule=[25, 35, 40]
+        train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.003, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
+
+
+
+    elif model == 'LND-A-5P-FIX':   
+        network = lnd_a_5p(input_shape)
+        schedule=[10, 50, 55]
+        train_params = {'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
+
+    elif model == 'LND-A-5P-LP':   
+        network = lnd_a_5p_reg(input_shape, l2=0.0005)
+        schedule=[45, 55, 60]
+        train_params = {'schedule':schedule, 'nb_epoch':65, 'batch_size':64, 'lr':0.0001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params)
 
     elif model == 'LND-A-5P-FWC':   
@@ -338,8 +391,29 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1'):
         preproc_params = {'zca_whitening':True}
         net_model = NetModel(network, train_params, default_augment_params, preproc_params)
 
+    elif model == 'LND-A-5P-ZMUV':   
+        network = lnd_a_5p(input_shape)
+        schedule=[25, 35, 40]
+        train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        preproc_params = {'zmuv':True}
+        net_model = NetModel(network, train_params, default_augment_params, preproc_params)
+
+    elif model == 'NORM-LND-A-5P-ZMUV':   
+        network = lnd_a_5p(input_shape)
+        schedule=[20, 35, 40]
+        train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        preproc_params = {'zmuv':True, 'samplewise_std_normalization':True}
+        net_model = NetModel(network, train_params, default_augment_params, preproc_params)
+
+    elif model == 'LND-A-5P-GCN':   
+        network = lnd_a_5p(input_shape)
+        schedule=[25, 35, 40]
+        train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        preproc_params = {'samplewise_std_normalization':True}
+        net_model = NetModel(network, train_params, default_augment_params, preproc_params)
+
     elif model == 'LND-A-5P-L2':   
-        network = lnd_a_5p_l2(input_shape)
+        network = lnd_a_5p_reg(input_shape, l2=0.0005)
         schedule=[35, 45, 50]
         train_params = {'schedule':schedule, 'nb_epoch':55, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         preproc_params = {}
@@ -351,8 +425,15 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1'):
         train_params = {'schedule':schedule, 'nb_epoch':55, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         augment_params = default_augment_params
         augment_params['output_shape'] = (128, 128)
-        preproc_params = {}
-        net_model = NetModel(network, train_params, augment_params, preproc_params)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == 'LND-A-6P-ALLJSRT':   
+        network = lnd_a_6p(input_shape)
+        schedule=[35, 45, 50]
+        train_params = {'schedule':schedule, 'nb_epoch':55, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (128, 128)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
 
     else:
         print "Model config not found."
