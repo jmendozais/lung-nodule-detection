@@ -25,37 +25,20 @@ import matplotlib.pyplot as plt
 #from keras.utils import visualize_util
 
 from data import DataProvider
+
+import baseline
 import model
 import eval
 import util
+import jsrt
+
 import sys
 import argparse
-
-import jsrt
 
 # Globals
 
 step = 10
 fppi_range = np.linspace(0.0, 10.0, 101)
-
-# Baselines
-hardie = np.array([[0.0, 0.0], [0.1, 0.2], [0.2, 0.3],[0.3, 0.38], [0.4, 0.415], [0.5, 0.46], [0.6, 0.48], [0.7, 0.51], [0.9, 0.53], [1.0, 0.57], [1.5, 0.67], [2.0, 0.72], [2.5, 0.75],[3.0, 0.78], [4.0, 0.79], [5.0, 0.81], [6.0, 0.82], [7.0, 0.85], [8.0, 0.86], [9.0, 0.895], [10.0, 0.93]])
-fun = interp1d(hardie.T[0], hardie.T[1], kind='linear', fill_value=0, bounds_error=False)
-hardie = np.array([fppi_range, fppi_range.copy()])
-hardie[1] = fun(hardie[0])
-hardie = hardie.T
-
-horvath = np.array([[0.0, 0.0], [0.5, 0.49], [1.0, 0.63], [1.5, 0.68], [2.0, 0.72], [2.5, 0.75], [3.0, 0.78], [3.5, 0.79], [4.0, 0.81], [10.0, 0.81]])
-fun = interp1d(horvath.T[0], horvath.T[1], kind='linear', fill_value=0, bounds_error=False)
-horvath = np.array([fppi_range, fppi_range.copy()])
-horvath[1] = fun(horvath[0])
-horvath = horvath.T
-
-vde = np.array([[0.0, 0.0], [0.5, 0.56], [1.0, 0.66], [1.5, 0.68], [2.0, 0.78], [2.5, 0.79], [3.0, 0.81], [3.5, 0.84], [4.0, 0.85], [5.0, 0.86], [10.0, 0.86]])
-fun = interp1d(vde.T[0], vde.T[1], kind='linear', fill_value=0, bounds_error=False)
-vde = np.array([fppi_range, fppi_range.copy()])
-vde[1] = fun(vde[0])
-vde = vde.T
 
 '''
 returns: Free Receiving Operating Curve obtained given a fold set
@@ -1103,6 +1086,48 @@ def compare_cnn_hybrid(detections_source, fname, network):
 
     return ops
 
+def compare_cnn_sota(detections_source, fname, nw_names, nw_labels, exp_name):
+    '''
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    left_masks = jsrt.left_lung(set='jsrt140')
+    right_masks = jsrt.right_lung(set='jsrt140')
+    '''
+    paths, locs, rads, subs = jsrt.jsrt(set=None)
+    left_masks = jsrt.left_lung(set=None)
+    right_masks = jsrt.right_lung(set=None)
+    
+    size = len(paths)
+
+    blobs = []
+    for i in range(size):
+        blobs.append([locs[i][0], locs[i][1], rads[i]])
+    blobs = np.array(blobs)
+
+    print "Loading dataset ..."
+    data = DataProvider(paths, left_masks, right_masks)
+    pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+    rois = detections_source.create_rois(data, pred_blobs)
+
+    av_cpi = 0
+    for tmp in pred_blobs:
+        av_cpi += len(tmp)
+    print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
+
+    Y = (140 > np.array(range(size))).astype(np.uint8)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+
+    op_set = []
+    legend = []
+
+    for i in range(len(nw_names)):
+        ops = froc_classify_cnn(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, nw_names[i])
+        op_set.append(ops)
+        legend.append(nw_labels[i])
+
+    util.save_froc_mixed(op_set_froc, legend_froc, baseline.sota_ops, baseline.sota_legend, exp_name)
+    return ops
+
+
 def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
     paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
@@ -1183,6 +1208,7 @@ if __name__=="__main__":
     parser.add_argument('--cmp-cnn-hybrid', help='Compare best cnn-clf with handcrafted-features(-d).', action='store_true')
     parser.add_argument('--hyp-cnn-lsvm-hybrid', help='Compare the performance of hybrid model ( cnn feats + hrg16 ) with linear svm clf varying the C parameter.', action='store_true')
     parser.add_argument('--roi-size', help='Layer index used to extract feature from cnn model.', default=64, type=int)
+    parser.add_argument('--cmp-cnn-sota', help='Compare all LND-X models.', action='store_true')
 
     
     args = parser.parse_args()

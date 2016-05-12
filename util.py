@@ -196,6 +196,41 @@ def show_blob(path, img, blob):
 
     imshow(path, img_roi)
 
+def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, unique=False, with_std=False):
+    ax = plt.gca()
+    ax.grid(True)
+
+    line_format = ['b.-', 'g.-', 'r.-', 'c.-', 'm.-', 'y.-', 'k.-', 
+                                 'b.--', 'g.--', 'r.--', 'c.--', 'm.--', 'y.--', 'k.--',
+                                 'b.-.', 'g.-.', 'r.-.', 'c.-.', 'm.-.', 'y.-.', 'k.-.',
+                                 'b.:', 'g.:', 'r.:', 'c.:', 'm.:', 'y.:', 'k.:']
+
+    idx = 0
+    legend = legend 
+    for i in range(len(froc_ops)):
+        ops = np.array(froc_ops[i]).T
+        plt.plot(ops[0], ops[1], line_format[idx%28], marker='x', markersize=3)
+        idx += 1
+
+    for i in range(len(scatter_ops)):
+        ops = scatter_ops.T
+        plt.plot(ops[0], ops[1], 'line_format[idx%28][0]{}'.format(s))
+        idx += 1
+
+    plt.ylim([0, 1.])
+    plt.ylabel('Sensitivity')
+    plt.xlabel('Average FPs per Image')
+
+    if legend != None:
+        assert len(legend) == len(op_set)
+        plt.legend(legend, loc=4, fontsize='small')
+
+    if not unique:
+        name='{}_{}'.format(name, time.clock())
+
+    plt.savefig('{}_froc.jpg'.format(name))
+    plt.clf()
+
 def save_froc(op_set, name, legend=None, unique=False, with_std=False):
     ax = plt.gca()
     ax.grid(True)
@@ -216,7 +251,7 @@ def save_froc(op_set, name, legend=None, unique=False, with_std=False):
     plt.ylim([0, 1.])
 
     plt.ylabel('Sensitivity')
-    plt.xlabel('Average FPPI')
+    plt.xlabel('Average FPs per Image')
 
     if legend != None:
         assert len(legend) == len(op_set)
