@@ -287,6 +287,14 @@ default_preproc_params = {'zmuv':True}
 def lnd_a(input_shape):
     network = standard_cnn(Sequential(), nb_modules=3, module_depth=1, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 128], input_shape=input_shape, init='orthogonal')
 
+def lnd_a_3p(input_shape):
+    network = standard_cnn(Sequential(), nb_modules=3, module_depth=1, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal')
+    return network
+
+def lnd_a_4p(input_shape):
+    network = standard_cnn(Sequential(), nb_modules=4, module_depth=1, nb_filters=[32, 64, 96, 128], conv_size=[3, 3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal')
+    return network
+
 def lnd_a_5p(input_shape):
     network = convpool_fs(Sequential(), nb_modules=5, module_depth=1, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], input_shape=input_shape, init='orthogonal', activation='relu')
     network.add(Flatten())
@@ -337,6 +345,24 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1'):
         schedule=[20, 30, 35]
         train_params = {'schedule':schedule, 'nb_epoch':3, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params)
+
+    elif model == 'LND-A-3P':
+        network = lnd_a_3p(input_shape)
+        schedule=[20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params)
+
+    elif model == 'LND-A-4P':
+        network = lnd_a_4p(input_shape)
+        schedule=[20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params)
 
     elif model == 'LND-A-5P':   
         network = lnd_a_5p(input_shape)

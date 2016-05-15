@@ -1,1 +1,8 @@
 data/
+*.npy
+*.pkl
+*.json
+*.pyc
+*.h5
+.DS_Store
+._.DS_Store

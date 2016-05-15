@@ -262,7 +262,6 @@ def fppi_sensitivity(real, pred, data=None):
         froc.append([np.mean(fppi), tp / p])
         return froc[-1]
     
-            
 def average_froc(frocs, fppi_range):
     av_sen = []
 

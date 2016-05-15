@@ -115,7 +115,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
 
         legend_ = ['Fold {}'.format(i + 1) for i in range(len(frocs))]
         frocs_.append(eval.average_froc([froc], np.linspace(0.0, 10.0, 101)))
-        util.save_froc(frocs_, 'data/{}_froc_kfold'.format(network_model), legend_, unique=True)
+        util.save_froc(frocs_, 'data/{}_froc_kfold'.format(network_model), legend_)
 
         fold += 1
 
@@ -225,13 +225,11 @@ def classify_cnn(_model, fname, network_model):
 
     legend = []
     legend.append('Hardie et al')
-    legend.append(network_model)
+    legend.append('CNN')
 
-    util.save_froc([hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+    util.save_froc([ops, baseline.hardie], 'data/{}-FROC'.format(network_model), legend, with_std=False)
 
     return ops
-
-
 
 def get_froc_on_folds_hybrid(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, rois, folds, network_model, use_feats=False, layer=-1):
     fold = 1
@@ -417,7 +415,7 @@ def protocol_froc_2(_model, fname, save_fw=False):
     legend.append('Hardie et al')
     legend.append(_model.name)
 
-    util.save_froc([hardie, ops], '{}'.format(_model.name), legend, with_std=True)
+    util.save_froc([baseline.hardie, ops], '{}'.format(_model.name), legend, with_std=True)
 
     return ops
 
@@ -503,7 +501,7 @@ def protocol_wmci_froc(_model, fname):
     skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     op_set = []
-    op_set.append(hardie)
+    op_set.append(baseline.hardie)
     detect_range = np.arange(0.3, 0.8, 0.1)
     for detect_thold in detect_range:
         selected_feats = []
@@ -522,7 +520,7 @@ def protocol_wmci_froc(_model, fname):
 
     op_set = np.array(op_set)
     legend = []
-    legend.append("hardie")
+    legend.append("baseline.hardie")
     for thold in detect_range:
         legend.append('wmci {}'.format(thold))
 
@@ -545,8 +543,8 @@ def protocol_generic_froc(_model, fnames, components, legend, kind='descriptor',
     skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
     
     op_set = []
-    op_set.append(hardie)
-    legend.insert(0, "hardie")
+    op_set.append(baseline.hardie)
+    legend.insert(0, "baseline.hardie")
 
     for i in range(len(components)):
         print "Loading blobs & features ..."
@@ -597,8 +595,8 @@ def protocol_selector_froc(_model, fname, selectors, legend):
     
     op_set = []
     
-    op_set.append(hardie)
-    legend.insert(0, "hardie")
+    op_set.append(baseline.hardie)
+    legend.insert(0, "baseline.hardie")
 
     for i in range(len(selectors)):
         print legend[i+1]
@@ -638,8 +636,8 @@ def protocol_classifier_froc(_model, fname, classifiers, legend):
     
     op_set = []
 
-    op_set.append(hardie)
-    legend.insert(0, "hardie")
+    op_set.append(baseline.hardie)
+    legend.insert(0, "baseline.hardie")
 
     for i in range(len(classifiers)):
         print legend[i+1]
@@ -899,11 +897,53 @@ def protocol_cnn_froc(detections_source, fname, network_model):
 
     legend = []
     legend.append('Hardie et al')
-    legend.append('current')
+    legend.append(network_model)
 
-    util.save_froc([hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
 
     return ops
+
+def protocol_cnn_froc_transforms(detections_source, fname, network_model):
+    '''
+    paths, locs, rads, subs = jsrt.jsrt(set=None)
+    left_masks = jsrt.left_lung(set=None)
+    right_masks = jsrt.right_lung(set=None)
+    '''
+    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    left_masks = jsrt.left_lung(set='jsrt140')
+    right_masks = jsrt.right_lung(set='jsrt140')
+
+    size = len(paths)
+
+    blobs = []
+    for i in range(size):
+        blobs.append([locs[i][0], locs[i][1], rads[i]])
+    blobs = np.array(blobs)
+
+    print "Loading dataset ..."
+    data = DataProvider(paths, left_masks, right_masks)
+    pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+    rois = detections_source.create_rois(data, pred_blobs)
+
+    av_cpi = 0
+    for tmp in pred_blobs:
+        av_cpi += len(tmp)
+    print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
+
+    Y = (140 > np.array(range(size))).astype(np.uint8)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+    
+    ops = get_froc_on_folds_keras(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, network_model)
+
+    legend = []
+    legend.append('Hardie et al')
+    legend.append(network_model)
+
+    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+
+    return ops
+
+
 
 def hybrid(detections_source, fname, network_model, layer):
     print 'CNN features with sklearn classifier'
@@ -938,7 +978,7 @@ def hybrid(detections_source, fname, network_model, layer):
     legend.append('Hardie et al')
     legend.append('current')
 
-    util.save_froc([hardie, ops], '{}_hybrid'.format(_model.name), legend)
+    util.save_froc([baseline.hardie, ops], '{}_hybrid'.format(_model.name), legend)
 
     return ops
 
@@ -968,7 +1008,7 @@ def compare_cnn_models(detections_source, fname, nw_names, nw_labels, exp_name):
     skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     op_set = []
-    op_set.append(hardie)
+    op_set.append(baseline.hardie)
 
     legend = []
     legend.append('Hardie et al')
@@ -1008,7 +1048,7 @@ def compare_cnn_sklearn_clfs(detections_source, fname, network):
     skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     op_set = []
-    op_set.append(hardie)
+    op_set.append(baseline.hardie)
 
 
     classifiers = [svm.SVC(kernel='linear', probability=True), svm.SVC(kernel='linear', probability=True), svm.SVC(kernel='rbf', probability=True), svm.SVC(kernel='rbf', probability=True), lda.LDA(), lda.LDA()]
@@ -1061,7 +1101,7 @@ def compare_cnn_hybrid(detections_source, fname, network):
     skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     op_set = []
-    op_set.append(hardie)
+    op_set.append(baseline.hardie)
 
     classifiers = [svm.SVC(kernel='linear', probability=True), svm.SVC(kernel='rbf', probability=True), lda.LDA()]
     layers = layer_idx_by_network[network]
@@ -1087,14 +1127,15 @@ def compare_cnn_hybrid(detections_source, fname, network):
     return ops
 
 def compare_cnn_sota(detections_source, fname, nw_names, nw_labels, exp_name):
-    '''
     paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
+
     '''
     paths, locs, rads, subs = jsrt.jsrt(set=None)
     left_masks = jsrt.left_lung(set=None)
     right_masks = jsrt.right_lung(set=None)
+    '''
     
     size = len(paths)
 
@@ -1124,8 +1165,8 @@ def compare_cnn_sota(detections_source, fname, nw_names, nw_labels, exp_name):
         op_set.append(ops)
         legend.append(nw_labels[i])
 
-    util.save_froc_mixed(op_set_froc, legend_froc, baseline.sota_ops, baseline.sota_legend, exp_name)
-    return ops
+    util.save_froc_mixed(op_set, legend, baseline.sota_ops, baseline.sota_authors, exp_name)
+    return None
 
 
 def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
@@ -1156,7 +1197,7 @@ def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
 
     legend = ['Hardie et al', '{} only'.format(network)]
     op_set = []
-    op_set.append(hardie)
+    op_set.append(baseline.hardie)
     ops = froc_classify_cnn(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, network)
     op_set.append(ops)
 
@@ -1177,7 +1218,7 @@ if __name__=="__main__":
     parser.add_argument('-p', '--preprocessor', help='Options: heq, nlm, cs.', default='none')
     parser.add_argument('-b', '--blob_detector', help='Options: wmci(default), TODO hog, log.', default='wmci')
     parser.add_argument('--eval-wmci', help='Measure sensitivity and fppi without classification', action='store_true')
-    parser.add_argument('-d', '--descriptor', help='Options: hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='hardie')
+    parser.add_argument('-d', '--descriptor', help='Options: baseline.hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='baseline.hardie')
     parser.add_argument('-c', '--classifier', help='Options: lda(default), svm.', default='lda')
     parser.add_argument('-r', '--reductor', help='Feature reductor or selector. Options: none(default), pca, lda, rfe, rlr.', default='none')
     
@@ -1190,6 +1231,8 @@ if __name__=="__main__":
     parser.add_argument('--hybrid', help='Evaluate hybrid approach: convnet + descriptor.', action='store_true')
     parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
     parser.add_argument('--fw', help='Plot the importance of individual features ( selected clf coef vs anova ) ', action='store_true')
+    parser.add_argument('-m', '--multi-channel', help='', action='store_true')
+
 
     # Deep learning evals 
 
@@ -1223,7 +1266,7 @@ if __name__=="__main__":
     #TODO
     _model.augment = args.augment
 
-    # default: clf -d hardie
+    # default: clf -d baseline.hardie
          
     if args.eval_wmci:
         eval_wmci_and_postprocessing(_model, extractor_key)
@@ -1231,7 +1274,14 @@ if __name__=="__main__":
     elif args.cmp_cnn:
         networks = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P-C2', 'LND-A-ALLCNN-5P', 'LND-C-5P']
         network_labels = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P, 2x2 conv on top', 'ALLCNN-A, 5 maxpool', 'LND-C, 5 maxpool']
-        compare_cnn_models(_model, '{}'.format(extractor_key), networks, networks, 'data/models')
+        compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/models')
+
+    elif args.cmp_cnn_sota:
+        #networks = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P-C2', 'LND-A-ALLCNN-5P', 'LND-C-5P']
+        #network_labels = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P, 2x2 conv on top', 'ALLCNN-A, 5 maxpool', 'LND-C, 5 maxpool']
+        networks = ['LND-A-6P']
+        network_labels = ['CNN']
+        compare_cnn_sota(_model, '{}'.format(extractor_key), networks, network_labels, 'data/models')
 
     elif args.cmp_cnn_pre:
         networks = ['LND-A-5P', 'LND-A-5P-GCN', 'LND-A-5P-ZCA', 'LND-A-5P-ZMUV']

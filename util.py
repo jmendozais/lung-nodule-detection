@@ -4,8 +4,16 @@ import numpy as np
 import numpy.linalg as la
 from skimage import draw
 import cv2
+import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
+
+font = {'family' : 'normal',
+#        'weight' : 'bold',
+        'size'   : 15}
+
+matplotlib.rc('font', **font)
+
 #import seaborn as sns
 
 plt.switch_backend('agg')
@@ -196,7 +204,7 @@ def show_blob(path, img, blob):
 
     imshow(path, img_roi)
 
-def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, unique=False, with_std=False):
+def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, unique=True, with_std=False):
     ax = plt.gca()
     ax.grid(True)
 
@@ -206,32 +214,36 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
                                  'b.:', 'g.:', 'r.:', 'c.:', 'm.:', 'y.:', 'k.:']
 
     idx = 0
-    legend = legend 
+    legend = []
+
+    markers = ['o', 'v', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', '^', '<', '>']
+    for i in range(len(scatter_ops)):
+        ops = scatter_ops[i].T
+        print ops[0], ops[1]
+        plt.plot(ops[0], ops[1], '{}{}'.format(line_format[idx%28][0], markers[idx%13]), markersize=5, markeredgewidth=1)
+        idx += 1
+        legend.append(scatter_legend[i])
+
     for i in range(len(froc_ops)):
         ops = np.array(froc_ops[i]).T
-        plt.plot(ops[0], ops[1], line_format[idx%28], marker='x', markersize=3)
+        plt.plot(ops[0], ops[1] * 0.9091, line_format[i%28], marker='x', markersize=3)
         idx += 1
+        legend.append(froc_legend[i])
 
-    for i in range(len(scatter_ops)):
-        ops = scatter_ops.T
-        plt.plot(ops[0], ops[1], 'line_format[idx%28][0]{}'.format(s))
-        idx += 1
-
-    plt.ylim([0, 1.])
+    x_ticks = np.linspace(0.0, 10.0, 11)
+    y_ticks = np.linspace(0.0, 1.0, 11)
+    plt.xticks(x_ticks, x_ticks)
+    plt.yticks(y_ticks, y_ticks)
+    plt.xlim([0, 10.0])
+    plt.ylim([0, 1.00])
     plt.ylabel('Sensitivity')
     plt.xlabel('Average FPs per Image')
+    plt.legend(legend, loc=4, fontsize='small', numpoints=1)
 
-    if legend != None:
-        assert len(legend) == len(op_set)
-        plt.legend(legend, loc=4, fontsize='small')
-
-    if not unique:
-        name='{}_{}'.format(name, time.clock())
-
-    plt.savefig('{}_froc.jpg'.format(name))
+    plt.savefig('{}_cmp.eps'.format(name))
     plt.clf()
 
-def save_froc(op_set, name, legend=None, unique=False, with_std=False):
+def save_froc(op_set, name, legend=None, unique=True, with_std=False):
     ax = plt.gca()
     ax.grid(True)
 
@@ -248,19 +260,29 @@ def save_froc(op_set, name, legend=None, unique=False, with_std=False):
         else:
             plt.plot(ops[0], ops[1], line_format[i%28], marker='x', markersize=3)
 
-    plt.ylim([0, 1.])
+    '''
+    import baseline
+    for fp in baseline.interesting_fps:
+        print 'fp {}: {}'.format(fp, ops[1][int(fp * 10)])
+    '''
 
-    plt.ylabel('Sensitivity')
+    x_ticks = np.linspace(0.0, 10.0, 11)
+    y_ticks = np.linspace(0.0, 1.0, 11)
+    plt.xticks(x_ticks, x_ticks)
+    plt.yticks(y_ticks, y_ticks)
+    plt.xlim([0, 10.0])
+    plt.ylim([0, 1.00])
     plt.xlabel('Average FPs per Image')
+    plt.ylabel('Sensitivity')
 
     if legend != None:
         assert len(legend) == len(op_set)
-        plt.legend(legend, loc=4, fontsize='small')
+        plt.legend(legend, loc=4, fontsize='small', numpoints=1)
 
     if not unique:
         name='{}_{}'.format(name, time.clock())
 
-    plt.savefig('{}_froc.jpg'.format(name))
+    plt.savefig('{}_cnn_clf.eps'.format(name))
     plt.clf()
 
 class MidpointNormalize(Normalize):
