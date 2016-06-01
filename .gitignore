@@ -4,5 +4,6 @@ data/
 *.json
 *.pyc
 *.h5
+*.jpg
 .DS_Store
 ._.DS_Store

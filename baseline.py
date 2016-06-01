@@ -35,12 +35,12 @@ interesting_fps = [2, 4, 4.3, 5, 5.4]
 ''' Using the whole JSRT database or using 0.9... * whole database. '''
 
 sota_authors = [
-    'Chen and Suzuki',
-    'Hardie et al',
-    'Schilham et al',
-    'Shiraishi et al',
-    'Coppini et al',
-    'Wei et al'
+    'Chen and Suzuki.',
+    'Hardie et al.',
+    'Schilham et al.',
+    'Shiraishi et al.',
+    'Coppini et al.',
+    'Wei et al.'
 ]
 
 scale_factor = 0.9091

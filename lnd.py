@@ -2,14 +2,18 @@
 
 '''
 TODO
-- Organize experiment login: Save frocs in main, store logs on a folder by model
-
+- Organize experiment login: Save frocs in main, store logs on a folder byqmodel
 '''
+
 import sys
 import time
 from itertools import product
+from os import path
+import argparse
 
 import numpy as np
+import matplotlib.pyplot as plt
+
 from scipy.interpolate import interp1d
 from sklearn.cross_validation import StratifiedKFold
 from sklearn import svm
@@ -20,51 +24,40 @@ from sklearn import linear_model
 from sklearn import ensemble
 from sklearn import preprocessing
 from sklearn.metrics import auc
-import matplotlib.pyplot as plt
-
-#from keras.utils import visualize_util
 
 from data import DataProvider
-
 import baseline
 import model
 import eval
 import util
 import jsrt
 
-import sys
-import argparse
-
 # Globals
-
 step = 10
 fppi_range = np.linspace(0.0, 10.0, 101)
 
-'''
-returns: Free Receiving Operating Curve obtained given a fold set
-'''
-
 def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs, feats, folds, save_fw=False, model_name='undefined'):
     print 'feature shape {}'.format(feats[0].shape)
-
     fold = 0
     valid = True
     frocs = []
     feature_weights = []
     for tr_idx, te_idx in folds:    
         print "Fold {}".format(fold + 1),
-        data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+        #data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
         paths_te = paths[te_idx]
-        blobs_te = []
 
+        #blobs_te = blobs[te_idx].reshape((1,) + blobs.shape).swapaxes(0, 1)
         for bl in blobs[te_idx]:
             blobs_te.append([bl])
         blobs_te = np.array(blobs_te)
 
         print 'Train with {}...'.format(_model.clf)
         ret = _model.train_with_feature_set(feats[tr_idx], pred_blobs[tr_idx], blobs[tr_idx], save_fw)
+
         print 'Predict ...'
         blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set(feats[te_idx], pred_blobs[te_idx])
+
         print 'Get froc ...'
         froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
 
@@ -73,8 +66,8 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
             feature_weights.append(ret[3])
 
         frocs.append(froc)
-        fold += 1
         sys.stdout.flush()
+        fold += 1
     
     if save_fw == True:
         feature_weights = np.array(feature_weights)
@@ -92,31 +85,40 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
         print "Fold {}".format(fold),
         data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
         paths_te = paths[te_idx]
-        blobs_te = []
 
+        blobs_te = []
         for bl in blobs[te_idx]:
             blobs_te.append([bl])
         blobs_te = np.array(blobs_te)
+        #blobs_te = blobs[te_idx].reshape((1,) + blobs.shape).swapaxes(0, 1)
 
-        history = _model.train_with_feature_set_keras(rois[tr_idx], pred_blobs[tr_idx], blobs[tr_idx], 
-                                            rois[te_idx], pred_blobs[te_idx], blobs[te_idx], 
-                                            model=network_model)
+        rois_tr = []
+        rois_te = []
+        if _model.streams != 'none':
+            for i in range(len(rois)):
+                rois_tr.append(rois[i][tr_idx])
+                rois_te.append(rois[i][te_idx])
+        else:
+            rois_tr = rois[tr_idx]
+            rois_te = rois[te_idx]
+            
+        history = _model.train_with_feature_set_keras(rois_tr, pred_blobs[tr_idx], blobs[tr_idx], 
+            rois_te, pred_blobs[te_idx], blobs[te_idx], 
+            model=network_model, fold=fold)
+
         if fold == 1:
-            model.layer_utils.model_summary(_model.keras_model.network)         
+            _model.keras_model.network.summary()
             #visualize_util.plot(_model.keras_model.network, to_file='data/{}.png'.format(network_model))
 
-        blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois[te_idx], pred_blobs[te_idx])
-
+        blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois_te, pred_blobs[te_idx])
         froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
         frocs.append(froc)
 
         _model.save('data/{}_fold_{}'.format(network_model, fold))
-        util.save_loss_acc(history, 'data/{}_fold_{}'.format(network_model, fold))
-
         legend_ = ['Fold {}'.format(i + 1) for i in range(len(frocs))]
         frocs_.append(eval.average_froc([froc], np.linspace(0.0, 10.0, 101)))
         util.save_froc(frocs_, 'data/{}_froc_kfold'.format(network_model), legend_)
-
+        util.save_loss_acc(history, 'data/{}_fold_{}'.format(network_model, fold))
         fold += 1
 
     av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
@@ -160,17 +162,22 @@ def extract_features_cnn(_model, fname, network_model, layer):
         print 'load model ...'
         _model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
         if fold == 1:
-            model.layer_utils.model_summary(_model.keras_model.network)         
+            _model.keras_model.network.summary()
         print 'extract ...'
         network_feats = _model.extract_features_from_keras_model(rois, layer)
         print 'save ...'
         np.save('data/{}_l{}_fold_{}.fts.npy'.format(network_model, layer, fold), network_feats)
         fold += 1
 
-def froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model):
+def froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, subs=None, sizes=None, kinds=None):
     fold = 1
     valid = True
     frocs = []
+    frocs_subs = []
+    frocs_sizes = []
+    frocs_kinds = []
+    lens = [len(set(subs)), len(set(sizes)), len(set(kinds))]
+
     for tr_idx, te_idx in folds:    
         print "Fold {}".format(fold),
         data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
@@ -185,24 +192,90 @@ def froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs,
         _model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
 
         if fold == 1:
-            model.layer_utils.model_summary(_model.keras_model.network)         
+            _model.keras_model.network.summary()
 
         print "predict ..."
-        blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois[te_idx], pred_blobs[te_idx])
+        rois_te = []
+        if _model.streams != 'none':
+            for i in range(len(rois)):
+                rois_te.append(rois[i][te_idx])
+        else:
+            rois_te = rois[te_idx]
+ 
+        blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois_te, pred_blobs[te_idx])
         
+        print "eval ..."
+        froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred, rois, te_idx)
+        frocs.append(froc)
+        frocs_subs.append(eval.froc_stratified(blobs_te, blobs_te_pred, probs_te_pred, subs[te_idx], lens[0]))
+        frocs_sizes.append(eval.froc_stratified(blobs_te, blobs_te_pred, probs_te_pred, sizes[te_idx], lens[1]))
+        frocs_kinds.append(eval.froc_stratified(blobs_te, blobs_te_pred, probs_te_pred, kinds[te_idx], lens[2]))
+        fold += 1
+
+    print frocs[0].shape
+    av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
+    av_froc_subs = []
+    av_froc_sizes = []
+    av_froc_kinds = []
+
+    print "frocs_subs ..."
+
+    frocs_subs = np.array(frocs_subs).swapaxes(0, 1)
+    for i in range(lens[0]):
+        av_froc_subs.append(eval.average_froc(frocs_subs[i], np.linspace(0.0, 10.0, 101)))
+
+    frocs_sizes = np.array(frocs_sizes).swapaxes(0, 1)
+    for i in range(lens[1]):
+        av_froc_sizes.append(eval.average_froc(frocs_sizes[i], np.linspace(0.0, 10.0, 101)))
+
+    frocs_kinds = np.array(frocs_kinds).swapaxes(0, 1)
+    for i in range(lens[2]):
+        av_froc_kinds.append(eval.average_froc(frocs_kinds[i], np.linspace(0.0, 10.0, 101)))
+
+    return av_froc , np.array(av_froc_subs), np.array(av_froc_sizes), np.array(av_froc_kinds)
+
+def froc_by_epoch(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, epoch):
+    fold = 1
+    valid = True
+    frocs = []
+    for tr_idx, te_idx in folds:
+        print "Fold {}".format(fold),
+        data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+        paths_te = paths[te_idx]
+        blobs_te = []
+
+        for bl in blobs[te_idx]:
+            blobs_te.append([bl])
+        blobs_te = np.array(blobs_te)
+
+        print 'load model {} ...'.format('data/{}_fold_{}'.format(network_model, fold))
+        _model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
+        print 'load weights {} ...'.format('data/{}_fold_{}'.format(network_model, fold))
+        _model.load_cnn_weights('data/{}.fold-{}.epoch-{}.h5'.format(network_model, fold, epoch))
+        print "predict ..."
+
+        rois_tr = []
+        rois_te = []
+        if _model.streams != 'none':
+            for i in range(len(rois)):
+                rois_tr.append(rois[i][tr_idx])
+                rois_te.append(rois[i][te_idx])
+        else:
+            rois_tr = rois[tr_idx]
+            rois_te = rois[te_idx]
+ 
+        blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois_te, pred_blobs[te_idx])
         print "eval ..."
         froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
         frocs.append(froc)
         fold += 1
 
-    print frocs[0].shape
     av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
     return av_froc
 
-
-def classify_cnn(_model, fname, network_model):
+def frocs_by_epoch(_model, fname, network_model):
     print "classify with cnn"
-    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -221,13 +294,63 @@ def classify_cnn(_model, fname, network_model):
     Y = (140 > np.array(range(size))).astype(np.uint8)
     folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
-    ops = froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model)
+    legends = []
+    legends.append('Hardie et al.')
+    frocs = []
+    frocs.append(baseline.hardie)
+
+    EPOCH_INTERVAL = 5
+    aucs1 = []
+    aucs2 = []
+    epoch = 0
+    while True:
+        epoch += EPOCH_INTERVAL
+        print 'data/{}.fold-1.epoch-{}.h5'.format(network_model, epoch)
+        if path.isfile('data/{}.fold-1.epoch-{}.h5'.format(network_model, epoch)):
+            ops = froc_by_epoch(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, epoch)
+            frocs.append(ops)
+            legends.append('{}, epoch {}'.format(network_model, epoch))
+            aucs1.append(util.auc(ops, range(2, 4)))
+            aucs2.append(util.auc(ops, range(0, 5)))
+        else:
+            break
+
+    util.save_froc(frocs, 'data/{}-on-epochs'.format(network_model), legends, with_std=False, use_markers=False)
+    util.save_auc(np.array(range(1, len(aucs1)+1)) * EPOCH_INTERVAL, aucs1, 'data/{}-auc-2-4'.format(network_model))
+    util.save_auc(np.array(range(1, len(aucs2)+1)) * EPOCH_INTERVAL, aucs2, 'data/{}-auc-0-5'.format(network_model))
+    return frocs
+
+def classify_cnn(_model, fname, network_model):
+    print "classify with cnn"
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
+    left_masks = jsrt.left_lung(set='jsrt140')
+    right_masks = jsrt.right_lung(set='jsrt140')
+
+    size = len(paths)
+
+    blobs = []
+    for i in range(size):
+        blobs.append([locs[i][0], locs[i][1], rads[i]])
+    blobs = np.array(blobs)
+
+    print "Loading blobs ..."
+    data = DataProvider(paths, left_masks, right_masks)
+    pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+    rois = _model.create_rois(data, pred_blobs)
+
+    Y = (140 > np.array(range(size))).astype(np.uint8)
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+
+    ops, ops_sub, ops_siz, ops_kind = froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, subs, sizes, kinds)
 
     legend = []
-    legend.append('Hardie et al')
+    legend.append('Hardie et al.')
     legend.append('CNN')
 
-    util.save_froc([ops, baseline.hardie], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+    util.save_froc(ops_sub, 'data/{}-sublety'.format(network_model), jsrt.sublety_labels, with_std=False)
+    util.save_froc(ops_siz, 'data/{}-size'.format(network_model), jsrt.size_labels, with_std=False)
+    util.save_froc(ops_kind, 'data/{}-severity'.format(network_model), jsrt.severity_labels, with_std=False)
 
     return ops
 
@@ -412,7 +535,7 @@ def protocol_froc_2(_model, fname, save_fw=False):
     print 'auc 2 - 4 fppis {}'.format(auc(range_ops.T[0], range_ops.T[1]))
     
     legend = []
-    legend.append('Hardie et al')
+    legend.append('Hardie et al.')
     legend.append(_model.name)
 
     util.save_froc([baseline.hardie, ops], '{}'.format(_model.name), legend, with_std=True)
@@ -869,7 +992,7 @@ def protocol_cnn_froc(detections_source, fname, network_model):
     left_masks = jsrt.left_lung(set=None)
     right_masks = jsrt.right_lung(set=None)
     '''
-    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -896,7 +1019,7 @@ def protocol_cnn_froc(detections_source, fname, network_model):
     ops = get_froc_on_folds_keras(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, network_model)
 
     legend = []
-    legend.append('Hardie et al')
+    legend.append('Hardie et al.')
     legend.append(network_model)
 
     util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
@@ -936,7 +1059,7 @@ def protocol_cnn_froc_transforms(detections_source, fname, network_model):
     ops = get_froc_on_folds_keras(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, network_model)
 
     legend = []
-    legend.append('Hardie et al')
+    legend.append('Hardie et al.')
     legend.append(network_model)
 
     util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
@@ -975,7 +1098,7 @@ def hybrid(detections_source, fname, network_model, layer):
     ops = get_froc_on_folds_hybrid(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, feats, rois, skf, network_model, use_feats=False, layer=layer)
 
     legend = []
-    legend.append('Hardie et al')
+    legend.append('Hardie et al.')
     legend.append('current')
 
     util.save_froc([baseline.hardie, ops], '{}_hybrid'.format(_model.name), legend)
@@ -983,7 +1106,7 @@ def hybrid(detections_source, fname, network_model, layer):
     return ops
 
 def compare_cnn_models(detections_source, fname, nw_names, nw_labels, exp_name):
-    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -1011,7 +1134,7 @@ def compare_cnn_models(detections_source, fname, nw_names, nw_labels, exp_name):
     op_set.append(baseline.hardie)
 
     legend = []
-    legend.append('Hardie et al')
+    legend.append('Hardie et al.')
 
     for i in range(len(nw_names)):
         ops = froc_classify_cnn(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, nw_names[i])
@@ -1054,7 +1177,7 @@ def compare_cnn_sklearn_clfs(detections_source, fname, network):
     classifiers = [svm.SVC(kernel='linear', probability=True), svm.SVC(kernel='linear', probability=True), svm.SVC(kernel='rbf', probability=True), svm.SVC(kernel='rbf', probability=True), lda.LDA(), lda.LDA()]
     layers = layer_idx_by_network[network]
 
-    legend = ['Hardie et al', 
+    legend = ['Hardie et al.', 
                 '{} only'.format(network),
                 '{}, n-2 layer, Linear SVM'.format(network),
                 '{}, n-1 layer, Linear SVM'.format(network),
@@ -1107,7 +1230,7 @@ def compare_cnn_hybrid(detections_source, fname, network):
     layers = layer_idx_by_network[network]
     layers_vect = [layers[1], layers[1], layers[1]]
 
-    legend = ['Hardie et al', 
+    legend = ['Hardie et al.', 
                 '{} only'.format(network),
                 '{} layer n-1, linear SVM'.format(network),
                 '{} layer n-2, rbf SVM'.format(network),
@@ -1195,7 +1318,7 @@ def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
     Y = (140 > np.array(range(size))).astype(np.uint8)
     skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
-    legend = ['Hardie et al', '{} only'.format(network)]
+    legend = ['Hardie et al.', '{} only'.format(network)]
     op_set = []
     op_set.append(baseline.hardie)
     ops = froc_classify_cnn(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, network)
@@ -1231,8 +1354,9 @@ if __name__=="__main__":
     parser.add_argument('--hybrid', help='Evaluate hybrid approach: convnet + descriptor.', action='store_true')
     parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
     parser.add_argument('--fw', help='Plot the importance of individual features ( selected clf coef vs anova ) ', action='store_true')
-    parser.add_argument('-m', '--multi-channel', help='', action='store_true')
 
+    parser.add_argument('--trf-channels', help='', action='store_true')
+    parser.add_argument('--streams', help='Options: trf (transformations), seg (segmentation), fovea (center-scaling), none(default)', default='none')
 
     # Deep learning evals 
 
@@ -1252,7 +1376,7 @@ if __name__=="__main__":
     parser.add_argument('--hyp-cnn-lsvm-hybrid', help='Compare the performance of hybrid model ( cnn feats + hrg16 ) with linear svm clf varying the C parameter.', action='store_true')
     parser.add_argument('--roi-size', help='Layer index used to extract feature from cnn model.', default=64, type=int)
     parser.add_argument('--cmp-cnn-sota', help='Compare all LND-X models.', action='store_true')
-
+    parser.add_argument('--frocs-by-epoch', help='Generate a figure with froc curves every 5 epochs', action='store_true')
     
     args = parser.parse_args()
     opts = vars(args)
@@ -1262,6 +1386,8 @@ if __name__=="__main__":
     _model.extractor = model.extractors[args.descriptor]
     _model.preprocessor = args.preprocessor
     _model.roi_size = args.roi_size
+    _model.use_transformations = args.trf_channels
+    _model.streams = args.streams 
     
     #TODO
     _model.augment = args.augment
@@ -1271,14 +1397,15 @@ if __name__=="__main__":
     if args.eval_wmci:
         eval_wmci_and_postprocessing(_model, extractor_key)
 
+    elif args.frocs_by_epoch:
+        frocs_by_epoch(_model, extractor_key, args.cnn)
+
     elif args.cmp_cnn:
         networks = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P-C2', 'LND-A-ALLCNN-5P', 'LND-C-5P']
         network_labels = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P, 2x2 conv on top', 'ALLCNN-A, 5 maxpool', 'LND-C, 5 maxpool']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/models')
 
     elif args.cmp_cnn_sota:
-        #networks = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P-C2', 'LND-A-ALLCNN-5P', 'LND-C-5P']
-        #network_labels = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P, 2x2 conv on top', 'ALLCNN-A, 5 maxpool', 'LND-C, 5 maxpool']
         networks = ['LND-A-6P']
         network_labels = ['CNN']
         compare_cnn_sota(_model, '{}'.format(extractor_key), networks, network_labels, 'data/models')

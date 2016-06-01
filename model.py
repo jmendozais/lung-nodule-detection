@@ -132,6 +132,9 @@ class BaselineModel:
             self.keras_model.load_weights('{}_weights.h5'.format(name))
             '''
 
+    def load_cnn_weights(self, name):
+            self.keras_model.network.load_weights(name)
+
     def save(self, name):
         if self.extractor != None:
             joblib.dump(self.extractor, '{}_extractor.pkl'.format(name))
@@ -158,12 +161,15 @@ class BaselineModel:
     def preprocess_rois(self, rois):
         if self.preprocessor == 'heq':
             for i in range(len(rois)):
-                rois[i] = equalize_hist(rois[i])
+                for k in range(len(rois[i])):
+                    rois[i][k] = equalize_hist(rois[i][k])
         elif self.preprocessor == 'nlm':
             for i in range(len(rois)):
-                rois[i] = denoise_nl_means(rois[i])
+                for k in range(len(rois[i])):
+                    rois[i][k] = denoise_nl_means(rois[i][k])
 
-    def create_rois(self, data, blob_set, mode=None):
+    def create_rois(self, data, blob_set, mode=None, downsample=False):
+        LCE_POS = 1
         dsize = (int(self.roi_size * 1.15), int(self.roi_size * 1.15))
         print 'dsize: {} rsize: {}'.format(dsize, self.roi_size)
         # Create image set
@@ -171,20 +177,48 @@ class BaselineModel:
         for i in range(len(data)):
             img, lung_mask = data.get(i)
             sampled, lce, norm = preprocess(img, lung_mask)
-            img_set.append(lce)
+            _, ci, _ = wmci_proba(lce, lung_mask, 0.5)
+            if not downsample:
+                img, lung_mask = data.get(i, downsample=False)
+                _, lce, norm = preprocess(img, lung_mask, downsample=False)
+                ci = cv2.resize(ci, img.shape, interpolation=cv2.INTER_CUBIC)
+
+            if self.use_transformations or self.streams != 'none':
+                #img_set.append(np.array([lce, norm, ci]))
+                #img_set.append(np.array([lce, ci]))
+                img_set.append(np.array([lce, norm]))
+            else:
+                img_set.append(np.array([lce]))
 
         print 'preproc: {}'.format(self.preprocessor)
         # Create roi set
         roi_set = []
+        if self.streams == 'trf':
+            roi_set = [[], [], []]
+        elif self.streams == 'seg':
+            roi_set = [[], []]
+        elif self.streams == 'fovea':
+            roi_set = [[], []]
+
         for i in range(len(img_set)):
             img = img_set[i]
             rois = []
             masks = []
-            if mode == 'mask':
-                _, masks = adaptive_distance_thold(img, blob_set[i])
+
+            #if mode == 'mask' or self.streams == 'seg' :
+            if self.streams == 'seg' :
+                _, masks = adaptive_distance_thold(img[LCE_POS], blob_set[i])
             
             for j in range(len(blob_set[i])):
+                sample_factor = 1
+                if not downsample:
+                    sample_factor = 4
+
                 x, y, r = blob_set[i][j]
+                x *= sample_factor
+                y *= sample_factor
+                r *= sample_factor
+
                 r = int(r * 1.15)
                 shift = 0 
                 side = 2 * shift + 2 * r + 1
@@ -192,23 +226,58 @@ class BaselineModel:
                 tl = (x - shift - r, y - shift - r)
                 ntl = (max(0, tl[0]), max(0, tl[1]))
                 br = (x + shift + r + 1, y + shift + r + 1)
-                nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+                nbr = (min(img.shape[1], br[0]), min(img.shape[2], br[1]))
 
-                roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
-                roi = cv2.resize(roi, dsize, interpolation=cv2.INTER_CUBIC)
-
+                roi = []
+                for k in range(img.shape[0]):
+                    tmp = img[k][ntl[0]:nbr[0], ntl[1]:nbr[1]]
+                    tmp = cv2.resize(tmp, dsize, interpolation=cv2.INTER_CUBIC)
+                    roi.append(tmp)
+                    
+                '''
                 if mode == 'mask':
                     mask = cv2.resize(masks[j], dsize, interpolation=cv2.INTER_CUBIC)
-                    roi *= mask.astype(np.float32)
+                    for k in range(img.shape[0]):
+                        roi[k] *= mask.astype(np.float32)
+                '''
 
-                rois.append(roi)
+                rois.append(np.array(roi))
 
             self.preprocess_rois(rois)
             '''
             for i in range(len(rois)):
                 util.imwrite('after_heq_{}.jpg'.format(i), rois[i])
             '''
-            roi_set.append(np.array(rois))
+            rois = np.array(rois)
+
+            if self.streams == 'trf':
+                #rois = np.swapaxes(np.swapaxes(np.swapaxes(rois, 2, 3), 1, 2), 0, 1)
+                rois = np.swapaxes(rois, 0, 1)
+                rois = rois.reshape(rois.shape[0], rois.shape[1], 1, rois.shape[2], rois.shape[3])
+                assert rois.shape[0] == len(roi_set)
+                for k in range(rois.shape[0]):
+                    roi_set[k].append(rois[k])
+            elif self.streams == 'seg':
+                masked_rois = np.copy(rois)
+                for j in xrange(len(masked_rois)):
+                    mask = cv2.resize(masks[j], dsize, interpolation=cv2.INTER_CUBIC)
+                    for k in xrange(len(masked_rois[j])): 
+                        masked_rois[j][k] *= mask.astype(np.float32)
+                roi_set[0].append(rois)
+                roi_set[1].append(masked_rois)
+            elif self.streams == 'fovea':
+                FOVEA_FACTOR = 2.5
+                tsize = (int(dsize[0] * FOVEA_FACTOR), int(dsize[1] * FOVEA_FACTOR))
+                offset = (tsize[0] - dsize[0]) / 2
+                fovea_rois = np.copy(rois)
+                for j in xrange(len(rois)):
+                    for k in xrange(len(rois[j])): 
+                        tmp = cv2.resize(rois[j][k], tsize, interpolation=cv2.INTER_CUBIC)
+                        fovea_rois[j][k] = tmp[offset:offset+dsize[0], offset:offset+dsize[1]]
+                roi_set[0].append(rois)
+                roi_set[1].append(fovea_rois)
+            else:
+                roi_set.append(rois)
 
         return np.array(roi_set)
 
@@ -297,14 +366,9 @@ class BaselineModel:
         return blobs, probs
 
     def predict_proba_one_keras(self, blobs, rois):
-        img_rows, img_cols = rois[0].shape
-        X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
-        X = X.astype('float32')
-
-        print 'Predict proba one keras'
-        print X.shape
-
-        probs = self.keras_model.predict_proba(X)
+        #img_rows, img_cols = rois[0].shape
+        #X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
+        probs = self.keras_model.predict_proba(rois, self.streams != 'none')
 
         probs = probs.T[1]
         blobs = np.array(blobs)
@@ -312,9 +376,9 @@ class BaselineModel:
         return blobs, probs
 
     def extract_features_one_keras(self, rois, layer=-1):
-        img_rows, img_cols = rois[0].shape
-        X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
-        X = X.astype('float32')
+        #img_rows, img_cols = rois[0].shape
+        #X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
+        X = rois.astype('float32')
 
         layers = len(self.keras_model.network.layers)
 
@@ -533,23 +597,40 @@ class BaselineModel:
 
     def train_with_feature_set_keras(self, feats_tr, pred_blobs_tr, real_blobs_tr,
                                         feats_test=None, pred_blobs_test=None, real_blobs_test=None,
-                                        model='shallow_1'):
-        img_rows, img_cols = feats_tr[0][0].shape
+                                        model='shallow_1', fold=None):
+
         nb_classes = 2
 
-        X_tr, y_tr = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr)
-        X_tr = X_tr.reshape(X_tr.shape[0], 1, img_rows, img_cols)
-        X_tr = X_tr.astype('float32')
+        X_tr, y_tr = [], []
+        if self.streams != 'none':
+            num_streams = len(feats_tr)
+            for i in range(num_streams):
+                tmp, y_tr = classify.create_training_set_from_feature_set(feats_tr[i], pred_blobs_tr, real_blobs_tr)
+                X_tr.append(tmp.astype('float32'))
+        else:
+            X_tr, y_tr = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr)
+            X_tr = X_tr.astype('float32')
+                
+        #X_tr = X_tr.reshape(X_tr.shape[0], 1, img_rows, img_cols)
         Y_tr= np_utils.to_categorical(y_tr, nb_classes)
 
         X_test, Y_test = None, None
         if feats_test != None:
-            X_test, y_test = classify.create_training_set_from_feature_set(feats_test, pred_blobs_test, real_blobs_test)
-            X_test = X_test.reshape(X_test.shape[0], 1, img_rows, img_cols)
-            X_test = X_test.astype('float32')
+
+            X_test, y_test = [], []
+            if self.streams != 'none':
+                num_streams = len(feats_test)
+                for i in range(num_streams):
+                    tmp, y_test = classify.create_training_set_from_feature_set(feats_test[i], pred_blobs_test, real_blobs_test)
+                    X_test.append(tmp.astype('float32'))
+            else:
+                X_test, y_test = classify.create_training_set_from_feature_set(feats_test, pred_blobs_test, real_blobs_test)
+                X_test = X_test.astype('float32')
+
+            #X_test = X_test.reshape(X_test.shape[0], 1, img_rows, img_cols)
             Y_test = np_utils.to_categorical(y_test, nb_classes)
         
-        self.keras_model, history = neural.fit(X_tr, Y_tr, X_test, Y_test, model)
+        self.keras_model, history = neural.fit(X_tr, Y_tr, X_test, Y_test, model, streams=(self.streams != 'none'), fold=fold)
 
         #self.save(self.name)
         return history
@@ -647,6 +728,7 @@ class BaselineModel:
         
         data_blobs = []
         data_probs = []
+
         for i in range(len(feature_set)):
             blobs, probs = self.predict_proba_one(blob_set[i], feature_set[i])
 
@@ -678,6 +760,8 @@ class BaselineModel:
 
         data_blobs = []
         data_probs = []
+        if self.streams != 'none':
+            feature_set = np.swapaxes(feature_set, 0, 1)
         for i in range(len(feature_set)):
             blobs, probs = self.predict_proba_one_keras(blob_set[i], feature_set[i])
 

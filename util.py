@@ -7,9 +7,11 @@ import cv2
 import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
+from sklearn import metrics
 
-font = {'family' : 'normal',
-#        'weight' : 'bold',
+font = {
+#       'family' : 'normal',
+#       'weight' : 'bold',
         'size'   : 15}
 
 matplotlib.rc('font', **font)
@@ -216,7 +218,7 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     idx = 0
     legend = []
 
-    markers = ['o', 'v', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', '^', '<', '>']
+    markers = ['o', 's', '8', 'v', 'p', '*', 'h', 'H', 'D', 'd', '^', '<', '>']
     for i in range(len(scatter_ops)):
         ops = scatter_ops[i].T
         print ops[0], ops[1]
@@ -243,7 +245,7 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     plt.savefig('{}_cmp.eps'.format(name))
     plt.clf()
 
-def save_froc(op_set, name, legend=None, unique=True, with_std=False):
+def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True):
     ax = plt.gca()
     ax.grid(True)
 
@@ -251,14 +253,18 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False):
                                  'b.--', 'g.--', 'r.--', 'c.--', 'm.--', 'y.--', 'k.--',
                                  'b.-.', 'g.-.', 'r.-.', 'c.-.', 'm.-.', 'y.-.', 'k.-.',
                                  'b.:', 'g.:', 'r.:', 'c.:', 'm.:', 'y.:', 'k.:']
-
+    if use_markers == True:
+        markers = ['o', 's', '8', 'v', 'p', '*', 'h', 'H', 'D', 'd', '^', '<', '>']
+    else:
+        markers = '.............'
+        
     for i in range(len(op_set)):
         ops = np.array(op_set[i]).T
         if with_std and i > 0:
             y_lower = ops[1] - ops[2]
-            plt.errorbar(ops[0], ops[1], fmt=line_format[i%28], yerr=ops[2], marker='x', markersize=3)
+            plt.errorbar(ops[0], ops[1], fmt=line_format[i%28], yerr=ops[2], marker=markers[i%13], markersize=3, fillstyle='none')
         else:
-            plt.plot(ops[0], ops[1], line_format[i%28], marker='x', markersize=3)
+            plt.plot(ops[0], ops[1], line_format[i%28], marker=markers[i%13], markersize=3, fillstyle='none')
 
     '''
     import baseline
@@ -284,6 +290,31 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False):
 
     plt.savefig('{}_cnn_clf.eps'.format(name))
     plt.clf()
+
+def auc(ops, range):
+    print 'ops.shape {}'.format(ops.shape)
+    ops = ops.T
+    lower = ops[0].searchsorted(range[0])
+    upper = ops[0].searchsorted(range[1])
+    return metrics.auc(ops[0][lower:upper], ops[1][lower:upper])
+
+def save_auc(epochs, aucs, name):
+    ax = plt.gca()
+    ax.grid(True)
+
+    plt.plot(epochs, aucs)
+
+    '''
+    import baseline
+    for fp in baseline.interesting_fps:
+        print 'fp {}: {}'.format(fp, ops[1][int(fp * 10)])
+    '''
+
+    plt.xlabel('Epoch')
+    plt.ylabel('AUC')
+    plt.savefig('{}.eps'.format(name))
+    plt.clf()
+
 
 class MidpointNormalize(Normalize):
     def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):

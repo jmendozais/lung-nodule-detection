@@ -166,59 +166,126 @@ def evaluate(real, predicted, data=None, sample=False):
 
 # TODO: Adapt the code to calculate the exact vertical average FROC curve, instead of mix tav and vav
 
-def froc(real, pred, probs, data=None):
-        n = len(real)       
-        p = 0
-        entries = np.full((0,3), fill_value=0, dtype=float)
-        
-        for i in range(n):
-            if real[i][0][0] != -1:
-                p += 1
-
-            dist = np.linalg.norm(pred[i][:,:2] - real[i][0][:2], axis=1)
-            
-            entry = []
-            entry.append(probs[i])
-            entry.append(dist)
-            entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
-
-            entries = np.append(entries, np.array(entry).T, axis=0)
-        
-        entries = sorted(entries, key=itemgetter(0))
-        entries.reverse()
-        entries = np.array(entries)
+def froc(real, pred, probs, rois=None, jsrt_idx=None):
+    n = len(real)       
+    p = 0
+    entries = np.full((0,5), fill_value=0, dtype=float)
     
-        tp = 0.0
-        fppi = np.full((n,), fill_value=0, dtype=np.float)
-        found = np.full((n,), fill_value=False, dtype=bool)
-        froc = []
-        f_prev = -1.0
-        for i in range(entries.shape[0]):
-            idx = entries[i][2]
-            if entries[i][0] != f_prev:
-                froc.append([np.mean(fppi), tp / p])
-                f_prev = entries[i][0]
+    for i in range(n):
+        if real[i][0][0] != -1:
+            p += 1
 
-            if not found[idx] and entries[i][1] < 31.43:
-                found[idx] = True
-                tp += 1
-            else:
-                fppi[idx] += 1
+        dist = np.linalg.norm(pred[i][:,:2] - real[i][0][:2], axis=1)
+        
+        entry = []
+        entry.append(probs[i])
+        entry.append(dist)
+        entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
+        entry.append(np.arange(len(probs[i]), dtype=np.float))
+        entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
 
-        froc.append([np.mean(fppi), tp / p])
+        entries = np.append(entries, np.array(entry).T, axis=0)
+    
+    entries = sorted(entries, key=itemgetter(0))
+    entries.reverse()
+    entries = np.array(entries)
 
-        targets = [2., 4., 10.]
-        ops = []
-        for i in range(len(targets)):
-            best_op = froc[0]
-            for op in froc:
-                if abs(op[0] - targets[i] + 0.5) <= 0.5:
-                    best_op = op
-            ops.append(best_op)
-        ops.append(froc[-1])
-        print "fppi operating point: {}".format(ops)
+    tp = 0.0
+    fppi = np.full((n,), fill_value=0, dtype=np.float)
+    found = np.full((n,), fill_value=False, dtype=bool)
+    froc = []
+    f_prev = -1.0
+    for i in range(entries.shape[0]):
+        idx = entries[i][2]
+        if entries[i][0] != f_prev:
+            froc.append([np.mean(fppi), tp / p])
+            f_prev = entries[i][0]
 
-        return np.array(froc)   
+        if not found[idx] and entries[i][1] < 31.43:
+            found[idx] = True
+            tp += 1
+            if rois != None:
+                tmp = rois[entries[i][2]][entries[i][3]]
+                for k in range(len(tmp)):
+                    util.imwrite('{}-{}-tp.jpg'.format(int(entries[i][0] * 1000000) * 0.0001, entries[i][4]), tmp[k])
+        else:
+            fppi[idx] += 1
+            if rois != None:
+                tmp = rois[entries[i][2]][entries[i][3]]
+                for k in range(len(tmp)):
+                    util.imwrite('{}-{}-fp.jpg'.format(int(entries[i][0] * 1000000) * 0.0001, entries[i][4]), tmp[k])
+
+    froc.append([np.mean(fppi), tp / p])
+
+    targets = [2., 4., 10.]
+    ops = []
+    for i in range(len(targets)):
+        best_op = froc[0]
+        for op in froc:
+            if abs(op[0] - targets[i] + 0.5) <= 0.5:
+                best_op = op
+        ops.append(best_op)
+    ops.append(froc[-1])
+    print "fppi operating point: {}".format(ops)
+
+    return np.array(froc)   
+
+def froc_stratified(real, pred, probs, kind, num_frocs):
+    n = len(real)       
+    p = 0
+    entries = np.full((0,3), fill_value=0, dtype=float)
+    
+    for i in range(n):
+        if real[i][0][0] != -1:
+            p += 1
+        dist = np.linalg.norm(pred[i][:,:2] - real[i][0][:2], axis=1)
+        entry = []
+        entry.append(probs[i])
+        entry.append(dist)
+        entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
+        entries = np.append(entries, np.array(entry).T, axis=0)
+    
+    entries = sorted(entries, key=itemgetter(0))
+    entries.reverse()
+    entries = np.array(entries)
+    fppi = np.full((n,), fill_value=0, dtype=np.float)
+    found = np.full((n,), fill_value=False, dtype=bool)
+
+    froc = []
+    tp = []
+    p = []
+    for i in xrange(num_frocs):
+        froc.append([])
+        tp.append(0.0)
+        p.append(0.0)
+
+    for val in kind:
+        p[val] += 1
+
+    print 'num frocs {}'.format(num_frocs)
+    print 'values {}'.format(kind)
+    for val in range(num_frocs):
+        froc[val].append([0.0, 0.0])
+        if p[val] == 0.0:
+            print 'kind {}: p {}'.format(val, p[val])
+            p[val] = util.EPS
+
+    f_prev = -1.0
+    for i in range(entries.shape[0]):
+        idx = entries[i][2]
+        if entries[i][0] != f_prev:
+            froc[kind[idx]].append([np.mean(fppi), tp[kind[idx]] / p[kind[idx]]])
+            f_prev = entries[i][0]
+        if not found[idx] and entries[i][1] < 31.43:
+            found[idx] = True
+            tp[kind[idx]] += 1
+        else:
+            fppi[idx] += 1
+
+    for i in xrange(num_frocs):
+        froc[i].append([np.mean(fppi), tp[i] / p[i]])
+        froc[i] = np.array(froc[i])
+    return np.array(froc)   
 
 def fppi_sensitivity(real, pred, data=None):
         n = len(real)       

@@ -5,6 +5,7 @@ from os.path import isfile, join
 
 import random, math
 import re
+import gc
 from six.moves import range
 
 import numpy as np
@@ -49,10 +50,12 @@ class Preprocessor:
 
     def fit_transform(self, X, Y):
         X = np.copy(X)
+
         if self.samplewise_center:
             for i in range(len(X)):
                 tmp = np.mean(X[i])
                 X[i] -= tmp
+
         elif self.samplewise_std_normalization:
             for i in range(len(X)):
                 tmp_mean = np.mean(X[i])
@@ -69,6 +72,7 @@ class Preprocessor:
         if self.featurewise_center or self.featurewise_std_normalization:
             self.mean = np.mean(X, axis=0)
             X -= self.mean
+
         if self.featurewise_std_normalization:
             self.std = np.std(X, axis=0)
             X /= self.std + util.EPS
@@ -220,40 +224,48 @@ class ImageDataGenerator:
         return img
 
     def perturb(self, x):
-        assert len(x) == 1, 'Input shape should be 1xMxN'
-        x = x[0]
-        
+        shape = x[0].shape
+
         if abs(self.translation_range[0]) < 1.:
-            side = max(x.shape)
+            side = max(shape)
             self.translation_range = (self.translation_range[0] * side, self.translation_range[1] * side)
 
-        tform_centering = self.build_centering_transform(x.shape, self.output_shape)
-        tform_center, tform_ucenter = self.build_center_uncenter_transforms(x.shape)
+        tform_centering = self.build_centering_transform(shape, self.output_shape)
+        tform_center, tform_ucenter = self.build_center_uncenter_transforms(shape)
         tform_augment = self.random_perturbation_transform(
             zoom_range=self.zoom_range, rotation_range=self.rotation_range,
             shear_range=(0., 0.), translation_range=self.translation_range, 
             do_flip=self.flip)
         tform_augment = tform_ucenter + tform_augment + tform_center
-        x = self.fast_warp(x, tform_centering + tform_augment, output_shape=self.output_shape, mode='constant').astype('float32')
-        return np.array([x])
+
+        new_x = np.full(shape=(x.shape[0], self.output_shape[0], self.output_shape[1]), dtype=np.float32, fill_value=0)
+        for i in range(x.shape[0]):
+            new_x[i] = self.fast_warp(x[i], tform_centering + tform_augment, output_shape=self.output_shape, mode='constant').astype('float32')
+
+        '''
+        tmp = np.random.randint(10000)
+        for i in range(len(new_x)):
+            util.imwrite('aug_trfs_{}_{}.jpg'.format(tmp, i), new_x[i])
+            print 'aug {} {} : {} {}'.format(tmp, i, np.min(new_x[i]), np.max(new_x[i]))
+        '''
+         
+        return np.array(new_x)
 
     def centering_crop(self, X):
         assert len(X) > 0
-        assert len(X[0]) == 1
 
         new_X = []
         tform_centering = self.build_centering_transform(X[0][0].shape, self.output_shape)
         for i in range(len(X)):
-            assert len(X[i]) == 1
-            x = self.fast_warp(X[i][0], tform_centering, output_shape=self.output_shape, mode='constant').astype('float32')
-            x = np.array([x])
-            new_X.append(x)
+            new_x = []
+            for k in range(len(X[i])):
+                new_x.append(self.fast_warp(X[i][k], tform_centering, output_shape=self.output_shape, mode='constant').astype('float32'))
+            new_X.append(np.array(new_x))
 
         return np.array(new_X)
 
-    def augment(self, X, y):
+    def augment(self, X, y, cropped_shape):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
-
         factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
         # balance
         print 'Mode: {} ...'.format(self.mode)
@@ -263,9 +275,8 @@ class ImageDataGenerator:
             negatives = X[idx == 0]
             l_pos = y[idx > 0][0]
             l_neg = y[idx == 0][0]
-            print ((2 * negatives.shape[0],) + X[0].shape)
-            aX = np.zeros((2 * negatives.shape[0],) + X[0].shape).astype(X[0].dtype)
-            ay = np.zeros((2 * negatives.shape[0],) + y[0].shape).astype(y[0].dtype)
+            aX = np.zeros((2 * negatives.shape[0],) + X[0].shape, dtype=X[0].dtype)
+            ay = np.zeros((2 * negatives.shape[0],) + y[0].shape, dtype=y[0].dtype)
             n_batches = int(math.ceil(float(2 * negatives.shape[0]) / self.batch_size))
             for batch_idx in range(n_batches):
                 begin = batch_idx * (self.batch_size / 2)
@@ -273,14 +284,10 @@ class ImageDataGenerator:
                 chunk = end - begin
                 aX[2*begin:2*begin + chunk] = negatives[begin:end]
                 ay[2*begin:2*begin + chunk] = np.full((chunk,) + l_neg.shape, dtype=l_neg.dtype, fill_value=l_neg)
-            
                 b_idx = self.rng.uniform(size=(chunk,))
                 b_idx = np.floor(b_idx * positives.shape[0]).astype(np.int)
                 aX[2*begin + chunk:2*(begin + chunk)] = positives[b_idx]
                 ay[2*begin + chunk:2*(begin + chunk)] = np.full((end - begin,) + l_pos.shape, dtype=l_pos.dtype, fill_value=l_pos)
-
-            X = np.copy(aX)
-            y = np.copy(ay)
 
         elif self.mode == 'balance_dataset':
             aX = X.copy()
@@ -296,25 +303,112 @@ class ImageDataGenerator:
             np.random.shuffle(aX) 
             np.random.seed(seed)
             np.random.shuffle(ay)
-            X = np.copy(aX)
-            y = np.copy(ay)
 
         # transform
         new_X = []
-        for i in range(X.shape[0]):
-            x = self.perturb(X[i].astype("float32"))
-
+        for i in range(aX.shape[0]):
             '''
-            # Check rois on two first batchs
-            if i < 64:
-                if y[i][1] > 0:
-                    util.imwrite('aug_pos_{}.jpg'.format(i), x[0])
-                elif y[i][1] == 0:
-                    util.imwrite('aug_neg_{}.jpg'.format(i), x[0])
+            if i < 96:
+                for k in range(len(aX[i])):
+                    util.imwrite('img_{}_{}.jpg'.format(i, k), aX[i][k])
+            '''
+            x = self.perturb(aX[i])
+            '''
+            if i < 96:
+                for k in range(len(aX[i])):
+                    util.imwrite('img_{}_{}_aug.jpg'.format(i, k), x[k])
             '''
             new_X.append(x)
 
-        return np.array(new_X), y
+        aX = None
+        gc.collect()
+        return np.array(new_X), ay    
+        
+    def augment2(self, X, y, output_shape):
+        assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
+
+        factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
+        # balance
+        print 'Mode: {} ...'.format(self.mode)
+        if self.mode == 'balance_batch':
+            idx = y.T[1]
+            positives = X[idx > 0]
+            negatives = X[idx == 0]
+            l_pos = y[idx > 0][0]
+            l_neg = y[idx == 0][0]
+            aX = np.zeros((2 * negatives.shape[0],) + output_shape, dtype=X[0].dtype)
+            ay = np.zeros((2 * negatives.shape[0],) + y[0].shape, dtype=y[0].dtype)
+            n_batches = int(math.ceil(float(2 * negatives.shape[0]) / self.batch_size))
+
+            for batch_idx in range(n_batches):
+                begin = batch_idx * (self.batch_size / 2)
+                end = min(begin + (self.batch_size / 2), negatives.shape[0]) 
+                chunk = end - begin
+                b_idx = self.rng.uniform(size=(chunk,))
+                b_idx = np.floor(b_idx * positives.shape[0]).astype(np.int)
+                for i in range(chunk):
+                    aX[2*begin + i] = self.perturb(negatives[begin + i])
+                    aX[2*begin + chunk + i] = self.perturb(positives[b_idx[i]])
+
+                ay[2*begin:2*begin + chunk] = np.full((chunk,) + l_neg.shape, dtype=l_neg.dtype, fill_value=l_neg)
+                ay[2*begin + chunk:2*(begin + chunk)] = np.full((end - begin,) + l_pos.shape, dtype=l_pos.dtype, fill_value=l_pos)
+
+        elif self.mode == 'balance_dataset':
+            aX = X.copy()
+            ay = y.copy()
+            for i in range(X.shape[0]):
+                if y[i][1] > 0:
+                    aXi = np.full((factor,) + X[i].shape, dtype=X[i].dtype, fill_value=X[i])
+                    aX = np.append(aX, aXi, axis=0)
+                    ayi = np.full((factor,) + y[i].shape, dtype=y[i].dtype, fill_value=y[i])
+                    ay = np.append(ay, ayi, axis=0)
+            seed = self.rng.randint(1, 10e6) 
+            np.random.seed(seed) 
+            np.random.shuffle(aX) 
+            np.random.seed(seed)
+            np.random.shuffle(ay)
+            # transform
+            new_X = []
+            for i in range(aX.shape[0]):
+                x = self.perturb(aX[i])
+                new_X.append(x)
+                aX = np.array(new_X)
+
+        return aX, ay
+
+
+
+    def online_augment(self, X, y):
+        assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
+        factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
+        # balance
+        print 'Mode: {} ...'.format(self.mode)
+        if self.mode == 'balance_batch':
+            idx = y.T[1]
+            positives = X[idx > 0]
+            negatives = X[idx == 0]
+            l_pos = y[idx > 0][0]
+            l_neg = y[idx == 0][0]
+            n_batches = int(math.ceil(float(2 * negatives.shape[0]) / self.batch_size))
+            for batch_idx in range(n_batches):
+                begin = batch_idx * (self.batch_size / 2)
+                end = min(begin + (self.batch_size / 2), negatives.shape[0]) 
+                chunk = end - begin
+
+                aX = np.zeros((2 * chunk,) + X[0].shape, dtype=X[0].dtype)
+                aY = np.zeros((2 * chunk,) + y[0].shape, dtype=y[0].dtype)
+
+                aX[0:chunk] = negatives[begin:end]
+                ay[0:chunk] = np.full((chunk,) + l_neg.shape, dtype=l_neg.dtype, fill_value=l_neg)
+            
+                b_idx = self.rng.uniform(size=(chunk,))
+                b_idx = np.floor(b_idx * positives.shape[0]).astype(np.int)
+
+                aX[chunk:2*chunk] = positives[b_idx]
+                ay[chunk:2*chunk] = np.full((end - begin,) + l_pos.shape, dtype=l_pos.dtype, fill_value=l_pos)
+                yield aX, ay
+        elif self.mode == 'balance_dataset':
+            print "ERR: Not supported"
 
 # Test
 if __name__ == '__main__':
