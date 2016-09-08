@@ -35,7 +35,7 @@ from segment import *
 from augment import *
 from util import *
 import neural
-
+import ae
 import jsrt
 
 #TODO: up classifier
@@ -71,35 +71,28 @@ def adjacency_rule(blobs, probs):
 
     return filtered_blobs, filtered_probs
 
-import keras
-class StageScheduler(keras.callbacks.Callback):
-    def __init__(self, stages=[], decay=0.1):
-        sorted(stages)
-        self.stages = stages
-        self.idx = 0
-        self.decay = decay
-    
-    def on_epoch_end(self, epoch, logs={}):
-        if self.idx < len(self.stages):
-            if epoch + 1 == self.stages[self.idx]:
-                lr = self.model.optimizer.lr.get_value()
-                self.model.optimizer.lr.set_value(float(lr * self.decay))
-                self.idx += 1
-        print 'lr {}'.format(self.model.optimizer.lr.get_value())
-                
 # Baseline Model
-class BaselineModel:
+class BaselineModel(object):
     def __init__(self, name='default'):
-        self.name = name
-
         self.clf = lda.LDA()
         self.scaler = preprocessing.StandardScaler()
         self.selector = None
         self.transform = None
         self.extractor = HardieExtractor()
         self.feature_set = None
-        self.keras_model = None
+        self.network = None
+
+        self.name = name
         self.roi_size = 64
+
+    @property
+    def roi_size(self):
+        return self._roi_size
+
+    @roi_size.setter
+    def roi_size(self, value):
+        self._roi_size = value
+        self.dsize = (int(value * 1.15), int(value * 1.15))
 
     def load(self, name):
         # Model
@@ -114,26 +107,18 @@ class BaselineModel:
         if path.isfile('{}_transform.pkl'.format(name)):
             self.transform = joblib.load('{}_transform.pkl'.format(name))
         if path.isfile('{}_arch.json'.format(name)):
-            self.keras_model.load(name)
-            '''
-            self.keras_model = model_from_json(open('{}_arch.json'.format(name)).read())
-            self.keras_model.load_weights('{}_weights.h5'.format(name))
-            '''
+            self.network.load(name)
         '''
         if path.isfile('{}_fs.npy'.format(self.extractor.name)):
             self.feature_set = np.load('{}_fs.npy'.format(self.extractor.name))
         '''
     def load_cnn(self, name):
         if path.isfile('{}_arch.json'.format(name)):
-            self.keras_model = neural.NetModel()
-            self.keras_model.load(name)
-            '''
-            self.keras_model = model_from_json(open('{}_arch.json'.format(name)).read())
-            self.keras_model.load_weights('{}_weights.h5'.format(name))
-            '''
+            self.network = neural.NetModel()
+            self.network.load(name)
 
     def load_cnn_weights(self, name):
-            self.keras_model.network.load_weights(name)
+            self.network.network.load_weights('{}_weights.h5'.format(name))
 
     def save(self, name):
         if self.extractor != None:
@@ -146,14 +131,8 @@ class BaselineModel:
             joblib.dump(self.selector, '{}_selector.pkl'.format(name))
         if self.transform != None:
             joblib.dump(self.transform, '{}_transform.pkl'.format(name))
-        if self.keras_model != None:
-            self.keras_model.save(name)
-            '''
-            json_string = self.keras_model.to_json()
-            open('{}_arch.json'.format(name), 'w').write(json_string)
-            self.keras_model.save_weights('{}_weights.h5'.format(name), overwrite=True)
-            '''
-
+        if self.network != None:
+            self.network.save(name)
         '''
         if self.feature_set != None:
             np.save(self.feature_set, '{}_fs.npy'.format(self.extractor.name))
@@ -179,14 +158,14 @@ class BaselineModel:
             sampled, lce, norm = preprocess(img, lung_mask)
             _, ci, _ = wmci_proba(lce, lung_mask, 0.5)
             if not downsample:
-                img, lung_mask = data.get(i, downsample=False)
-                _, lce, norm = preprocess(img, lung_mask, downsample=False)
+                img, lung_mask = data.get(i, downsample=downsample)
+                _, lce, norm = preprocess(img, lung_mask, downsample=downsample)
                 ci = cv2.resize(ci, img.shape, interpolation=cv2.INTER_CUBIC)
 
             if self.use_transformations or self.streams != 'none':
-                #img_set.append(np.array([lce, norm, ci]))
+                img_set.append(np.array([lce, norm, ci]))
                 #img_set.append(np.array([lce, ci]))
-                img_set.append(np.array([lce, norm]))
+                #img_set.append(np.array([lce, norm]))
             else:
                 img_set.append(np.array([lce]))
 
@@ -366,28 +345,20 @@ class BaselineModel:
         return blobs, probs
 
     def predict_proba_one_keras(self, blobs, rois):
-        #img_rows, img_cols = rois[0].shape
-        #X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
-        probs = self.keras_model.predict_proba(rois, self.streams != 'none')
-
+        probs = self.network.predict_proba(rois, self.streams != 'none')
         probs = probs.T[1]
         blobs = np.array(blobs)
 
         return blobs, probs
 
     def extract_features_one_keras(self, rois, layer=-1):
-        #img_rows, img_cols = rois[0].shape
-        #X = rois.reshape(rois.shape[0], 1, img_rows, img_cols)
         X = rois.astype('float32')
-
-        layers = len(self.keras_model.network.layers)
-
+        layers = len(self.network.network.layers)
         feats = np.array([])
-
         if layer < 0:
-            feats = neural.get_activations(self.keras_model.network, layers - 1, X)
+            feats = neural.get_activations(self.network.network, layers - 1, X)
         else:
-            feats = neural.get_activations(self.keras_model.network, layer, X)
+            feats = neural.get_activations(self.network.network, layer, X)
 
         return feats
 
@@ -416,207 +387,25 @@ class BaselineModel:
 
         return classify.train(X, Y, self.clf, self.scaler, self.selector, feat_weight)
         
-    def fit_vgg(self, X_train, Y_train):
-        np.random.seed(1337)  # for reproducibility
-        batch_size = 32
-        nb_classes = 2
-        nb_epoch = 40
-        data_augmentation = True
-
-        # input image dimensions
-        img_rows, img_cols = 32, 32
-        # the CIFAR10 images are RGB
-        img_channels = 1
-
-        #print('X_train shape:', X_train.shape)
-        #print(X_train.shape[0], 'train samples')
-
-        _init = 'orthogonal'
-        _activation = 'linear' #LeakyReLU(alpha=.333)
-        _filters = 64
-        _dropout = 0.1
-
-        model = Sequential()
-
-        model.add(Convolution2D(_filters, 3, 3, border_mode='same',
-                    input_shape=(img_channels, img_rows, img_cols), init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Convolution2D(_filters, 3, 3, init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        model.add(Dropout(_dropout))
-
-        model.add(Convolution2D(2 * _filters, 3, 3, border_mode='same', init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Convolution2D(2 * _filters, 3, 3, init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        model.add(Dropout(2 * _dropout))
-
-        model.add(Convolution2D(3 * _filters, 3, 3, border_mode='same', init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Convolution2D(3 * _filters, 3, 3, init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        model.add(Dropout(3 * _dropout))
-
-        model.add(Flatten())
-        model.add(Dense(512, init=_init))
-        model.add(Activation('relu'))
-        model.add(Dropout(0.5))
-        model.add(Dense(nb_classes))
-        model.add(Activation('softmax'))
-
-        # let's train the model using SGD + momentum (how original).
-        sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-        model.compile(loss='categorical_crossentropy', optimizer=sgd)
-
-        lr_scheduler = StageScheduler([20, 30])
-        if not data_augmentation:
-            print('Not using data augmentation or normalization')
-            model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
-            #score = model.evaluate(X_test, Y_test, batch_size=batch_size)
-            #print('Test score
-        else:
-            print('Using data augmentation')
-            X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, 
-                        rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
-
-            print 'Negatives: {}'.format(np.sum(Y_train.T[0]))
-            print 'Positives: {}'.format(np.sum(Y_train.T[1]))
-            model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
-
-        self.keras_model = model
-
-    def fit_graham(self, X_train, Y_train):
-        Y_train = np.array([Y_train.T[1]]).T
-        print 'labels shape {}'.format(Y_train)
-        np.random.seed(1337)  # for reproducibility
-        batch_size = 32
-        nb_classes = 2
-        nb_epoch = 40
-        data_augmentation = True
-
-        # input image dimensions
-        img_rows, img_cols = X_train[0][0].shape
-        print img_rows, img_cols
-        # the CIFAR10 images are RGB
-        img_channels = 1
-
-        #print('X_train shape:', X_train.shape)
-        #print(X_train.shape[0], 'train samples')
-
-        _init = 'orthogonal'
-        _activation = 'linear' #LeakyReLU(alpha=.333)
-        _filters = 64
-        _dropout = 0.1
-
-        model = Sequential()
-
-        model.add(Convolution2D(_filters, 3, 3, border_mode='same',
-                    input_shape=(img_channels, img_rows, img_cols), init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Convolution2D(_filters, 3, 3, init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-
-        model.add(Convolution2D(2 * _filters, 2, 2, border_mode='same', init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Dropout(_dropout))
-        model.add(Convolution2D(2 * _filters, 2, 2, init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Dropout(_dropout))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-
-        model.add(Convolution2D(3 * _filters, 2, 2, border_mode='same', init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Dropout(2 * _dropout))
-        model.add(Convolution2D(3 * _filters, 2, 2, init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Dropout(2 * _dropout))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-
-        model.add(Convolution2D(4 * _filters, 2, 2, border_mode='same', init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Dropout(3 * _dropout))
-        model.add(Convolution2D(4 * _filters, 2, 2, init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Dropout(3 * _dropout))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-
-        model.add(Convolution2D(5 * _filters, 2, 2, border_mode='same', init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Dropout(4 * _dropout))
-        model.add(Convolution2D(5 * _filters, 2, 2, init=_init))
-        #model.add(Activation(_activation))
-        model.add(LeakyReLU(alpha=.333))
-        model.add(Dropout(4 * _dropout))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-
-        model.add(Flatten())
-        model.add(Dense(512, init=_init))
-        model.add(Activation('relu'))
-        model.add(Dropout(0.5))
-        model.add(Dense(1))
-        model.add(Activation('softmax'))
-
-        # let's train the model using SGD + momentum (how original).
-        sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
-        model.compile(loss='binary_crossentropy', optimizer=sgd)
-
-        lr_scheduler = StageScheduler([15, 30])
-        if not data_augmentation:
-            print('Not using data augmentation or normalization')
-            model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
-            #score = model.evaluate(X_test, Y_test, batch_size=batch_size)
-            #print('Test score
-        else:
-            print('Using data augmentation')
-            X_train, Y_train = offline_augment(X_train, Y_train, ratio=1, 
-                        rotation_range=15, width_shift_range=0.1, height_shift_range=0.1, horizontal_flip=True)
-
-            model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[lr_scheduler])
-
-        self.keras_model = model
-
-
     def train_with_feature_set_keras(self, feats_tr, pred_blobs_tr, real_blobs_tr,
                                         feats_test=None, pred_blobs_test=None, real_blobs_test=None,
-                                        model='shallow_1', fold=None):
+                                        model='shallow_1', fold=None, network_init=None):
 
         nb_classes = 2
-
-        X_tr, y_tr = [], []
+        X_train, y_train = [], []
         if self.streams != 'none':
             num_streams = len(feats_tr)
             for i in range(num_streams):
-                tmp, y_tr = classify.create_training_set_from_feature_set(feats_tr[i], pred_blobs_tr, real_blobs_tr)
-                X_tr.append(tmp.astype('float32'))
+                tmp, y_train = classify.create_training_set_from_feature_set(feats_tr[i], pred_blobs_tr, real_blobs_tr)
+                X_train.append(tmp.astype('float32'))
         else:
-            X_tr, y_tr = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr)
-            X_tr = X_tr.astype('float32')
+            X_train, y_train = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr)
+            X_train = X_train.astype('float32')
                 
-        #X_tr = X_tr.reshape(X_tr.shape[0], 1, img_rows, img_cols)
-        Y_tr= np_utils.to_categorical(y_tr, nb_classes)
+        Y_train= np_utils.to_categorical(y_train, nb_classes)
 
         X_test, Y_test = None, None
         if feats_test != None:
-
             X_test, y_test = [], []
             if self.streams != 'none':
                 num_streams = len(feats_test)
@@ -627,17 +416,17 @@ class BaselineModel:
                 X_test, y_test = classify.create_training_set_from_feature_set(feats_test, pred_blobs_test, real_blobs_test)
                 X_test = X_test.astype('float32')
 
-            #X_test = X_test.reshape(X_test.shape[0], 1, img_rows, img_cols)
             Y_test = np_utils.to_categorical(y_test, nb_classes)
         
-        self.keras_model, history = neural.fit(X_tr, Y_tr, X_test, Y_test, model, streams=(self.streams != 'none'), fold=fold)
+        self.network = neural.create_network(model, X_train.shape, fold, self.streams) 
+        if network_init is not None:
+            self.load_cnn_weights('data/{}_fold_{}'.format(network_init, fold))
 
-        #self.save(self.name)
+        history = self.network.fit(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=(self.roi_size, self.roi_size), checkpoint_prefix=model)
+
         return history
 
     def predict_proba(self, data):
-        #self.load(self.name)
-
         data_blobs = []
         data_probs = []
         for i in range(len(data)):
@@ -668,10 +457,6 @@ class BaselineModel:
 
         return np.array(data_blobs), np.array(data_probs)
 
-    '''
-        Input: data provider
-        Returns: blobs
-    '''
     def predict(self, data):
         data_blobs = []
         for i in range(len(data)):
@@ -723,7 +508,6 @@ class BaselineModel:
         return np.array(data_blobs)
 
     def predict_proba_from_feature_set(self, feature_set, blob_set):
-        #self.load(self.name)
         DIST2 = 987.755
         
         data_blobs = []
@@ -748,7 +532,6 @@ class BaselineModel:
                     filtered_probs.append(probs[j])
 
             #show_blobs("Predict result ...", lce, filtered_blob)
-
             data_blobs.append(np.array(filtered_blobs)) 
             data_probs.append(np.array(filtered_probs))
 
@@ -786,8 +569,7 @@ class BaselineModel:
 
         return np.array(data_blobs), np.array(data_probs)
 
-    def extract_features_from_keras_model(self, roi_set, layer):
-        #self.load(self.name)
+    def extract_features_from_network(self, roi_set, layer):
         data_feats = []
 
         print '[',
@@ -809,26 +591,21 @@ class BaselineModel:
             probs = prob_set[i]
             filtered_blobs = blob_set[i][probs > thold]
             filtered_probs = prob_set[i][probs > thold]
-            '''
-            probs = prob_set[i]
-            blobs = blob_set[i]
-            filtered_blobs = []
-            filtered_probs = []
-            for j in range(len(blobs)):
-                if probs[j] > thold:
-                    filtered_blobs.append(blobs[j])
-                    filtered_probs.append(probs[j])
-            '''
-
             #show_blobs("Predict result ...", lce, filtered_blob)
             data_blobs.append(np.array(filtered_blobs)) 
             data_probs.append(np.array(filtered_probs))
 
         return np.array(data_blobs), np.array(data_probs)
 
+    def pretrain(self, model, X, fold=None, streams=False):
+        self.network = neural.create_network(model, X.shape, fold, streams)
+        ae.pretrain_layerwise(self.network.network, X, nb_epoch=15)
+        #return history
+
+
+
 # optimized
 opt_classifiers = {'svm':svm.SVC(probability=True, C=0.0373, gamma=0.002), 'lda':lda.LDA()}
 # default
 classifiers = {'linear-svm':svm.SVC(kernel='linear', probability=True), 'svm':svm.SVC(kernel='rbf', probability=True, C=1.0, gamma=0.01), 'lda':lda.LDA()}
 reductors = {'none':None, 'pca':decomposition.PCA(n_components=0.99999999999, whiten=True), 'lda':selection.SelectFromModel(lda.LDA())}
-

@@ -9,6 +9,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
 from sklearn import metrics
 
+from preprocess import *
 font = {
 #       'family' : 'normal',
 #       'weight' : 'bold',
@@ -125,10 +126,11 @@ def imwrite_with_blobs(fname, img, blobs):
 
     imwrite(fname, labeled)
 
-def show_blobs_real_predicted(path, res1, res2):
-    img = np.load(path, 0)
+def show_blobs_real_predicted(img, idx, res1, res2):
+    #img = np.load(path, 0)
     resized_img = cv2.resize(img, (512, 512), interpolation=cv2.INTER_CUBIC)
-    color_img = cv2.cvtColor(resized_img.copy(), cv2.COLOR_GRAY2BGR) 
+    color_img = cv2.cvtColor(resized_img.copy().astype(np.float32), cv2.COLOR_GRAY2BGR) 
+    max_value = np.max(img)
     
     print "Real vs predicted .."
     print 'real',
@@ -136,16 +138,16 @@ def show_blobs_real_predicted(path, res1, res2):
         print res,
         if res[0] == -1:
             continue
-        color_img = label_blob(color_img, res, (255, 0, 0))
+        color_img = label_blob(color_img, res, (max_value, 0, 0))
     print ''
     print 'predicted',
     for res in res2:
         print res,
         if res[0] == -1:
             continue
-        color_img = util.label_blob(color_img, res, (0, 255, 255))
+        color_img = label_blob(color_img, res, (0, max_value, max_value))
     print ''
-    util.imshow('real vs predicted', color_img)
+    imwrite('jsrt-{}.jpg'.format(idx), color_img)
     
 def show_nodule(roi, mask, scale=4):
     dsize = (mask.shape[0] * scale, mask.shape[0] * scale)
@@ -174,6 +176,21 @@ def print_list(paths, blobs):
     for i in range(size):
         print_detection(paths[i], blobs[i])
 
+def extract_roi(img, blob, dsize=(32, 32)):
+    x, y, r = blob
+    shift = 0
+    side = 2 * shift + 2 * r + 1
+
+    tl = (x - shift - r, y - shift - r)
+    ntl = (max(0, tl[0]), max(0, tl[1]))
+    br = (x + shift + r + 1, y + shift + r + 1)
+    nbr = (min(img.shape[0], br[0]), min(img.shape[1], br[1]))
+
+    img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
+    img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
+
+    return img_roi
+
 def save_blob(path, img, blob):
     x, y, r = blob
     shift = 0
@@ -187,7 +204,6 @@ def save_blob(path, img, blob):
 
     img_roi = img[ntl[0]:nbr[0], ntl[1]:nbr[1]]
     img_roi = cv2.resize(img_roi, dsize, interpolation=cv2.INTER_CUBIC)
-
     imwrite(path, img_roi)
 
 def show_blob(path, img, blob):
@@ -409,6 +425,35 @@ def save_acc(history, name):
 def save_loss_acc(history, name):
     save_loss(history, name + '_loss')
     save_acc(history, name + '_acc')
+
+def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random):
+    rois = []
+    if data != None:
+        for i in range(len(data)):
+            img, lung_mask = data.get(i)
+            sampled, lce, norm = preprocess(img, lung_mask)
+            # Pick LCE images
+            side = lce.shape[0]
+            assert lung_mask.shape[0] == lce.shape[0]
+            #rois = []
+            cnt = 0
+            while cnt < rois_by_image:
+                rx = int(rng.uniform(0, side))
+                ry = int(rng.uniform(0, side))
+                if lung_mask[rx, ry] > 0:
+                    '''
+                    print "img shape {}".format(img.shape)
+                    print "lce shape {}".format(lce.shape)
+                    print "lung_mask shape {}".format(lce.shape)
+                    print "lung_mask corner_value {} max_value {}".format(lung_mask[0][0], np.max(lung_mask))
+                    print "point {} {}".format(rx, ry)
+                    #print 'roi-{}-{}.jpg'.format(i, cnt)
+                    #imwrite('roi-{}-{}.jpg'.format(i, cnt), util.extract_roi(lce, (rx, ry, 25), dsize))
+                    '''
+                    rois.append([util.extract_roi(lce, (rx, ry, 25), dsize)])
+                    cnt += 1
+            #roi_set.append(rois)
+    return np.array(rois)
 
 if __name__ == '__main__':
     import jsrt

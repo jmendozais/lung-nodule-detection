@@ -31,6 +31,7 @@ import model
 import eval
 import util
 import jsrt
+import neural
 
 # Globals
 step = 10
@@ -76,13 +77,14 @@ def get_froc_on_folds(_model, paths, left_masks, right_masks, blobs, pred_blobs,
     av_froc = eval.average_froc(frocs, fppi_range)
     return av_froc
 
-def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model):
+def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, network_init=None):
     fold = 1
     valid = True
     frocs = []
     frocs_ = []
     for tr_idx, te_idx in folds:    
         print "Fold {}".format(fold),
+            
         data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
         paths_te = paths[te_idx]
 
@@ -102,13 +104,16 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
             rois_tr = rois[tr_idx]
             rois_te = rois[te_idx]
             
-        history = _model.train_with_feature_set_keras(rois_tr, pred_blobs[tr_idx], blobs[tr_idx], 
-            rois_te, pred_blobs[te_idx], blobs[te_idx], 
-            model=network_model, fold=fold)
+        history = _model.train_with_feature_set_keras(rois_tr, pred_blobs[tr_idx], 
+            blobs[tr_idx], rois_te, 
+            pred_blobs[te_idx], blobs[te_idx], 
+            model=network_model, fold=fold,
+            network_init=network_init
+            )
 
         if fold == 1:
-            _model.keras_model.network.summary()
-            #visualize_util.plot(_model.keras_model.network, to_file='data/{}.png'.format(network_model))
+            _model.network.network.summary()
+            #visualize_util.plot(_model.network.network, to_file='data/{}.png'.format(network_model))
 
         blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois_te, pred_blobs[te_idx])
         froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
@@ -162,7 +167,7 @@ def extract_features_cnn(_model, fname, network_model, layer):
         print 'load model ...'
         _model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
         if fold == 1:
-            _model.keras_model.network.summary()
+            _model.network.network.summary()
         print 'extract ...'
         network_feats = _model.extract_features_from_keras_model(rois, layer)
         print 'save ...'
@@ -192,7 +197,7 @@ def froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs,
         _model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
 
         if fold == 1:
-            _model.keras_model.network.summary()
+            _model.network.network.summary()
 
         print "predict ..."
         rois_te = []
@@ -205,7 +210,12 @@ def froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs,
         blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois_te, pred_blobs[te_idx])
         
         print "eval ..."
-        froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred, rois, te_idx)
+        froc = []
+        if _model.streams != 'none':
+            froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred, rois_te[1], data_te, te_idx)
+        else:
+            froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred, rois_te, data_te, te_idx)
+
         frocs.append(froc)
         frocs_subs.append(eval.froc_stratified(blobs_te, blobs_te_pred, probs_te_pred, subs[te_idx], lens[0]))
         frocs_sizes.append(eval.froc_stratified(blobs_te, blobs_te_pred, probs_te_pred, sizes[te_idx], lens[1]))
@@ -319,6 +329,58 @@ def frocs_by_epoch(_model, fname, network_model):
     util.save_auc(np.array(range(1, len(aucs1)+1)) * EPOCH_INTERVAL, aucs1, 'data/{}-auc-2-4'.format(network_model))
     util.save_auc(np.array(range(1, len(aucs2)+1)) * EPOCH_INTERVAL, aucs2, 'data/{}-auc-0-5'.format(network_model))
     return frocs
+
+def pretrain_cnn(_model, fname, network_model, init_name=None):
+    print "pretrain with cnn"
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
+    left_masks = jsrt.left_lung(set='jsrt140')
+    right_masks = jsrt.right_lung(set='jsrt140')
+
+    size = len(paths)
+
+    blobs = []
+    for i in range(size):
+        blobs.append([locs[i][0], locs[i][1], rads[i]])
+    blobs = np.array(blobs)
+
+    print "Loading blobs ..."
+    data = DataProvider(paths, left_masks, right_masks)
+    pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+    rois = _model.create_rois(data, pred_blobs, downsample=True)
+
+    Y = (140 > np.array(range(size))).astype(np.uint8)
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+
+    fold = 1
+    for tr_idx, te_idx in folds:
+        data_tr = DataProvider(paths[tr_idx], left_masks[tr_idx], right_masks[tr_idx])
+        #data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+         
+        X = util.extract_random_rois(data_tr, (_model.roi_size, _model.roi_size))
+        print 'Pretraining Fold {}'.format(fold)
+        print 'Pretraining dataset len: {} ...'.format(len(X))    
+        _model.pretrain(network_model, X)
+        print 'Save ...'
+        if init_name == None:
+            init_name = network + '_init'
+
+        _model.save('data/{}_fold_{}'.format(init_name, fold))
+        fold += 1
+
+    '''
+    ops, ops_sub, ops_siz, ops_kind = froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, subs, sizes, kinds)
+
+    legend = []
+    legend.append('Hardie et al.')
+    legend.append('CNN')
+
+    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+    util.save_froc(ops_sub, 'data/{}-sublety'.format(network_model), jsrt.sublety_labels, with_std=False)
+    util.save_froc(ops_siz, 'data/{}-size'.format(network_model), jsrt.size_labels, with_std=False)
+    util.save_froc(ops_kind, 'data/{}-severity'.format(network_model), jsrt.severity_labels, with_std=False)
+
+    return ops
+    '''
 
 def classify_cnn(_model, fname, network_model):
     print "classify with cnn"
@@ -1026,6 +1088,41 @@ def protocol_cnn_froc(detections_source, fname, network_model):
 
     return ops
 
+def protocol_pretrained_cnn(detections_source, fname, network_model, network_init):
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
+    left_masks = jsrt.left_lung(set='jsrt140')
+    right_masks = jsrt.right_lung(set='jsrt140')
+    size = len(paths)
+
+    blobs = []
+    for i in range(size):
+        blobs.append([locs[i][0], locs[i][1], rads[i]])
+    blobs = np.array(blobs)
+
+    print "Loading dataset ..."
+    data = DataProvider(paths, left_masks, right_masks)
+    pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+    rois = detections_source.create_rois(data, pred_blobs)
+
+    av_cpi = 0
+    for tmp in pred_blobs:
+        av_cpi += len(tmp)
+    print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
+
+    Y = (140 > np.array(range(size))).astype(np.uint8)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+    
+    ops = get_froc_on_folds_keras(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, network_model, network_init=network_init)
+
+    legend = []
+    legend.append('Hardie et al.')
+    legend.append(network_model)
+
+    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+
+    return ops
+
+
 def protocol_cnn_froc_transforms(detections_source, fname, network_model):
     '''
     paths, locs, rads, subs = jsrt.jsrt(set=None)
@@ -1137,7 +1234,7 @@ def compare_cnn_models(detections_source, fname, nw_names, nw_labels, exp_name):
     legend.append('Hardie et al.')
 
     for i in range(len(nw_names)):
-        ops = froc_classify_cnn(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, nw_names[i])
+        ops, _, _, _ = froc_classify_cnn(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, nw_names[i], subs, sizes, kinds)
         op_set.append(ops)
         legend.append(nw_labels[i])
 
@@ -1336,6 +1433,8 @@ def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
     util.save_froc(op_set, 'data/{}-{}-GS-HYB'.format(network, fname), legend)
     return ops
 
+#def pretrain_convnet(model, extractor_key, network):
+
 if __name__=="__main__":    
     parser = argparse.ArgumentParser(prog='lnd.py')
     parser.add_argument('-p', '--preprocessor', help='Options: heq, nlm, cs.', default='none')
@@ -1348,34 +1447,41 @@ if __name__=="__main__":
     parser.add_argument('--fts', help='Performs feature extraction.', action='store_true')
     parser.add_argument('--clf', help='Performs classification.', action='store_true')
     parser.add_argument('--hyp', help='Performs hyperparameter search. The target method to evaluate should be specified using -t.', action='store_true')
+    parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
     parser.add_argument('--cmp', help='Compare results of different models via froc. Options: hog, hog-impls, lbp, clf.', default='none')
+    parser.add_argument('--fw', help='Plot the importance of individual features ( selected clf coef vs anova ) ', action='store_true')
+
+    # DEEP LEARNING
+
+    # Commons
     parser.add_argument('--cnn', help='Evaluate convnet. Options: shallow_1, shallow_2.', default='none')
     parser.add_argument('-l', '--layer', help='Layer index used to extract feature from cnn model.', default=-1, type=int)
     parser.add_argument('--hybrid', help='Evaluate hybrid approach: convnet + descriptor.', action='store_true')
-    parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
-    parser.add_argument('--fw', help='Plot the importance of individual features ( selected clf coef vs anova ) ', action='store_true')
 
-    parser.add_argument('--trf-channels', help='', action='store_true')
-    parser.add_argument('--streams', help='Options: trf (transformations), seg (segmentation), fovea (center-scaling), none(default)', default='none')
+    # Fussion
+    parser.add_argument('--trf-channels', help='', action='store_true') # Early fussion channels
+    parser.add_argument('--streams', help='Options: trf (transformations), seg (segmentation), fovea (center-scaling), none (default)', default='none') # Late fussion opts
+    
+    # Fussion : TODO
+    parser.add_argument('--early', help='Options: trf, seg, fovea, none(lce, default)', default='none')
+    parser.add_argument('--late', help='Options: trf, seg, fovea, none(lce, default)', default='none')
 
-    # Deep learning evals 
+    # Comparing models
+    parser.add_argument('--cmp-cnn', help = 'Compare models (mod), preprocessing (pre), regularization (reg), \
+                                            max-pooling stages (mp), number of feature maps (nfm), dropout (dp), \
+                                            mlp width (clf-width, deprecated), common classifiers (skl), hybrid cnn + features (hyb), \
+                                            hybrid model evaluated with linear SVM grid search on C (hyp-hyb)', \
+                                            default='none') 
 
-    # TODO: Add augment suffix to network model name
+    # Pretraining
+    parser.add_argument('--pre-tr', help='Enable pretraining', action='store_true')#default='none')
+    parser.add_argument('--init', help='Enable initialization from a existing network', default='none')
+
+    # Opts
     parser.add_argument('-a', '--augment', help='Augmentation configurations: bt, zcabt, xbt', default='bt')
-
-    parser.add_argument('--cmp-cnn', help='Compare all LND-X models.', action='store_true')
-    parser.add_argument('--cmp-cnn-pre', help='Compare preprocessing method on LND-A-5P.', action='store_true')
-    parser.add_argument('--cmp-cnn-reg', help='Compare regularization methods on LND-A-5P.', action='store_true')
-    parser.add_argument('--cmp-cnn-mp', help='Compare # of pooling stages with LND-A model', action='store_true')
-    parser.add_argument('--cmp-cnn-nfm', help='Compare # of feature maps with LND-A-5P model', action='store_true')
-    parser.add_argument('--cmp-cnn-dp', help='Compare dropout percent arrangements on LND-A-5P model', action='store_true')
-
-    parser.add_argument('--cmp-cnn-clf-width', help='Compare the best LND-X model replacing its default MLP by alternatives.', action='store_true')
-    parser.add_argument('--cmp-cnn-skl', help='Compare the best LND-X model replacing its nn-clf stage by conventional classification algorithms(svm, lda).', action='store_true')
-    parser.add_argument('--cmp-cnn-hybrid', help='Compare best cnn-clf with handcrafted-features(-d).', action='store_true')
-    parser.add_argument('--hyp-cnn-lsvm-hybrid', help='Compare the performance of hybrid model ( cnn feats + hrg16 ) with linear svm clf varying the C parameter.', action='store_true')
     parser.add_argument('--roi-size', help='Layer index used to extract feature from cnn model.', default=64, type=int)
-    parser.add_argument('--cmp-cnn-sota', help='Compare all LND-X models.', action='store_true')
+
+    # Evals
     parser.add_argument('--frocs-by-epoch', help='Generate a figure with froc curves every 5 epochs', action='store_true')
     
     args = parser.parse_args()
@@ -1400,53 +1506,66 @@ if __name__=="__main__":
     elif args.frocs_by_epoch:
         frocs_by_epoch(_model, extractor_key, args.cnn)
 
-    elif args.cmp_cnn:
+    elif args.cmp_cnn == 'caes':
+        networks = ['3P', '3P-CAE1', '3P-CAE5', '3P-CAE10', '3P-CAE15', '3P-CAE20']
+        #networks = ['3P', '3P-CAE20']
+        network_labels = ['Orthogonal init.', 'CAE, 1 epoch', 'CAE, 5 epochs', 'CAE, 10 epochs', 'CAE, 15 epochs', 'CAE, 20 epochs']
+        #network_labels = ['Orthogonal init.', 'CAE, 20 epochs']
+        compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/models')
+
+    elif args.cmp_cnn == 'caes2':
+        networks = ['3PE40', '3P-CAE'] 
+        network_labels = ['Orthogonal init.', 'CAE init']
+        compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/models')
+
+    elif args.cmp_cnn == 'mod':
         networks = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P-C2', 'LND-A-ALLCNN-5P', 'LND-C-5P']
         network_labels = ['LND-A', 'LND-B', 'LND-C', 'LND-A-5P, 2x2 conv on top', 'ALLCNN-A, 5 maxpool', 'LND-C, 5 maxpool']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/models')
 
-    elif args.cmp_cnn_sota:
-        networks = ['LND-A-6P']
-        network_labels = ['CNN']
-        compare_cnn_sota(_model, '{}'.format(extractor_key), networks, network_labels, 'data/models')
-
-    elif args.cmp_cnn_pre:
+    elif args.cmp_cnn == 'pre':
         networks = ['LND-A-5P', 'LND-A-5P-GCN', 'LND-A-5P-ZCA', 'LND-A-5P-ZMUV']
         network_labels = ['LND-A-5P', 'LND-A-5P with GCN', 'LND-A-5P with ZCA', 'LND-A-5P with ZMUV']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/pre')
 
-    elif args.cmp_cnn_reg:
+    elif args.cmp_cnn == 'reg':
         networks = ['LND-A-5P', 'LND-A-5P-L2']
         network_labels = ['LND-A-5P', 'LND-A-5P, L2 regularization.']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/reg')
 
-    elif args.cmp_cnn_mp:
+    elif args.cmp_cnn == 'mp':
         networks = ['LND-A-3P', 'LND-A-4P', 'LND-A-5P']
         network_labels = ['LND-A, 3 pooling stages', 'LND-A, 4 pooling stages', 'LND-A, 5 pooling stages']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/pool_stages')
 
-    elif args.cmp_cnn_nfm:
+    elif args.cmp_cnn == 'nfm':
         networks = ['LND-A-5P', 'LND-A-5P-64', 'LND-A-5P-96']
         network_labels = ['LND-A-5P, layer * 32 filters', 'LND-A-5P, layer * 64 filters', 'LND-A-5P, layer * 96 filters']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/fmaps')
 
-    elif args.cmp_cnn_dp:
+    elif args.cmp_cnn == 'dp':
         networks = ['LND-A-5P', 'LND-A-5P-LDP', 'LND-A-5P-LDP2']
         network_labels = ['LND-A-5P, 0.25 dp', 'LND-A-5P, 0.15 + layer * 0.05 dp', 'LND-A-5P, 0.1 + layer * 0.1 dp']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/dps')
 
-    elif args.cmp_cnn_clf_width:
+    elif args.cmp_cnn == 'clf-width':
         networks = ['LND-A-5P', 'LND-A-5P-MLP512', 'LND-A-5P-MLP1024']
         network_labels = ['LND-A-5P with MPL(512-256)', 'LND-A-5P with MPL(512, 512)', 'LND-A-5P with MPL(1024, 1024)']
         compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/widths')
 
-    elif args.cmp_cnn_skl:
+    elif args.cmp_cnn == 'skl':
         assert args.cnn != 'none'
         compare_cnn_sklearn_clfs(_model, '{}'.format(extractor_key), args.cnn)
-    elif args.cmp_cnn_hybrid:
+
+    elif args.cmp_cnn == 'hyb':
         compare_cnn_hybrid(_model, '{}'.format(extractor_key), args.cnn)
-    elif args.hyp_cnn_lsvm_hybrid:
+
+    elif args.cmp_cnn == 'hyp-hyb':
         hyp_cnn_lsvm_hybrid(_model, '{}'.format(extractor_key), args.cnn)
+
+    elif args.pre_tr == 'conv':
+        pretrain_convnet(_model, args.extractor_key, args.cnn)
+
     elif args.cmp != 'none':
         if args.clf:
             _model.clf = model.classifiers[args.classifier]
@@ -1476,15 +1595,20 @@ if __name__=="__main__":
         hybrid(_model, '{}'.format(extractor_key), args.cnn, args.layer)
 
     elif args.cnn != 'none':
+        if args.pre_tr:
+            pretrain_cnn(_model, extractor_key, args.cnn, args.init)
         # extract features fron a specific layer. 
-        if args.fts:
+        elif args.fts:
             extract_features_cnn(_model, extractor_key, args.cnn, args.layer)
         # perform classification stage convnet only.
         elif args.clf:
             classify_cnn(_model, extractor_key, args.cnn)
         # perform detection pipeline with convnet model only
         else:
-            protocol_cnn_froc(_model, '{}'.format(extractor_key), args.cnn)
+            if args.init != 'none':
+                protocol_pretrained_cnn(_model, extractor_key, args.cnn, args.init)
+            else:
+                protocol_cnn_froc(_model, '{}'.format(extractor_key), args.cnn)
     else:
         method = protocol_froc_2
         if args.fts:

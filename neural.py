@@ -34,52 +34,48 @@ def get_activations(model, layer, X_batch):
 
 # Feature blocks 
 
-def convpool_block(model, depth=2, nb_filters=64, nb_conv=3, nb_pool=2, init='orthogonal', input_shape=None, activation='relu', batch_norm=False, regularizer=None, **junk):
+def convpool_block(inp, depth=2, nb_filters=64, nb_conv=3, nb_pool=2, init='orthogonal', activation='relu', batch_norm=False, regularizer=None, **junk):
+    out = inp
     for i in range(depth):
-        if input_shape != None:
-            model.add(Convolution2D(nb_filters, nb_conv, nb_conv, border_mode='same', init=init, input_shape=input_shape, W_regularizer=regularizer))
-        else:
-            model.add(Convolution2D(nb_filters, nb_conv, nb_conv, border_mode='same', init=init, W_regularizer=regularizer))
-
+        out = Convolution2D(nb_filters, nb_conv, nb_conv, border_mode='same', init=init, W_regularizer=regularizer)(out)
         if batch_norm:
-            model.add(BatchNormalization())
-
+            out = BatchNormalization()(out)
         if activation == 'leaky_relu':
-            model.add(LeakyReLU(alpha=.333))
+            out = LeakyReLU(alpha=.333)(out)
         else:
-            model.add(Activation(activation))
-    model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
-    return model
+            out = Activation(activation)(out)
+    out = MaxPooling2D(pool_size=(nb_pool, nb_pool))(out)
+    return out
 
-def convpool_fs(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64),  init='orthogonal', batch_norm=False, activation='relu', regularizer=None, dropout=0.25):
+def convpool_fs(inp, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], init='orthogonal', batch_norm=False, activation='relu', regularizer=None, dropout=0.25):
     assert nb_modules == len(nb_filters)
     layewise_dropout = type(dropout) == type([])
 
+    out = inp
     prevent_coadapt = dropout == 0.5
     if prevent_coadapt:
         print "prevent co-adaptation with dropout ..."
-        model.add(Dropout(0.2, input_shape=input_shape))
+        out = Dropout(0.2)(out)
 
     for i in range(nb_modules):
         if i == 0:
             if prevent_coadapt:
-                convpool_block(model, module_depth, nb_filters[i], nb_conv=conv_size[i], init=init, activation=activation, regularizer=regularizer)
+                out = convpool_block(out, module_depth, nb_filters[i], nb_conv=conv_size[i], init=init, activation=activation, regularizer=regularizer)
             else:
-                convpool_block(model, module_depth, nb_filters[i], nb_conv=conv_size[i], input_shape=input_shape, init=init, activation=activation, regularizer=regularizer)
+                out = convpool_block(out, module_depth, nb_filters[i], nb_conv=conv_size[i], init=init, activation=activation, regularizer=regularizer)
         else:
-            convpool_block(model, module_depth, nb_filters[i], nb_conv=conv_size[i], activation=activation, regularizer=regularizer)
+            out = convpool_block(out, module_depth, nb_filters[i], nb_conv=conv_size[i], activation=activation, regularizer=regularizer)
 
         if batch_norm is False:
             if layewise_dropout:
-                model.add(Dropout(dropout[i]))
+                out = Dropout(dropout[i])(out)
             else:
-                model.add(Dropout(dropout))
+                out = Dropout(dropout)(out)
 
-    return model
+    return out
 
 def convpool_fs_ldp(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64),  init='orthogonal', batch_norm=False, activation='relu', nb_dp=5, dp_init=0.15, dp_inc=0.05, regularizer=None):
     assert nb_modules == len(nb_filters)
-    
     for i in range(nb_modules):
         if i == 0:
             convpool_block(model, module_depth, nb_filters[i], nb_conv=conv_size[i], input_shape=input_shape, init=init, activation=activation, regularizer=regularizer)
@@ -129,17 +125,19 @@ def allcnn_fs(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[
 
 # Classification blocks
 
-def mlp_softmax(model, nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', regularizer=None):
+def mlp_softmax(inp, nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', regularizer=None):
+    out = inp
     for i in range(nb_dense):
-        model.add(Dense(dense_units[i], init=init, W_regularizer=regularizer))
+        out = Dense(dense_units[i], init=init, W_regularizer=regularizer)(out)
         if activation == 'leaky_relu':
-            model.add(LeakyReLU(alpha=.333))
+            out = LeakyReLU(alpha=.333)(out)
         else:
-            model.add(Activation(activation))
-        model.add(Dropout(0.5))
+            out = Activation(activation)(out)
+        out = Dropout(0.5)(out)
 
-    model.add(Dense(nb_classes, W_regularizer=regularizer))
-    model.add(Activation('softmax'))
+    out = Dense(nb_classes, W_regularizer=regularizer)(out)
+    out = Activation('softmax')(out)
+    return out
 
 def nin_softmax(model, nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', regularizer=None):
     for i in range(nb_dense):
@@ -153,30 +151,30 @@ def nin_softmax(model, nb_dense=1, dense_units=[512], nb_classes=2, init='orthog
     model.add(Dense(nb_classes, W_regularizer=regularizer))
     model.add(Activation('softmax'))
 
-def maxout_softmax(model, nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', nb_feature=2, regularizer=None):
+def maxout_softmax(inp, nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', nb_feature=2, regularizer=None):
+    out = inp
     for i in range(nb_dense):
-        model.add(MaxoutDense(dense_units[i], init=init, nb_feature=nb_feature, W_regularizer=regularizer))
-        model.add(Activation('linear'))
-        model.add(Dropout(0.5))
+        out = MaxoutDense(dense_units[i], init=init, nb_feature=nb_feature, W_regularizer=regularizer)(out)
+        out = Activation('linear')(out)
+        out = Dropout(0.5)(out)
 
-    model.add(Dense(nb_classes, W_regularizer=regularizer))
-    model.add(Activation('softmax'))
+    out = Dense(nb_classes, W_regularizer=regularizer)(out)
+    out = Activation('softmax')(out)
 
 # Models 
 
 def standard_cnn(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', regularizer=None):
-    convpool_fs(model, nb_modules, module_depth,  nb_filters, conv_size, input_shape,  init, batch_norm, activation, regularizer=regularizer)
-    model.add(Flatten())
-    mlp_softmax(model, nb_dense, dense_units, nb_classes, init, batch_norm, activation, regularizer=regularizer)
-    return model
+    inp = Input(shape=input_shape, dtype='float32', name='input_layer')   
+    out = convpool_fs(inp, nb_modules, module_depth,  nb_filters, conv_size, init, batch_norm, activation, regularizer=regularizer)
+    out = Flatten()(out)
+    out = mlp_softmax(out, nb_dense, dense_units, nb_classes, init, batch_norm, activation, regularizer=regularizer)
+    return Model(input=inp, output=out)
 
 def standard_cnn_ldp(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', nb_dp=5, dp_init=0.15, dp_inc=0.05, regularizer=None):
     convpool_fs_ldp(model, nb_modules, module_depth,  nb_filters, conv_size, input_shape,  init, batch_norm, activation, nb_dp=nb_dp, dp_init=dp_init, dp_inc=dp_inc, regularizer=regularizer)
     model.add(Flatten())
     mlp_softmax(model, nb_dense, dense_units, nb_classes, init, batch_norm, activation, regularizer=regularizer)
     return model
-
-
 
 class StageScheduler(keras.callbacks.Callback):
     def __init__(self, stages=[], decay=0.1):
@@ -380,7 +378,7 @@ class NetModel:
             X = X.astype('float32')
             X = self.generator.centering_crop(X)
             X = self.preprocessor.transform(X)
-            return self.network.predict_proba(X)
+            return self.network.predict(X)
 
 ''' 
 Configurations
@@ -487,7 +485,7 @@ def lnd_3p(input_layer, activation, init, dropout):
 
     return out
 
-def lnd_a_3p_streams(input_shape, num_streams=3):
+def lnd_a_3p_streams(input_shape, num_streams=3, late_fusion=False):
     activation = 'relu'
     init = 'orthogonal'
     dropout = 0.25
@@ -502,11 +500,27 @@ def lnd_a_3p_streams(input_shape, num_streams=3):
         ins.append(in_)
         outs.append(out_)
         
-    out = merge(outs, 'concat')
+    if late_fusion:
+        outs2 = []
+        outs3 = []
+        for i in xrange(num_streams):
+            out = Dense(dense_units, init=init)(outs[i])
+            out = Activation(activation)(out)
+            out = Dropout(0.5)(out)
+            outs2.append(out)
 
-    out = Dense(dense_units, init=init)(out)
-    out = Activation(activation)(out)
-    out = Dropout(0.5)(out)
+        for i in xrange(num_streams):
+            out = Dense(dense_units, init=init)(outs2[i])
+            out = Activation(activation)(out)
+            out = Dropout(0.5)(out)
+            outs3.append(out)
+ 
+        out = merge(outs3, 'concat')
+    else:
+        out = merge(outs, 'concat')
+        out = Dense(dense_units, init=init)(out)
+        out = Activation(activation)(out)
+        out = Dropout(0.5)(out)
 
     out = Dense(dense_units, init=init)(out)
     out = Activation(activation)(out)
@@ -514,23 +528,70 @@ def lnd_a_3p_streams(input_shape, num_streams=3):
 
     out = Dense(nb_classes)(out)
     out = Activation('softmax')(out)
-
     return Model(input=ins, output=out)
 
-def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1', streams=False, fold=None):
+def vgg16():
+    model = Sequential()
+    model.add(ZeroPadding2D((1,1),input_shape=(3,224,224)))
+    model.add(Convolution2D(64, 3, 3, activation='relu'))
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(64, 3, 3, activation='relu'))
+    model.add(MaxPooling2D((2,2), strides=(2,2)))
+
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(128, 3, 3, activation='relu'))
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(128, 3, 3, activation='relu'))
+    model.add(MaxPooling2D((2,2), strides=(2,2)))
+
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(256, 3, 3, activation='relu'))
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(256, 3, 3, activation='relu'))
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(256, 3, 3, activation='relu'))
+    model.add(MaxPooling2D((2,2), strides=(2,2)))
+
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(MaxPooling2D((2,2), strides=(2,2)))
+
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(ZeroPadding2D((1,1)))
+    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(MaxPooling2D((2,2), strides=(2,2)))
+
+    model.add(Flatten())
+    model.add(Dense(4096, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(4096, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(1000, activation='softmax'))
+
+    weights_path = 'data/vgg16_weights.h5'
+    if weights_path:
+        model.load_weights(weights_path)
+    
+    model.pop()
+    model.add(Dense(2, activation='softmax'))
+
+    return model
+
+def create_network(model, input_shape, fold=-1, streams=-1):
     print 'Fit model: {}'.format(model)
     if streams:
-        print 'X-train shape: {} {}'.format(len(X_train), X_train[0].shape)
+        print 'X-train streams: {} shape: {}'.format(streams, input_shape)
     else:
-        print 'X-train shape: {}'.format(X_train.shape)
+        print 'X-train shape: {}'.format(input_shape)
 
-    FACTOR = 1.15 * 2
     net_model = None
-    input_shape = []
-    input_shape.append(X_train[0].shape[-3])
-    input_shape.append(2 * int(round(X_train[0].shape[-2] / FACTOR)))
-    input_shape.append(2 * int(round(X_train[0].shape[-1] / FACTOR)))
-    input_shape = tuple(input_shape)
     print 'cropped shape {}'.format(input_shape)
 
     hist = None
@@ -540,10 +601,83 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1', streams=Fal
         train_params = {'schedule':schedule, 'nb_epoch':3, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
-    elif model == 'LND-A-3P':
+    elif model == '3P':
+        network = lnd_a_3p((1, 32, 32))
+        schedule=[20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':10, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3PE40':
         network = lnd_a_3p((1, 32, 32))
         schedule=[20, 30, 35]
         train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+
+    elif model == '3P-CAE':
+        network = lnd_a_3p((1, 32, 32))
+        schedule=[20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3P-CAE1':
+        network = lnd_a_3p((1, 32, 32))
+        schedule=[20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':10, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3P-CAE5':
+        network = lnd_a_3p((1, 32, 32))
+        schedule = [20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':10, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3P-CAE10':
+        network = lnd_a_3p((1, 32, 32))
+        schedule=[20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':10, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3P-CAE15':
+        network = lnd_a_3p((1, 32, 32))
+        schedule=[20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':10, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3P-CAE20':
+        network = lnd_a_3p((1, 32, 32))
+        schedule=[20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':10, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3P-CAE30':
+        network = lnd_a_3p((1, 32, 32))
+        schedule=[20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':10, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         augment_params = default_augment_params
         augment_params['output_shape'] = (32, 32)
@@ -572,8 +706,8 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1', streams=Fal
     elif model == 'LND-A-3P-STR-FOVEA':
         #network = lnd_a_3p_fat(input_shape)
         network = lnd_a_3p_streams(input_shape, 2)
-        schedule=[50, 50, 50]
-        train_params = {'schedule':schedule, 'nb_epoch':50, 'batch_size':32, 
+        schedule=[60, 60, 50]
+        train_params = {'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         augment_params = default_augment_params
         augment_params['output_shape'] = (32, 32)
@@ -588,6 +722,24 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1', streams=Fal
         augment_params = default_augment_params
         augment_params['output_shape'] = (32, 32)
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3P-LATE':
+        network = lnd_a_3p_streams(input_shape, 3, late_fusion=True)
+        schedule=[50, 50, 50]
+        train_params = {'schedule':schedule, 'nb_epoch':50, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params)
+
+    elif model == '3P-LATE2':
+        network = lnd_a_3p_streams(input_shape, 3, late_fusion=True)
+        schedule=[50, 50, 50]
+        train_params = {'schedule':schedule, 'nb_epoch':50, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params)
 
     elif model == 'LND-A-4P':
         network = lnd_a_4p(input_shape)
@@ -621,8 +773,6 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1', streams=Fal
         schedule=[25, 35, 40]
         train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.003, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
-
-
 
     elif model == 'LND-A-5P-FIX':   
         network = lnd_a_5p(input_shape)
@@ -684,6 +834,15 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1', streams=Fal
         train_params = {'schedule':schedule, 'nb_epoch':55, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         preproc_params = {}
         net_model = NetModel(network, train_params, default_augment_params, preproc_params)
+
+    elif model == '5P':   
+        network = lnd_a_5p(input_shape)
+        schedule=[50, 50, 50]
+        train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (128, 128)
+        net_model = NetModel(network, train_params, augment_params)
 
     elif model == '6P':   
         network = lnd_a_6p(input_shape)
@@ -777,10 +936,19 @@ def fit(X_train, Y_train, X_val=None, Y_val=None, model='shallow_1', streams=Fal
         augment_params['output_shape'] = (128, 128)
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
 
+    elif model == 'VGG16':
+        network = vgg16(input_shape)
+        schedule=[40, 40, 40]
+        train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 'lr':0.0001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (224, 224)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
     else:
         print "Model config not found."
     
-    hist = net_model.fit(X_train, Y_train, X_val, Y_val, streams=streams, cropped_shape=input_shape, checkpoint_prefix='data/{}.fold-{}'.format(model, fold))
-    return net_model, hist
+    return net_model
  
 ''' .... '''
+
+

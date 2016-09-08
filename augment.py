@@ -376,8 +376,6 @@ class ImageDataGenerator:
 
         return aX, ay
 
-
-
     def online_augment(self, X, y):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
         factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))

@@ -1,4 +1,5 @@
 import os
+
 import os.path as path
 import numpy as np
 import cv2
@@ -166,24 +167,62 @@ def evaluate(real, predicted, data=None, sample=False):
 
 # TODO: Adapt the code to calculate the exact vertical average FROC curve, instead of mix tav and vav
 
-def froc(real, pred, probs, rois=None, jsrt_idx=None):
+def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random):
+    roi_set = []
+    if data != None:
+        for i in range(len(data)):
+            img, lung_mask = data.get(i)
+            sampled, lce, norm = preprocess(img, lung_mask)
+
+            # Pick LCE images
+            side = lce.shape[0]
+            assert lung_mask.shape[0] == lce.shape[0]
+            rois = []
+            cnt = 0
+            while cnt < rois_by_image:
+                rx = rng.uniform(0, side)
+                ry = rng.uniform(0, side)
+                if lung_mask[rx, ry] > 0:
+                    rois.append(util.extract_roi((rx, ry), img))
+                    cnt += 1
+            roi_set.append(rois)
+    
+    return np.array(roi_set)
+
+
+def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None):
+    img_set = []
+    if data != None:
+        for i in range(len(data)):
+            img, lung_mask = data.get(i)
+            sampled, lce, norm = preprocess(img, lung_mask)
+            img_set.append(np.array([lce]))
+    img_set = np.array(img_set)
+
     n = len(real)       
     p = 0
-    entries = np.full((0,5), fill_value=0, dtype=float)
-    
+
+    entries = []
+    if jsrt_idx != None: 
+        entries = np.full((0,5), fill_value=0, dtype=float)
+    else: 
+        entries = np.full((0,4), fill_value=0, dtype=float)
+
     for i in range(n):
+        if data != None:
+            util.show_blobs_real_predicted(img_set[i][0], jsrt_idx[i], real[i], pred[i])
         if real[i][0][0] != -1:
             p += 1
-
         dist = np.linalg.norm(pred[i][:,:2] - real[i][0][:2], axis=1)
-        
         entry = []
         entry.append(probs[i])
         entry.append(dist)
         entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
         entry.append(np.arange(len(probs[i]), dtype=np.float))
-        entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
-
+        if jsrt_idx != None:
+            entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
+        print np.array(entry).T.shape
+        print entries.shape
         entries = np.append(entries, np.array(entry).T, axis=0)
     
     entries = sorted(entries, key=itemgetter(0))
@@ -195,28 +234,37 @@ def froc(real, pred, probs, rois=None, jsrt_idx=None):
     found = np.full((n,), fill_value=False, dtype=bool)
     froc = []
     f_prev = -1.0
+    
+    print 'checks'
+    print len(img_set)
+    print len(pred)
+
     for i in range(entries.shape[0]):
         idx = entries[i][2]
         if entries[i][0] != f_prev:
             froc.append([np.mean(fppi), tp / p])
             f_prev = entries[i][0]
-
         if not found[idx] and entries[i][1] < 31.43:
             found[idx] = True
             tp += 1
             if rois != None:
-                tmp = rois[entries[i][2]][entries[i][3]]
+                tmp = rois[int(entries[i][2])][int(entries[i][3])]
                 for k in range(len(tmp)):
-                    util.imwrite('{}-{}-tp.jpg'.format(int(entries[i][0] * 1000000) * 0.0001, entries[i][4]), tmp[k])
+                    foo=1
+                    #util.imwrite('{}-{}-tp.jpg'.format(int(entries[i][0] * 1000000) * 0.0001, entries[i][4]), tmp[k])
+                    #print 'check {} : {} - {}'.format(i, entries[i][2], entries[i][3])
+                    #util.save_blob('{}-{}-tp.jpg'.format(int(entries[i][0] * 1000000000000) * 0.0000000001, entries[i][4]), img_set[entries[i][2]][0], pred[entries[i][2]][entries[i][3]])
         else:
             fppi[idx] += 1
-            if rois != None:
-                tmp = rois[entries[i][2]][entries[i][3]]
+            if rois != None and entries[i][1] > 31.43:
+                tmp = rois[int(entries[i][2])][int(entries[i][3])]
                 for k in range(len(tmp)):
-                    util.imwrite('{}-{}-fp.jpg'.format(int(entries[i][0] * 1000000) * 0.0001, entries[i][4]), tmp[k])
+                    foo=1
+                    #util.imwrite('{}-{}-fp.jpg'.format(int(entries[i][0] * 1000000) * 0.0001, entries[i][4]), tmp[k])
+                    #print 'check {} : {} - {}'.format(i, entries[i][2], entries[i][3])
+                    #util.save_blob('{}-{}-fp.jpg'.format(int(entries[i][0] * 1000000000000) * 0.0000000001, entries[i][4]), img_set[entries[i][2]][0], pred[entries[i][2]][entries[i][3]])
 
     froc.append([np.mean(fppi), tp / p])
-
     targets = [2., 4., 10.]
     ops = []
     for i in range(len(targets)):
