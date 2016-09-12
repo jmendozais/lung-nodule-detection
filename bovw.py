@@ -75,13 +75,13 @@ class HOG:
         return ans
 
 class BOVW:
-    def __init__(self, extractor, k=10, size=(8, 8), pad=(4, 4)):
+    def __init__(self, extractor, k=10, size=(8, 8), pad=(4, 4), pool='hard'):
         self.k = k
         self.pad = pad
         self.size = size
+        self.pool = pool
 
         self.extractor = extractor
-        print("K ------> {}".format(self.k))
         self.clusterer = cluster.KMeans(self.k, max_iter=40, n_init=1)
 
     def load(self, name):
@@ -114,10 +114,20 @@ class BOVW:
         assert len(X) > 0
         xr = np.linspace(0, X[0].shape[0] - self.size[0], self.pad[0])
         yr = np.linspace(0, X[0].shape[1] - self.size[1], self.pad[1])
+        xr_len = len(xr)
+        yr_len = len(yr)
 
         v_len = len(self.extractor.extract(X[0][0:self.size[0], 0:self.size[1]]))
         ft = np.zeros(shape=(len(xr) * len(yr), v_len), dtype='float32')
-        V = np.zeros(shape=(len(X), self.k), dtype='float32')
+        if self.pool == 'hard':
+            V = np.zeros(shape=(len(X), self.k), dtype='float32')
+        elif self.pool == 'soft':
+            V = np.zeros(shape=(len(X), 4 * self.k), dtype='float32')
+            #V = np.zeros(shape=(len(X), self.k), dtype='float32')
+        else:
+            raise Exception("Undefined pooling mode: {}".format(self.pool))
+        C = self.clusterer.cluster_centers_
+        zeros  = np.zeros(shape = (len(C),), dtype=C.dtype)
         
         for k in range(len(X)):
             it = 0
@@ -125,9 +135,23 @@ class BOVW:
                 ft[it] = self.extractor.extract(X[k][i:i + self.size[0], j:j + self.size[1]]) 
                 it += 1
             assert len(ft) == it
-            idx = self.clusterer.predict(ft)
-            V[k], _ = np.histogram(idx, bins=self.k, range=(0, self.k))  
-        
+            if self.pool == 'hard':
+                idx = self.clusterer.predict(ft)
+                V[k], _ = np.histogram(idx, bins=self.k, range=(0, self.k))  
+            elif self.pool == 'soft':
+                for i, j in product(range(xr_len), range(yr_len)): 
+                    index = 0
+                    if i > xr_len/2:
+                        index += 2
+                    if j > yr_len/2:
+                        index += 1
+                    S = np.linalg.norm(C - ft[i*xr_len + j], axis=1)
+                    S = np.mean(S) - S
+                    #V[k] += np.max([S, zeros], axis=0)
+                    V[k][index*self.k:(index+1)*self.k] += np.max([S, zeros], axis=0)
+            else:
+                raise Exception("Undefined pooling mode: {}".format(self.pool))
+        print("V shape {}".format(V.shape))
         return V
 
     def fit_transform(self, X):
@@ -138,11 +162,11 @@ def load_mnist(img_cols, img_rows, nb_classes):
     (X_train, y_train), (X_test, y_test) = mnist.load_data()
     tmp = []
     for x in X_train:
-        tmp.append(imresize(x, (32, 32)))
+        tmp.append(imresize(x, (img_rows, img_cols)))
     X_train = np.array(tmp)
     tmp = []
     for x in X_test:
-        tmp.append(imresize(x, (32, 32)))
+        tmp.append(imresize(x, (img_rows, img_cols)))
     X_test = np.array(tmp)
     print("shapes {} {}".format(X_train.shape, X_test.shape))
 
@@ -184,7 +208,7 @@ if __name__ == '__main__':
     batch_size = 100
     nb_epoch = 1
     nb_classes = 10
-    img_rows, img_cols = 32, 32
+    img_rows, img_cols = 36, 36
     
     (X_train, Y_train), (X_test, Y_test) = load_mnist(img_rows, img_cols, nb_classes)
 
@@ -193,7 +217,11 @@ if __name__ == '__main__':
     Y_train_small = Y_train[range(10000)]
     print("X shape {}".format(X_train_small.shape))
 
-    bow = BOVW(HOG(cell=(5,5)), k=320, size=(15, 15), pad=(1,1))
+    # IMG BOW(k=320, pool=hard) 76.6
+    # IMG BOW(k=320, pool=soft) 82.2
+    # IMG BOW(k=600, pool=soft) 82.2
+    #bow = BOVW(HOG(cell=(5,5)), k=320, size=(15, 15), pad=(1,1), pool='hard')
+    bow = BOVW(IMG(), k=320, size=(15, 15), pad=(1,1), pool='soft')
     print("BOVW fit transform ...")
     V_train = bow.fit_transform(X_train_small)
     print("BOVW transform ...")
@@ -209,7 +237,18 @@ if __name__ == '__main__':
     V_train = extract_HOG(X_train_small)
     V_test = extract_HOG(X_test)
     '''
-    #clf = KNeighborsClassifier()
+    clf = KNeighborsClassifier(5)
+    print("clf fit ...")
+    clf.fit(V_train, Y_train_small)
+    print("clf predict ...")
+    Y_pred = clf.predict(V_test)
+
+    print("Y test: {}".format(Y_test))
+    print("Y pred: {}".format(Y_pred))
+    acc = np.mean(Y_test == Y_pred)
+    print("Accuracy: {}".format(acc))
+  
+
     '''
     clf = SVC(kernel='rbf')
     parameters = {'C':10. ** np.arange(-3,3), 'gamma':2. ** np.arange(-5, 1)}
@@ -219,6 +258,7 @@ if __name__ == '__main__':
     print("score: {}".format(grid.score(X_test, y_test)))
     print(grid.best_estimator_)
     '''
+def test_svc_hp(X_train, Y_train, X_test, Y_test):
     for c in range(-3, 3):
         c = 10 ** c
         clf = SVC(kernel='rbf', C=c)
