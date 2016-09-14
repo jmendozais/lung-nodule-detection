@@ -11,8 +11,9 @@ from keras.utils import np_utils
 from sklearn.svm import SVC
 from sklearn.grid_search import GridSearchCV
 from sklearn.cross_validation import StratifiedKFold
-
-
+from sklearn import preprocessing
+import matplotlib.pyplot as plt
+import sys
 
 EPS = 1e-9
 class IMG: 
@@ -75,14 +76,15 @@ class HOG:
         return ans
 
 class BOVW:
-    def __init__(self, extractor, k=10, size=(8, 8), pad=(4, 4), pool='hard'):
+    def __init__(self, extractor, k=10, size=(8, 8), pad=(4, 4), pool='hard', codebook_len=400000):
         self.k = k
         self.pad = pad
         self.size = size
         self.pool = pool
+        self.codebook_len = codebook_len
 
         self.extractor = extractor
-        self.clusterer = cluster.KMeans(self.k, max_iter=40, n_init=1)
+        self.clusterer = cluster.KMeans(self.k, max_iter=20, n_init=1)
 
     def load(self, name):
         self.k, self.pad, self.size = joblib.load('{}_pms.pkl'.format(name))
@@ -96,14 +98,26 @@ class BOVW:
     
     def fit(self, X):
         assert len(X) > 0
-        xr = np.linspace(0, X[0].shape[0] - self.size[0], self.pad[0])
-        yr = np.linspace(0, X[0].shape[1] - self.size[1], self.pad[1])
+        assert self.codebook_len > len(X)
+        self.samples_per_image = (self.codebook_len + len(X) - 1)/len(X)
+        print("Samples per image {}".format(self.samples_per_image))
+        test = X[0]
+        if len(test.shape) == 3:
+            test = test[0]
 
-        v_len = len(self.extractor.extract(X[0][0:self.size[0], 0:self.size[1]]))
-        V = np.zeros(shape=(len(X) * len(xr) * len(yr), v_len), dtype='float32')
+        '''
+        xr = np.linspace(0, test.shape[0] - self.size[0], self.pad[0])
+        yr = np.linspace(0, test.shape[1] - self.size[1], self.pad[1])
+        coords = product(xr, yr)
+        '''
+        v_len = len(self.extractor.extract(test[0:self.size[0], 0:self.size[1]]))
+        V = np.zeros(shape=(len(X) * self.samples_per_image, v_len), dtype='float32')
         it = 0
         for img in X:
-            for i, j in product(xr, yr):
+            if len(img.shape) == 3:
+                img = img[0]
+            coords = np.random.uniform(low=0, high=test.shape[0] - self.size[0], size=(self.samples_per_image, 2)).astype(np.int)
+            for i, j in coords:
                 V[it] = self.extractor.extract(img[i:i + self.size[0], j:j + self.size[1]]) 
                 it += 1
         
@@ -112,13 +126,18 @@ class BOVW:
         
     def transform(self, X):
         assert len(X) > 0
-        xr = np.linspace(0, X[0].shape[0] - self.size[0], self.pad[0])
-        yr = np.linspace(0, X[0].shape[1] - self.size[1], self.pad[1])
+        test = X[0]
+        if len(test.shape) == 3:
+            test = test[0]
+        xr = np.arange(0, test.shape[0] - self.size[0], self.pad[0])
+        yr = np.arange(0, test.shape[1] - self.size[1], self.pad[1])
+        coords = list(product(xr, yr))
         xr_len = len(xr)
         yr_len = len(yr)
+        print('size {}, {} len {}'.format(test.shape, yr, yr_len))
 
-        v_len = len(self.extractor.extract(X[0][0:self.size[0], 0:self.size[1]]))
-        ft = np.zeros(shape=(len(xr) * len(yr), v_len), dtype='float32')
+        v_len = len(self.extractor.extract(test[0:self.size[0], 0:self.size[1]]))
+        ft = np.zeros(shape=(len(coords), v_len), dtype='float32')
         if self.pool == 'hard':
             V = np.zeros(shape=(len(X), self.k), dtype='float32')
         elif self.pool == 'soft':
@@ -130,25 +149,32 @@ class BOVW:
         zeros  = np.zeros(shape = (len(C),), dtype=C.dtype)
         
         for k in range(len(X)):
+            print("fit {} ...".format(k))
+            img = X[k]
+            if len(img.shape) == 3:
+                img = img[0]
+            #coords = np.random.uniform(low=0, high=test.shape[0]-self.size[0], size=(self.samples_per_image, 2)).astype(np.int)
             it = 0
-            for i, j in product(xr, yr):
-                ft[it] = self.extractor.extract(X[k][i:i + self.size[0], j:j + self.size[1]]) 
+            for i, j in coords:
+                ft[it] = self.extractor.extract(img[i:i + self.size[0], j:j + self.size[1]]) 
                 it += 1
             assert len(ft) == it
             if self.pool == 'hard':
                 idx = self.clusterer.predict(ft)
                 V[k], _ = np.histogram(idx, bins=self.k, range=(0, self.k))  
             elif self.pool == 'soft':
-                for i, j in product(range(xr_len), range(yr_len)): 
+                it2 = 0
+                for i, j in coords:
                     index = 0
-                    if i > xr_len/2:
+                    if i > ((test.shape[0] - self.size[0])/2):
                         index += 2
-                    if j > yr_len/2:
+                    if j > ((test.shape[1] - self.size[1])/2):
                         index += 1
-                    S = np.linalg.norm(C - ft[i*xr_len + j], axis=1)
+                    S = np.linalg.norm(C - ft[it2], axis=1)
                     S = np.mean(S) - S
                     #V[k] += np.max([S, zeros], axis=0)
                     V[k][index*self.k:(index+1)*self.k] += np.max([S, zeros], axis=0)
+                    it2 += 1
             else:
                 raise Exception("Undefined pooling mode: {}".format(self.pool))
         print("V shape {}".format(V.shape))
@@ -213,30 +239,30 @@ if __name__ == '__main__':
     (X_train, Y_train), (X_test, Y_test) = load_mnist(img_rows, img_cols, nb_classes)
 
     print("X shape {}".format(X_train.shape))
-    X_train_small = X_train[range(10000)]
-    Y_train_small = Y_train[range(10000)]
+    X_train_small = X_train#X_train[range(10000)]
+    Y_train_small = Y_train#Y_train[range(10000)]
     print("X shape {}".format(X_train_small.shape))
 
-    # IMG BOW(k=320, pool=hard) 76.6
-    # IMG BOW(k=320, pool=soft) 82.2
-    # IMG BOW(k=600, pool=soft) 82.2
-    #bow = BOVW(HOG(cell=(5,5)), k=320, size=(15, 15), pad=(1,1), pool='hard')
-    bow = BOVW(IMG(), k=320, size=(15, 15), pad=(1,1), pool='soft')
+    #bow = BOVW(HOG(cell=(5,5)), k=600, size=(15, 15), pad=(1,1), pool='hard')
+    bow = BOVW(IMG(), k=600, size=(15, 15), pad=(1, 1), pool='soft')
     print("BOVW fit transform ...")
     V_train = bow.fit_transform(X_train_small)
     print("BOVW transform ...")
     V_test = bow.transform(X_test)
 
     '''
-    # 32x32 feature vector, 0.94
+    # 32x32 feature vector, 0.9498
     V_train = extract_IMG(X_train_small)
     V_test = extract_IMG(X_test)
-     '''
     '''
-    #  feature vector, 0.94
+
+    '''
+    # feature vector, 0.9498
     V_train = extract_HOG(X_train_small)
     V_test = extract_HOG(X_test)
     '''
+    
+    # BOVW 0.9488
     clf = KNeighborsClassifier(5)
     print("clf fit ...")
     clf.fit(V_train, Y_train_small)
