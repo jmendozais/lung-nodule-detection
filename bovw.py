@@ -76,7 +76,7 @@ class HOG:
         return ans
 
 class BOVW:
-    def __init__(self, extractor, k=10, size=(8, 8), pad=(4, 4), pool='hard', codebook_len=400000):
+    def __init__(self, extractor, k=10, size=(8, 8), pad=(1, 1), pool='hard', codebook_len=400000):
         self.k = k
         self.pad = pad
         self.size = size
@@ -149,7 +149,6 @@ class BOVW:
         zeros  = np.zeros(shape = (len(C),), dtype=C.dtype)
         
         for k in range(len(X)):
-            print("fit {} ...".format(k))
             img = X[k]
             if len(img.shape) == 3:
                 img = img[0]
@@ -183,6 +182,14 @@ class BOVW:
     def fit_transform(self, X):
         self.fit(X)
         return self.transform(X)
+
+def create_model(config):
+    model = None
+    if config == 'img':
+        model = BOVW(IMG(), k=10, size=(15, 15), pad=(4, 4), pool='soft', codebook_len=60000)
+    elif config == 'hog':
+        model = BOVW(HOG(cell=(5, 5)), k=600, size=(15, 15), pad=(1, 1), pool='soft')
+    return model
         
 def load_mnist(img_cols, img_rows, nb_classes):
     (X_train, y_train), (X_test, y_test) = mnist.load_data()

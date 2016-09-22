@@ -32,6 +32,7 @@ import eval
 import util
 import jsrt
 import neural
+import bovw
 
 # Globals
 step = 10
@@ -129,6 +130,136 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
     av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
 
     return av_froc
+
+def bovw_folds(_model, fname, config, save_fw=False):
+    # DATA
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
+    left_masks = jsrt.left_lung(set='jsrt140')
+    right_masks = jsrt.right_lung(set='jsrt140')
+    size = len(paths)
+
+    blobs = []
+    for i in range(size):
+        blobs.append([locs[i][0], locs[i][1], rads[i]])
+    blobs = np.array(blobs)
+
+    print "Loading blobs & features ..."
+    data = DataProvider(paths, left_masks, right_masks)
+    pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+    rois = _model.create_rois(data, pred_blobs)
+
+    av_cpi = 0
+    for tmp in pred_blobs:
+        av_cpi += len(tmp)
+    print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
+
+    Y = (140 > np.array(range(size))).astype(np.uint8)
+    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+    print "save_fw {}".format(save_fw)
+
+    # FOLDS 
+    fold = 1
+    valid = True
+    frocs = []
+    frocs_ = []
+    for tr_idx, te_idx in skf:    
+        print "Fold {}".format(fold),
+            
+        data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+        paths_te = paths[te_idx]
+
+        blobs_te = []
+        for bl in blobs[te_idx]:
+            blobs_te.append([bl])
+        blobs_te = np.array(blobs_te)
+        #blobs_te = blobs[te_idx].reshape((1,) + blobs.shape).swapaxes(0, 1)
+
+        rois_tr = []
+        rois_te = []
+        if _model.streams != 'none':
+            for i in range(len(rois)):
+                rois_tr.append(rois[i][tr_idx])
+                rois_te.append(rois[i][te_idx])
+        else:
+            rois_tr = rois[tr_idx]
+            rois_te = rois[te_idx]
+        
+        bovw_model = bovw.create_model(config)
+        V_tr, V_te = _model.fit_transform_bovw(rois_tr, pred_blobs[tr_idx], blobs[tr_idx], rois_te, pred_blobs[te_idx], blobs[te_idx], model=bovw_model)
+        util.save_dataset(V_tr, pred_blobs[tr_idx], blobs[tr_idx], V_te, pred_blobs[te_idx], blobs[te_idx], 'data/{}-fold-{}'.format(config, fold))
+        fold += 1
+
+def classify_foldwise(_model, fname, config, save_fw=False):
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
+    left_masks = jsrt.left_lung(set='jsrt140')
+    right_masks = jsrt.right_lung(set='jsrt140')
+    size = len(paths)
+
+    blobs = []
+    for i in range(size):
+        blobs.append([locs[i][0], locs[i][1], rads[i]])
+    blobs = np.array(blobs)
+
+    print "Loading blobs & features ..."
+    data = DataProvider(paths, left_masks, right_masks)
+    feats = np.load('data/{}.fts.npy'.format(fname))
+    
+    pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+
+    av_cpi = 0
+    for tmp in pred_blobs:
+        av_cpi += len(tmp)
+    print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
+
+    Y = (140 > np.array(range(size))).astype(np.uint8)
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+
+    fold = 1
+    valid = True
+    frocs = []
+    feature_weights = []
+
+    for tr_idx, te_idx in folds:    
+        print "Fold {}".format(fold),
+        feats_tr, pred_blobs_tr, blobs_tr, feats_te, pred_blobs_te, blobs_te = util.load_dataset('data/{}-fold-{}'.format(config, fold))
+
+        blobs_te2 = []
+        for bl in blobs_te:
+            blobs_te2.append([bl])
+        blobs_te2 = np.array(blobs_te2)
+
+        print 'Train with {}...'.format(_model.clf)
+        ret = _model.train_with_feature_set(feats_tr, pred_blobs_tr, blobs_tr)
+
+        print 'Predict ...'
+        blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set(feats_te, pred_blobs_te)
+
+        print 'Get froc ...'
+        froc = eval.froc(blobs_te2, blobs_te_pred, probs_te_pred)
+
+        if save_fw == True:
+            print 'w at fold -> {}'.format(ret[3].shape)
+            feature_weights.append(ret[3])
+
+        frocs.append(froc)
+        sys.stdout.flush()
+        fold += 1
+    
+    if save_fw == True:
+        feature_weights = np.array(feature_weights)
+        util.save_weights(feature_weights, '{}_fw'.format(model_name))
+
+    ops = eval.average_froc(frocs, fppi_range)
+
+    step=1
+    range_ops = ops[step * 2:step * 4 + 1]
+    print 'auc 2 - 4 fppis {}'.format(auc(range_ops.T[0], range_ops.T[1]))
+    
+    legend = []
+    legend.append('Hardie et al.')
+    legend.append(_model.name)
+
+    util.save_froc([baseline.hardie, ops], '{}'.format(_model.name), legend, with_std=True)
 
 def extract_features_cnn(_model, fname, network_model, layer):
     print "Extract cnn features"
@@ -1435,7 +1566,9 @@ def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
 
 #def pretrain_convnet(model, extractor_key, network):
 
-if __name__=="__main__":    
+if __name__=="__main__": 
+    
+    # TRADITIONAL PIPELINES
     parser = argparse.ArgumentParser(prog='lnd.py')
     parser.add_argument('-p', '--preprocessor', help='Options: heq, nlm, cs.', default='none')
     parser.add_argument('-b', '--blob_detector', help='Options: wmci(default), TODO hog, log.', default='wmci')
@@ -1451,6 +1584,10 @@ if __name__=="__main__":
     parser.add_argument('--cmp', help='Compare results of different models via froc. Options: hog, hog-impls, lbp, clf.', default='none')
     parser.add_argument('--fw', help='Plot the importance of individual features ( selected clf coef vs anova ) ', action='store_true')
 
+    # BAG OF VISUAL WORDS
+    parser.add_argument('--bovw', help='Options: check available configs on bovw.py', default='none')
+    parser.add_argument('--clf-foldwise', help='Performs classification loading features foldwise.', default='none')
+    
     # DEEP LEARNING
 
     # Commons
@@ -1505,6 +1642,14 @@ if __name__=="__main__":
 
     elif args.frocs_by_epoch:
         frocs_by_epoch(_model, extractor_key, args.cnn)
+
+    elif args.bovw != 'none':
+        _model.name = 'bovw-{}'.format(args.bovw)
+        bovw_folds(_model, extractor_key, args.bovw)
+
+    elif args.clf_foldwise != 'none':
+        _model.name = 'bovw-{}'.format(args.clf_foldwise)
+        classify_foldwise(_model, extractor_key, args.clf_foldwise)
 
     elif args.cmp_cnn == 'caes':
         networks = ['3P', '3P-CAE1', '3P-CAE5', '3P-CAE10', '3P-CAE15', '3P-CAE20']

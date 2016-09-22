@@ -180,8 +180,7 @@ class WhatWhereMaxPooling2D(_Pooling2D):
 
         if ph != 0 or pw != 0:
             raise Exception("Unsupporded what-where max pooling with padding")
-            #img = numpy.pad(img, ((0, 0), (0, 0), (ph, ph + sy - 1), (pw, pw + sx - 1)), mode='constant', constant_values=(pval,))
-l
+        #img = numpy.pad(img, ((0, 0), (0, 0), (ph, ph + sy - 1), (pw, pw + sx - 1)), mode='constant', constant_values=(pval,))
         print('Shape: {}'.format((n, c, kh, kw, out_h, out_w,)))
         self.col = K.variable(np.empty((n, c, kh, kw, out_h, out_w), dtype='float32'), name='swwaepool2d')
 

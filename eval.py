@@ -221,7 +221,7 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None):
         entry.append(np.arange(len(probs[i]), dtype=np.float))
         if jsrt_idx != None:
             entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
-        print np.array(entry).T.shape
+        #print np.array(entry).T.shape
         print entries.shape
         entries = np.append(entries, np.array(entry).T, axis=0)
     

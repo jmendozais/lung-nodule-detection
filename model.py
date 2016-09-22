@@ -3,7 +3,7 @@ import sys
 
 import skimage.io as io
 from skimage.exposure import equalize_hist
-from skimage.restoration import denoise_nl_means
+#from skimage.restoration import denoise_nl_means
 
 from sklearn import lda
 from sklearn import svm
@@ -602,7 +602,18 @@ class BaselineModel(object):
         ae.pretrain_layerwise(self.network.network, X, nb_epoch=15)
         #return history
 
-
+    def fit_transform_bovw(self, rois_tr, pred_blobs_tr, blobs_tr, rois_te, pred_blobs_te, blobs_te,  model):
+        X_tr, Y_tr = classify.create_training_set_from_feature_set(rois_tr, pred_blobs_tr, blobs_tr)
+        X_te, Y_te = classify.create_training_set_from_feature_set(rois_te, pred_blobs_te, blobs_te)
+        model.fit(X_tr)
+        V_tr = []
+        for rois in rois_tr:
+            V_tr.append(model.transform(rois))
+        V_te = []
+        for rois in rois_te:
+            V_te.append(model.transform(rois))
+        return np.array(V_tr), np.array(V_te)
+       
 
 # optimized
 opt_classifiers = {'svm':svm.SVC(probability=True, C=0.0373, gamma=0.002), 'lda':lda.LDA()}

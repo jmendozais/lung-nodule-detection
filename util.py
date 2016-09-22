@@ -70,6 +70,23 @@ def scale_list(path, factor):
 
     save_list(paths, tls, sizes)
 
+def save_dataset(V_tr, pred_blobs_tr, blobs_tr, V_te, pred_blobs_te, blobs_te, name):
+    np.save('{}-vtr.npy'.format(name), V_tr)
+    np.save('{}-pbtr.npy'.format(name), pred_blobs_tr)
+    np.save('{}-btr.npy'.format(name), blobs_tr)
+    np.save('{}-vte.npy'.format(name), V_te)
+    np.save('{}-pbte.npy'.format(name), pred_blobs_te)
+    np.save('{}-bte.npy'.format(name), blobs_te)
+
+def load_dataset(name):
+    V_tr = np.load('{}-vtr.npy'.format(name))
+    pred_blobs_tr = np.load('{}-pbtr.npy'.format(name))
+    blobs_tr = np.load('{}-btr.npy'.format(name))
+    V_te = np.load('{}-vte.npy'.format(name))
+    pred_blobs_te = np.load('{}-pbte.npy'.format(name))
+    blobs_te = np.load('{}-bte.npy'.format(name))
+    return V_tr, pred_blobs_tr, blobs_tr, V_te, pred_blobs_te, blobs_te
+
 # Display utils 
 
 def imshow(windowName,  _img, wait=True):
