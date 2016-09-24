@@ -18,7 +18,7 @@ from keras.models import Model, Sequential
 from keras.models import model_from_json
 from keras.layers.advanced_activations import LeakyReLU, PReLU
 
-from keras.optimizers import SGD, Adadelta, Adagrad
+from keras.optimizers import SGD, Adadelta, Adagrad, Adam
 from keras.utils import np_utils, generic_utils
 from keras.regularizers import WeightRegularizer
 from six.moves import range
@@ -31,6 +31,19 @@ def get_activations(model, layer, X_batch):
     get_activations = theano.function([model.layers[0].input], model.layers[layer].get_output(train=False), allow_input_downcast=True)
     activations = get_activations(X_batch) # same result as above
     return activations
+
+def get_optimizer(config):
+    if 'opt' in config:
+        optimizer = config['opt']
+        config.pop('opt', None)
+        if optimizer == 'sgd-nesterov':
+            return SGD(lr=config['lr'], momentum=config['momentum'], decay=config['decay'], nesterov=config['nesterov'])
+        if optimizer == 'adagrad':
+            return Adagrad(lr=config['lr'], epsilon=config['epsilon'], decay=config['decay']) 
+        if optimizer == 'adadelta':
+            return Adadelta(lr=config['lr'], rho=config['rho'], epsilon=config['epsilon'], decay=config['decay'])
+        if optimizer == 'adam':
+            return Adam(lr=config['lr'], beta_1=config['beta_1'], beta_2=config['beta_2'], epsilon=config['epsilon'], decay=config['decay'])
 
 # Feature blocks 
 
@@ -321,22 +334,25 @@ class NetModel:
         print 'negatives: {}'.format(np.sum(Y_train.T[0]))
         print 'positives: {}'.format(np.sum(Y_train.T[1]))
 
-        sgd = SGD(lr=self.training_params['lr'], 
-                decay=self.training_params['decay'],
-                momentum=self.training_params['momentum'], 
-                nesterov=self.training_params['nesterov'])
+        opt = get_optimizer(self.training_params)
+        #opt = SGD(lr=self.training_params['lr'], decay=self.training_params['decay'], momentum=self.training_params['momentum'], nesterov=self.training_params['nesterov'])
 
-        self.network.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
-        lr_scheduler = StageScheduler(self.training_params['schedule'])
+        self.network.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
         batch_size = self.training_params['batch_size']
         nb_epoch = self.training_params['nb_epoch']
+
         loss_bw_history = LossHistory()
         checkpoint_cb = ModelCheckpoint(verbose=True, filepath=checkpoint_prefix)
+        callbacks = [loss_bw_history, checkpoint_cb]
+        if 'schedule' in self.training_params:
+            lr_scheduler = StageScheduler(self.training_params['schedule'])
+            callbacks.append(lr_scheduler)
 
         print 'fit network  ...'
+
         history = None
         if X_test is None:
-            history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[checkpoint_cb, lr_scheduler, loss_bw_history], shuffle=False, validation_split=0.1, show_accuracy=True)
+            history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=callbacks, shuffle=False, validation_split=0.1, show_accuracy=True)
         else:
             if streams:
                 num_streams = len(X_test)
@@ -357,7 +373,7 @@ class NetModel:
                 gc.collect()
                 print 'input shape: {}'.format(X_train.shape)
 
-            history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=[checkpoint_cb, lr_scheduler, loss_bw_history], shuffle=False, validation_data=(X_test, Y_test))
+            history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=callbacks, shuffle=False, validation_data=(X_test, Y_test))
             gc.collect()
 
         print 'history obj'
@@ -422,10 +438,11 @@ def lnd_a_5p_reg(input_shape, l1=0., l2=0.):
     return network
 
 def lnd_a_6p(input_shape):
-    network = convpool_fs(Sequential(), nb_modules=6, module_depth=1, nb_filters=[32, 64, 96, 128, 160, 192], conv_size=[3, 3, 3, 3, 3,3], input_shape=input_shape, init='orthogonal', activation='leaky_relu')
-    network.add(Flatten())
-    mlp_softmax(network, nb_dense=2, dense_units=[512, 512], nb_classes=2, init='orthogonal', activation='leaky_relu')
-    return network
+    inp = Input(shape=input_shape, dtype='float32', name='input_layer')   
+    out = convpool_fs(inp, nb_modules=6, module_depth=1, nb_filters=[32, 64, 96, 128, 160, 192], conv_size=[3, 3, 3, 3, 3,3], init='orthogonal', activation='leaky_relu')
+    out = Flatten()(out)
+    out = mlp_softmax(out, nb_dense=2, dense_units=[512, 512], nb_classes=2, init='orthogonal', activation='leaky_relu')
+    return Model(input=inp, output=out)
 
 def lnd_a_6p_thin(input_shape):
     network = convpool_fs(Sequential(), nb_modules=6, module_depth=1, nb_filters=[32, 32, 32, 64, 96, 128], conv_size=[3, 3, 3, 3, 3,3], input_shape=input_shape, init='orthogonal', activation='leaky_relu')
@@ -845,9 +862,30 @@ def create_network(model, input_shape, fold=-1, streams=-1):
         net_model = NetModel(network, train_params, augment_params)
 
     elif model == '6P':   
-        network = lnd_a_6p(input_shape)
+        network = lnd_a_6p((1,128, 128))
         schedule=[25, 60, 60]
-        train_params = {'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        train_params = {'opt':'sgd', 'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (128, 128)
+        net_model = NetModel(network, train_params, augment_params, {})
+
+    elif model == '6P-adagrad':   
+        network = lnd_a_6p((1,128, 128))
+        train_params = {'opt':'adagrad', 'nb_epoch':60, 'batch_size':32, 'lr':0.001, 'epsilon':1e-08, 'decay':0.0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (128, 128)
+        net_model = NetModel(network, train_params, augment_params, {})
+
+    elif model == '6P-adadelta':   
+        network = lnd_a_6p((1,128, 128))
+        train_params = {'opt':'adadelta', 'nb_epoch':60, 'batch_size':32, 'lr':1.0, 'rho':0.95, 'epsilon':1e-08, 'decay':0.0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (128, 128)
+        net_model = NetModel(network, train_params, augment_params, {})
+
+    elif model == '6P-adam':   
+        network = lnd_a_6p((1,128, 128))
+        train_params = {'opt':'adam', 'nb_epoch':60, 'batch_size':32, 'lr':0.001, 'beta_1':0.9, 'beta_2':0.999, 'epsilon':1e-08, 'decay':0.0}
         augment_params = default_augment_params
         augment_params['output_shape'] = (128, 128)
         net_model = NetModel(network, train_params, augment_params, {})

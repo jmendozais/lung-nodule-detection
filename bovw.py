@@ -189,6 +189,15 @@ def create_model(config):
         model = BOVW(IMG(), k=10, size=(15, 15), pad=(4, 4), pool='soft', codebook_len=60000)
     elif config == 'hog':
         model = BOVW(HOG(cell=(5, 5)), k=600, size=(15, 15), pad=(1, 1), pool='soft')
+    elif config == 'img-hard':
+        model = BOVW(IMG(), k=600, size=(15, 15), pad=(1, 1), pool='hard')
+    elif config == 'img-soft':
+        model = BOVW(IMG(), k=600, size=(15, 15), pad=(1, 1), pool='soft')
+    elif config == 'hog-hard':
+        model = BOVW(HOG(cell=(5, 5)), k=600, size=(15, 15), pad=(1, 1), pool='hard')
+    elif config == 'hog-soft':
+        model = BOVW(HOG(cell=(5, 5)), k=600, size=(15, 15), pad=(1, 1), pool='soft')
+ 
     return model
         
 def load_mnist(img_cols, img_rows, nb_classes):

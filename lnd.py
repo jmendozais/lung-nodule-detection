@@ -1604,7 +1604,7 @@ if __name__=="__main__":
     parser.add_argument('--late', help='Options: trf, seg, fovea, none(lce, default)', default='none')
 
     # Comparing models
-    parser.add_argument('--cmp-cnn', help = 'Compare models (mod), preprocessing (pre), regularization (reg), \
+    parser.add_argument('--cmp-cnn', help = 'Compare models (mod), preprocessing (pre), regularization (reg), optimization (opt), \
                                             max-pooling stages (mp), number of feature maps (nfm), dropout (dp), \
                                             mlp width (clf-width, deprecated), common classifiers (skl), hybrid cnn + features (hyb), \
                                             hybrid model evaluated with linear SVM grid search on C (hyp-hyb)', \
@@ -1614,8 +1614,11 @@ if __name__=="__main__":
     parser.add_argument('--pre-tr', help='Enable pretraining', action='store_true')#default='none')
     parser.add_argument('--init', help='Enable initialization from a existing network', default='none')
 
-    # Opts
-    parser.add_argument('-a', '--augment', help='Augmentation configurations: bt, zcabt, xbt', default='bt')
+    # TODO: Optimization
+    parser.add_argument('--opt', help='Select an optimization algorithm: sgd-nesterov, adagrad, adadelta, adam.', default='sgd-nesterov')
+
+    # Options
+    parser.add_argument('-a', '--augment', help='Augmentation configurations: bt, zcabt, xbt.', default='bt')
     parser.add_argument('--roi-size', help='Layer index used to extract feature from cnn model.', default=64, type=int)
 
     # Evals
@@ -1650,6 +1653,11 @@ if __name__=="__main__":
     elif args.clf_foldwise != 'none':
         _model.name = 'bovw-{}'.format(args.clf_foldwise)
         classify_foldwise(_model, extractor_key, args.clf_foldwise)
+
+    elif args.cmp_cnn == 'opts':
+        networks = ['6P-nesterov', '6P-adagrad', '6P-adadelta', '6P-adam']
+        network_labels = ['6P, nesterov', '6P, adagrad', '6P, adadelta', '6P, adam']
+        compare_cnn_models(_model, '{}'.format(extractor_key), networks, network_labels, 'data/models')
 
     elif args.cmp_cnn == 'caes':
         networks = ['3P', '3P-CAE1', '3P-CAE5', '3P-CAE10', '3P-CAE15', '3P-CAE20']
