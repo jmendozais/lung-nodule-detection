@@ -275,7 +275,7 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     plt.xlabel('Average FPs per Image')
     plt.legend(legend, loc=4, fontsize='small', numpoints=1)
 
-    plt.savefig('{}_cmp.eps'.format(name))
+    plt.savefig('{}_cmp.pdf'.format(name))
     plt.clf()
 
 def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True):
@@ -295,7 +295,9 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
         ops = np.array(op_set[i]).T
         if with_std and i > 0:
             y_lower = ops[1] - ops[2]
-            plt.errorbar(ops[0], ops[1], fmt=line_format[i%28], yerr=ops[2], marker=markers[i%13], markersize=3, fillstyle='none')
+            #plt.errorbar(ops[0], ops[1], fmt=line_format[i%28], yerr=ops[2], marker=markers[i%13], markersize=3, fillstyle='none')
+            plt.plot(ops[0], ops[1], line_format[i%28], marker=markers[i%13], markersize=3, fillstyle='none')
+            plt.fill_between(ops[0], ops[1] - ops[2], ops[1] + ops[2], facecolor=line_format[i%13][0], alpha=0.3)  
         else:
             plt.plot(ops[0], ops[1], line_format[i%28], marker=markers[i%13], markersize=3, fillstyle='none')
 
@@ -321,7 +323,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
     if not unique:
         name='{}_{}'.format(name, time.clock())
 
-    plt.savefig('{}_cnn_clf.eps'.format(name))
+    plt.savefig('{}_cnn_clf.pdf'.format(name))
     plt.clf()
 
 def auc(ops, range):
@@ -345,7 +347,7 @@ def save_auc(epochs, aucs, name):
 
     plt.xlabel('Epoch')
     plt.ylabel('AUC')
-    plt.savefig('{}.eps'.format(name))
+    plt.savefig('{}.pdf'.format(name))
     plt.clf()
 
 
