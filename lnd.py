@@ -1206,7 +1206,17 @@ def protocol_cnn_froc(detections_source, fname, network_model):
         av_cpi += len(tmp)
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
-    Y = (140 > np.array(range(size))).astype(np.uint8)
+    # Setting labels ...
+    Y = None
+    if detections_source.label == 'nodule':
+        Y = (140 > np.array(range(size)))
+    elif detections_source.label == 'sublety':
+        Y = subs
+    else:
+        print "{} option doesnt exists. Using nodule labels".format(detections_source.labels)
+        Y = (140 > np.array(range(size)))
+    Y = Y.astype(np.uint8)
+    
     skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
     
     ops = get_froc_on_folds_keras(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, network_model)
@@ -1583,6 +1593,7 @@ if __name__=="__main__":
     parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
     parser.add_argument('--cmp', help='Compare results of different models via froc. Options: hog, hog-impls, lbp, clf.', default='none')
     parser.add_argument('--fw', help='Plot the importance of individual features ( selected clf coef vs anova ) ', action='store_true')
+    parser.add_argument('--label', help='Options: nodule, sublety.', default='nodule')
 
     # BAG OF VISUAL WORDS
     parser.add_argument('--bovw', help='Options: check available configs on bovw.py', default='none')
@@ -1631,6 +1642,7 @@ if __name__=="__main__":
     _model.roi_size = args.roi_size
     _model.use_transformations = args.trf_channels
     _model.streams = args.streams 
+    _model.label = args.label
     
     #TODO
     _model.augment = args.augment
