@@ -216,6 +216,7 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None):
         dist = np.linalg.norm(pred[i][:,:2] - real[i][0][:2], axis=1)
         entry = []
         entry.append(probs[i])
+        print 'probs[i]'.format(probs[i])
         entry.append(dist)
         entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
         entry.append(np.arange(len(probs[i]), dtype=np.float))
