@@ -885,7 +885,7 @@ def create_network(model, input_shape, fold=-1, streams=-1):
 
     elif model == '6P-adam':   
         network = lnd_a_6p((1,128, 128))
-        train_params = {'opt':'adam', 'nb_epoch':60, 'batch_size':32, 'lr':0.001, 'beta_1':0.9, 'beta_2':0.999, 'epsilon':1e-08, 'decay':0.0}
+        train_params = {'opt':'adam', 'nb_epoch':60, 'batch_size':32, 'lr':0.0005, 'beta_1':0.9, 'beta_2':0.999, 'epsilon':1e-08, 'decay':0.0}
         augment_params = default_augment_params
         augment_params['output_shape'] = (128, 128)
         net_model = NetModel(network, train_params, augment_params, {})

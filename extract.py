@@ -83,6 +83,32 @@ def angle2(u, v):
     ans += 2 * pi
     return ans.data
 
+
+def mean_std_phase_rgrad(img, mask):
+
+    mag, dxr, dyr = finite_derivatives(img)
+    side = img.shape[0]
+    rx = -1 * np.linspace(-1 * (side/2), side/2, side)
+    ry = -1 * np.linspace(-1 * (side/2), side/2, side)
+
+    ry, rx = np.meshgrid(rx, ry)
+    rx = rx[(ntl[0]-tl[0]):side - (br[0] - nbr[0]), ntl[1]-tl[1]:side - (br[1] - nbr[1])]
+    ry = ry[(ntl[0]-tl[0]):side - (br[0] - nbr[0]), ntl[1]-tl[1]:side - (br[1] - nbr[1])]
+
+    phase = angle2((rx, ry), (dxr, dyr)) # (1)
+    ins = np.ma.array(data=phase, mask=1-ext_mask, fill_value=0)
+    out = np.ma.array(data=phase, mask=ext_mask, fill_value=0)
+    phase_result = (ins.mean(), out.mean(), ins.std(), out.std())
+
+    rgrad = np.cos(phase) * roi
+    ins = np.ma.array(data=rgrad, mask=1-ext_mask, fill_value=0)
+    out = np.ma.array(data=rgrad, mask=ext_mask, fill_value=0)
+    rgrad_result = (ins.mean(), out.mean(), ins.std(), out.std())
+
+    return phase_result, rgrad_result
+
+
+
 # FIX: The shift should be in relation with the bounding box of the segmentation. It means the mask.
 def _mean_std_maxin_with_extended_mask_phase_rgrad(mag, dx, dy, blob, mask):
     result = []
