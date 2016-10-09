@@ -9,11 +9,14 @@ from keras.layers.core import Reshape
 from keras.layers import Dense, Dropout, Activation, Flatten, Input, InputLayer
 from keras.layers import Convolution2D, UpSampling2D
 from keras.layers import MaxPooling2D
+from keras.layers import merge
 from keras.utils import np_utils, layer_utils
 from keras import backend as K
 from keras.engine import InputSpec
 from scipy.misc import imresize
 from theano import tensor as T
+
+from itertools import product
 
 import neural
 import util
@@ -30,54 +33,6 @@ def get_deconv_outsize(size, k, s, p, cover_all=False):
     else:
         return s * (size - 1) + k - 2 * p
 
-def im2col_np(img, kh, kw, sy, sx, ph, pw, pval=0, cover_all=False):
-    n, c, h, w = img.shape
-    out_h = get_conv_outsize(h, kh, sy, ph, cover_all)
-    out_w = get_conv_outsize(w, kw, sx, pw, cover_all)
-
-    img = numpy.pad(img, ((0, 0), (0, 0), (ph, ph + sy - 1), (pw, pw + sx - 1)), mode='constant', constant_values=(pval,))
-    col = numpy.ndarray((n, c, kh, kw, out_h, out_w), dtype=img.dtype)
-
-    for i in six.moves.range(kh):
-        i_lim = i + sy * out_h
-        for j in six.moves.range(kw):
-            j_lim = j + sx * out_w
-            col[:, :, i, j, :, :] = img[:, :, i:i_lim:sy, j:j_lim:sx]
-    return col
-
-def im2col(img, col, input_shape, pool_size, strides, padding, pval=0, cover_all=False):
-    kh, kw = pool_size
-    sy, sx = strides
-    ph, pw = padding
-
-    n, c, h, w = input_shape
-    out_h = get_conv_outsize(h, kh, sy, ph, cover_all)
-    out_w = get_conv_outsize(w, kw, sx, pw, cover_all)
-
-    #img = numpy.pad(img, ((0, 0), (0, 0), (ph, ph + sy - 1), (pw, pw + sx - 1)), mode='constant', constant_values=(pval,))
-
-    print('Shape: {}'.format((n, c, kh, kw, out_h, out_w,)))
-    #col = K.variable(np.empty((n, c, kh, kw, out_h, out_w), dtype=img.dtype))
-
-    for i in range(kh):
-        i_lim = i + sy * out_h
-        for j in range(kw):
-            j_lim = j + sx * out_w
-            T.set_subtensor(col[:, :, i, j, :, :], img[:, :, i:i_lim:sy, j:j_lim:sx])
-    return col
-
-def col2im(col, sy, sx, ph, pw, h, w):
-        n, c, kh, kw, out_h, out_w = col.shape
-
-        img = K.variable(numpy.zeros((n, c, h + 2 * ph + sy - 1, w + 2 * pw + sx - 1), dtype=col.dtype), name='col2im')
-        for i in range(kh):
-            i_lim = i + sy * out_h
-            for j in range(kw):
-                j_lim = j + sx * out_w
-                img[:, :, i:i_lim:sy, j:j_lim:sx] += col[:, :, i, j, :, :]
-
-        return img[:, :, ph:h + ph, pw:w + pw]
-
 def conv_output_length(input_length, filter_size, border_mode, stride):
     if input_length is None:
         return None
@@ -87,6 +42,13 @@ def conv_output_length(input_length, filter_size, border_mode, stride):
     elif border_mode == 'valid':
         output_length = input_length - filter_size + 1
     return (output_length + stride - 1) // stride
+
+def getwhere(x):
+    ''' Calculate the "where" mask that contains switches indicating which
+    index contained the max value when MaxPool2D was applied.  Using the
+    gradient of the sum is a nice trick to keep everything high level.'''
+    y_prepool, y_postpool = x
+    return K.gradients(K.sum(y_postpool), y_prepool)
 
 class _Pooling2D(Layer):
     def __init__(self, pool_size=(2, 2), strides=None, border_mode='valid',
@@ -158,74 +120,23 @@ class KMaxPooling2D(_Pooling2D):
         return output
 
 class WhatWhereMaxPooling2D(_Pooling2D):
-
     def __init__(self, pool_size=(2, 2), strides=None, border_mode='valid',
                  dim_ordering='th', **kwargs):
-        self.indexed = False
         super(WhatWhereMaxPooling2D, self).__init__(pool_size, strides, border_mode,
                                            dim_ordering, **kwargs)
-    def build(self, input_shape):
-        print("WHAT-WHERE shape ", input_shape)
-        print("batch size", self.batch_size)
-
-        #out = K.zeros(shape=(self.batch_size, input_shape[1], input_shape[2], input_shape[3]), dtype='float32')
-        kh, kw = self.pool_size
-        sy, sx = self.strides
-        ph, pw = 0, 0
-
-        self.input_shape_holder = self.batch_size, input_shape[1], input_shape[2], input_shape[3]
-        n, c, h, w = self.input_shape_holder
-        out_h = get_conv_outsize(h, kh, sy, ph)
-        out_w = get_conv_outsize(w, kw, sx, pw)
-
-        if ph != 0 or pw != 0:
-            raise Exception("Unsupporded what-where max pooling with padding")
-        #img = numpy.pad(img, ((0, 0), (0, 0), (ph, ph + sy - 1), (pw, pw + sx - 1)), mode='constant', constant_values=(pval,))
-        print('Shape: {}'.format((n, c, kh, kw, out_h, out_w,)))
-        self.col = K.variable(np.empty((n, c, kh, kw, out_h, out_w), dtype='float32'), name='swwaepool2d')
-
     def _pooling_function(self, inputs, pool_size, strides,
                           border_mode, dim_ordering):
-
-        im2col(inputs, self.col, self.input_shape_holder, pool_size, strides, padding=(0,0), pval=-float('inf'), cover_all=False)
-        n, c, kh, kw, out_h, out_w = self.col.shape.eval()
-        print("COL SHAPE", self.col.shape.eval())
-        self.col = K.reshape(self.col, (n, c, kh * kw, out_h, out_w))
-
-        if not self.indexed:
-            self.indexed = True
-            self.n = K.variable(np.array(range(n * c * kh * kw * out_h * out_w)), name='idx n')
-            self.c = K.variable(np.array(range(n * c * kh * kw * out_h * out_w)), name='idx c')
-            self.i = K.variable(np.array(range(n * c * kh * kw * out_h * out_w)), name='idx i')
-            self.j = K.variable(np.array(range(n * c * kh * kw * out_h * out_w)), name='idx j')
-
-            self.j = self.i % out_w
-            self.i = (self.j / out_w) % out_h
-            self.c = (self.c / (out_w * out_h * kw * kh)) % c
-            self.n = (self.n / (out_w * out_h * kw * kh * c))  % n
-            
-        self.where = K.argmax(self.col, axis=2)
-        self.where = K.reshape(self.where, (n * c * out_h * out_w,))
-        y = K.max(self.col, axis=2)
-        self.col = K.reshape(self.col, (n, c, kh, kw, out_h, out_w))
-        print("our OUT TYPE", type(y))
-        print("our OUT SHAPE", y.shape.eval())
-        #return y
-        output = K.pool2d(inputs, pool_size, strides,
-                          border_mode, dim_ordering, pool_mode='max')
-        print("keras OUT TYPE", type(output))
-        #print("keras OUT SHAPE", output.shape.eval())
+        output = K.pool2d(inputs, pool_size, strides, border_mode, dim_ordering, pool_mode='max')
+        self.where = merge([inputs, output], mode=getwhere, output_shape=lambda x: x[0])
         return output
 
 class WhatWhereUnPooling2D(Layer):
-
     def __init__(self, pooling_layer, size=(2, 2), dim_ordering='th', **kwargs):
         self.size = tuple(size)
         assert dim_ordering in {'tf', 'th'}, 'dim_ordering must be in {tf, th}'
         self.dim_ordering = dim_ordering
         self.input_spec = [InputSpec(ndim=4)]
         self.pooling_layer = pooling_layer
-        self.where = None
         super(WhatWhereUnPooling2D, self).__init__(**kwargs)
 
     def get_output_shape_for(self, input_shape):
@@ -242,19 +153,14 @@ class WhatWhereUnPooling2D(Layer):
         else:
             raise Exception('Invalid dim_ordering: ' + self.dim_ordering)
 
-    def build(self, input_shape):
-        self.img = K.zeros(shape=self.pooling_layer.input_shape_holder, dtype='float32', name='unpooling-out-holder')
-        self.col = K.zeros(shape=self.pooling_layer.input_shape_holder, dtype='float32', name='unpooling-out-holder')
-     
     def call(self, x, mask=None):
-        T.set_subtensor(col[:, :, i, j, :, :], img[:, :, i:i_lim:sy, j:j_lim:sx])
-        out[self.n, self.c, self.where, self.i, self.j] = x
-        out = col2im(out)
-        return out
+        #y = K.resize_images(x, self.size[0], self.size[1], self.dim_ordering)
+        y = T.nnet.abstract_conv.bilinear_upsampling(x, self.size[0])
+        return merge([y, self.pooling_layer.where], mode='mul')
 
     def get_config(self):
         config = {'size': self.size}
-        base_config = super(UpSampling2D, self).get_config()
+        base_config = super(WhatWhereUnPooling2D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 '''
@@ -446,8 +352,8 @@ def pretrain_swwae(network, X, nb_modules=-1, batch_size=32, nb_epoch=12, nb_cla
                 decoder_output = Reshape((convlike_input_shape[1], convlike_input_shape[2], convlike_input_shape[3]))(decoder_output)
                 has_flatten = False
             if mp_layers[k] != None:
-                decoder_output = UpSampling2D()(decoder_output)
-                #decoder_output = WhatWhereUnPooling2D(mp_layers[k])(decoder_output)
+                #decoder_output = UpSampling2D(size=mp_layers[k].pool_size)(decoder_output)
+                decoder_output = WhatWhereUnPooling2D(mp_layers[k], size=mp_layers[k].pool_size)(decoder_output)
             conv_config = encoder_trainable_layers[k].get_config()
             conv_config['name'] = 'dec_' + conv_config['name']
             conv_config['nb_filter'] = input_shapes[k][1]
@@ -734,14 +640,16 @@ def test_masci():
     bias = True
     batch_size = 100
     nb_epoch = 1
+    nb_epoch_sup = 10
     nb_classes = 10
     img_rows, img_cols = 32, 32
+    small_set_len = 1000 
     
     (X_train, Y_train), (X_test, Y_test) = load_mnist(img_rows, img_cols, nb_classes)
 
     print("X shape {}".format(X_train.shape))
-    X_train_small = X_train[range(1000)]
-    Y_train_small = Y_train[range(1000)]
+    X_train_small = X_train[range(small_set_len)]
+    Y_train_small = Y_train[range(small_set_len)]
     print("X shape {}".format(X_train.shape))
 
     #model = base(img_rows, img_cols, nb_classes, bias)
@@ -750,41 +658,65 @@ def test_masci():
     pretrain_layerwise(model, X_train, 3, batch_size, nb_epoch, nb_classes)
 
     print("Sup: layer weigths {}".format(model.layers[1].get_weights()[0][0]))
-    model.fit(X_train_small, Y_train_small, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1, validation_data=(X_test, Y_test))
+    model.fit(X_train_small, Y_train_small, batch_size=batch_size, nb_epoch=nb_epoch_sup, verbose=1, validation_data=(X_test, Y_test))
     score = model.evaluate(X_test, Y_test, verbose=0)
 
-    print('Test score:', score[0])
-    print('Test accuracy:', score[1])
+    print('Test cae score:', score[0])
+    print('Test cae accuracy:', score[1])
 
-def swwae_where():
+def test_unsupervised_pretraining(mode='cae', unsup_epochs=1, sup_epochs=30, small_set_len=1000):
     bias = True
     batch_size = 100
-    nb_epoch = 1
     nb_classes = 10
     img_rows, img_cols = 32, 32
-    
+    small_set_len = 1000 
+ 
     (X_train, Y_train), (X_test, Y_test) = load_mnist(img_rows, img_cols, nb_classes)
 
     print("X shape {}".format(X_train.shape))
-    X_train_small = X_train[range(100)]
-    Y_train_small = Y_train[range(100)]
+    X_train_small = X_train[range(small_set_len)]
+    Y_train_small = Y_train[range(small_set_len)]
     print("X shape {}".format(X_train.shape))
 
-    model = where_mnist_model(img_rows, img_cols, nb_classes, bias)
+    #model = where_mnist_model(img_rows, img_cols, nb_classes, bias)
+    model = masci(img_rows, img_cols, nb_classes, bias)
     model.compile(loss='categorical_crossentropy', optimizer='adadelta', metrics=['accuracy'])
-    #ae = pretrain_layerwise(model, X_train_small, 2, batch_size, nb_epoch, nb_classes)
-    ae = pretrain_swwae(model, X_train_small, 2, batch_size, nb_epoch, nb_classes)
+    ae = None
+    if mode == 'cae':
+        ae = pretrain_layerwise(model, X_train, 2, batch_size, unsup_epochs, nb_classes)
+    elif mode == 'swwae':
+        ae = pretrain_swwae(model, X_train, 2, batch_size, unsup_epochs, nb_classes)
+    elif mode == 'ortho':
+        print("No pretraiing")
+    else:
+        raise Exception("Undefined mode: {}".format(mode))
 
-    X_test_sample = X_test[np.random.uniform(0, len(X_test), size=(20)).astype(np.int)]
+    '''
+    # Test what-where pooling-unpooling
+    X_test_sample = X_test[np.random.uniform(0, len(X_test), size=(100)).astype(np.int)]
     X_rec = ae.predict(X_test_sample)
     
     for i in range(len(X_rec)):
         util.imwrite("{}_where_cae.jpg".format(i), X_test_sample[i][0])
         util.imwrite("{}_where_cae_rec.jpg".format(i), X_rec[i][0])
+    '''
 
-    # TODO: Test what-where pooling-unpooling
-    # TODO: Create swwae experiment
+    model.fit(X_train_small, Y_train_small, batch_size=batch_size, nb_epoch=sup_epochs, verbose=1, validation_data=(X_test, Y_test))
+    score = model.evaluate(X_test, Y_test, verbose=0)
+    print("Mode: {}".format(mode))
+    print('Test score:', score[0])
+    print('Test accuracy:', score[1])
+    return score[1]
 
 if __name__ == "__main__":
-    swwae_where()
-    #test_masci()
+    modes = ['ortho', 'cae', 'swwae']
+    unsup_epochs = [1, 2, 4, 8] 
+    sup_epochs = [2, 4, 8, 16, 32]
+    for mode, unsup, sup in product(modes, unsup_epochs, sup_epochs):
+        acc = test_unsupervised_pretraining(mode=mode, unsup_epochs=unsup, sup_epochs=sup)
+        print('pretraining mode {}, unsup {}, sup {}, acc={}'.format(mode, unsup, sup, acc))
+        
+    '''
+    CAE: 0.87, 0.8549, 0.945
+    SWWAE: 0.86, 0.8649, 0.946
+    '''

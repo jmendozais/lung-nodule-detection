@@ -17,6 +17,35 @@ import matplotlib.pyplot as plt
 import model
 import util
 
+import theano
+import theano.tensor as T
+
+class Min:
+    """
+    Min kernel (also known as Histogram intersection kernel)
+        K(x, y) = SUM_i min(x_i, y_i)
+    """
+    
+    def __init__(self):
+        self.h1 = T.dmatrix('h1')
+        self.h2 = T.dmatrix('h2')
+        self.kernel = T.dmatrix('k')
+    
+    def _compute(self, data_1, data_2):
+
+        if np.any(data_1 < 0) or np.any(data_2 < 0):
+            warnings.warn('Min kernel requires data to be strictly positive!')
+
+        for d in range(data_1.shape[1]):
+            column_1 = data_1[:, d].reshape(-1, 1)
+            column_2 = data_2[:, d].reshape(-1, 1)
+            self.kernel += T.min(column_1, column_2.T)
+
+        return kernel
+
+    def dim(self):
+        return None
+
 def create_uniform_trset(out_file):
     MAX_DIST = 35
 
@@ -190,7 +219,6 @@ def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs):
     Y = np.array(Y)
     return X, Y
 
-
 def train(X, Y, clf, scaler, selector, weights=False):
     iters = 1
     trs = int(0.7 * len(Y))
@@ -203,32 +231,29 @@ def train(X, Y, clf, scaler, selector, weights=False):
         NX.append(np.array(xi))
     X = np.array(NX)
 
-    folds = np.array(list(cross_val.StratifiedShuffleSplit(Y, iters, train_size=trs, test_size=tes, random_state=seed)))
+    ev = False
+    if ev == True:
+        folds = np.array(list(cross_val.StratifiedShuffleSplit(Y, iters, train_size=trs, test_size=tes, random_state=seed)))
+        tr = folds[0][0]
+        te = folds[0][1]
+        eval_scaler = clone(scaler)
+        if selector != None:
+            eval_selector = clone(selector)
 
-    tr = folds[0][0]
-    te = folds[0][1]
+        eval_clf = clone(clf)
+        Xt_tr = eval_scaler.fit_transform(X[tr])
+        if selector != None:
+            Xt_tr = eval_selector.fit_transform(Xt_tr, Y[tr])
 
-    eval_scaler = clone(scaler)
-    if selector != None:
-        eval_selector = clone(selector)
-    eval_clf = clone(clf)
-
-    Xt_tr = eval_scaler.fit_transform(X[tr])
-    if selector != None:
-        Xt_tr = eval_selector.fit_transform(Xt_tr, Y[tr])
-
-    eval_clf.fit(Xt_tr, Y[tr])
-
-    Xt_te = eval_scaler.transform(X[te])
-    if selector != None:
-        Xt_te = eval_selector.transform(Xt_te)
-
-    pred = eval_clf.predict(Xt_te)
-
-    print "Evaluate performance on patches"
-    print "Classification report: " 
-    print classification_report(Y[te].astype(int), pred.astype(int))
-    
+        eval_clf.fit(Xt_tr, Y[tr])
+        Xt_te = eval_scaler.transform(X[te])
+        if selector != None:
+            Xt_te = eval_selector.transform(Xt_te)
+        pred = eval_clf.predict(Xt_te)
+        print "Evaluate performance on patches"
+        print "Classification report: " 
+        print classification_report(Y[te].astype(int), pred.astype(int))
+        
     Xt = scaler.fit_transform(X)
     if selector != None:
         print "selecting ..."

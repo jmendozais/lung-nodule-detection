@@ -5,13 +5,17 @@ import skimage.io as io
 from skimage.exposure import equalize_hist
 #from skimage.restoration import denoise_nl_means
 
+from sklearn import neighbors
 from sklearn import lda
 from sklearn import svm
 from sklearn import decomposition
 from sklearn import preprocessing
+from sklearn import ensemble
 from sklearn import feature_selection as selection
 from sklearn.externals import joblib
 from sklearn.feature_selection import RFE
+
+import pykernels as pk
 
 from time import *
 from os import path
@@ -338,15 +342,21 @@ class BaselineModel(object):
         if self.selector != None:
             feature_vectors = self.selector.transform(feature_vectors)
 
-        probs = self.clf.predict_proba(feature_vectors)
-        probs = probs.T[1]
+        probs = None
+        if hasattr(self.clf, 'predict_proba'):
+            probs = self.clf.predict_proba(feature_vectors)
+            probs = np.max(probs.T[1:], axis=0)
+        else:
+            probs = self.clf.predict(feature_vectors)
+            
         blobs = np.array(blobs)
 
         return blobs, probs
 
     def predict_proba_one_keras(self, blobs, rois):
         probs = self.network.predict_proba(rois, self.streams != 'none')
-        probs = probs.T[1]
+        #probs = probs.T[1]
+        probs = np.max(probs.T[1:], axis=0)
         blobs = np.array(blobs)
 
         return blobs, probs
@@ -384,7 +394,7 @@ class BaselineModel(object):
 
     def train_with_feature_set(self, feature_set, pred_blobs, real_blobs, feat_weight=False):
         X, Y = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
-
+        print 'min value on dataset {}'.format(np.min(X))
         return classify.train(X, Y, self.clf, self.scaler, self.selector, feat_weight)
         
     def train_with_feature_set_keras(self, feats_tr, pred_blobs_tr, real_blobs_tr,
@@ -422,7 +432,7 @@ class BaselineModel(object):
         if network_init is not None:
             self.load_cnn_weights('data/{}_fold_{}'.format(network_init, fold))
 
-        history = self.network.fit(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=(self.roi_size, self.roi_size), checkpoint_prefix=model)
+        history = self.network.fit(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=(self.roi_size, self.roi_size), checkpoint_prefix='data/{}-fold-{}'.format(model, fold))
 
         return history
 
@@ -615,8 +625,9 @@ class BaselineModel(object):
         return np.array(V_tr), np.array(V_te)
        
 
+
 # optimized
 opt_classifiers = {'svm':svm.SVC(probability=True, C=0.0373, gamma=0.002), 'lda':lda.LDA()}
 # default
-classifiers = {'linear-svm':svm.SVC(kernel='linear', probability=True), 'svm':svm.SVC(kernel='rbf', probability=True, C=1.0, gamma=0.01), 'lda':lda.LDA()}
+classifiers = {'linear-svm':svm.SVC(kernel='linear', C=1, probability=True), 'svm':svm.SVC(kernel='rbf', probability=True), 'lda':lda.LDA(), 'knn': neighbors.KNeighborsRegressor(), 'rf': ensemble.RandomForestClassifier(), 'hik':svm.SVC(kernel=pk.regular.Min(), C=1, probability=True)}
 reductors = {'none':None, 'pca':decomposition.PCA(n_components=0.99999999999, whiten=True), 'lda':selection.SelectFromModel(lda.LDA())}

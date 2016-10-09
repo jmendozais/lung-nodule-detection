@@ -6,6 +6,7 @@ TODO
 '''
 
 import sys
+sys.setrecursionlimit(10000)
 import time
 from itertools import product
 from os import path
@@ -189,7 +190,7 @@ def bovw_folds(_model, fname, config, save_fw=False):
         util.save_dataset(V_tr, pred_blobs[tr_idx], blobs[tr_idx], V_te, pred_blobs[te_idx], blobs[te_idx], 'data/{}-fold-{}'.format(config, fold))
         fold += 1
 
-def classify_foldwise(_model, fname, config, save_fw=False):
+def classify_foldwise(_model, fname, config, save_fw=False, save_froc=True):
     paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
@@ -255,11 +256,13 @@ def classify_foldwise(_model, fname, config, save_fw=False):
     range_ops = ops[step * 2:step * 4 + 1]
     print 'auc 2 - 4 fppis {}'.format(auc(range_ops.T[0], range_ops.T[1]))
     
-    legend = []
-    legend.append('Hardie et al.')
-    legend.append(_model.name)
+    if save_froc == True:
+        legend = []
+        legend.append('Hardie et al.')
+        legend.append(_model.name)
+        util.save_froc([baseline.hardie, ops], '{}'.format(_model.name), legend, with_std=True)
 
-    util.save_froc([baseline.hardie, ops], '{}'.format(_model.name), legend, with_std=True)
+    return ops
 
 def extract_features_cnn(_model, fname, network_model, layer):
     print "Extract cnn features"
@@ -540,7 +543,7 @@ def classify_cnn(_model, fname, network_model):
     legend.append('Hardie et al.')
     legend.append('CNN')
 
-    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=True)
     util.save_froc(ops_sub, 'data/{}-sublety'.format(network_model), jsrt.sublety_labels, with_std=False)
     util.save_froc(ops_siz, 'data/{}-size'.format(network_model), jsrt.size_labels, with_std=False)
     util.save_froc(ops_kind, 'data/{}-severity'.format(network_model), jsrt.severity_labels, with_std=False)
@@ -879,8 +882,7 @@ def protocol_generic_froc(_model, fnames, components, legend, kind='descriptor',
         op_set.append(ops)
 
     op_set = np.array(op_set)
-    util.save_froc(op_set, _model.name, legend)
-
+    util.save_froc(op_set, _model.name, legend) 
     return op_set
 
 
@@ -1225,7 +1227,7 @@ def protocol_cnn_froc(detections_source, fname, network_model):
     legend.append('Hardie et al.')
     legend.append(network_model)
 
-    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=True)
 
     return ops
 
@@ -1259,7 +1261,7 @@ def protocol_pretrained_cnn(detections_source, fname, network_model, network_ini
     legend.append('Hardie et al.')
     legend.append(network_model)
 
-    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=True)
 
     return ops
 
@@ -1300,7 +1302,7 @@ def protocol_cnn_froc_transforms(detections_source, fname, network_model):
     legend.append('Hardie et al.')
     legend.append(network_model)
 
-    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False)
+    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=True)
 
     return ops
 
@@ -1339,7 +1341,7 @@ def hybrid(detections_source, fname, network_model, layer):
     legend.append('Hardie et al.')
     legend.append('current')
 
-    util.save_froc([baseline.hardie, ops], '{}_hybrid'.format(_model.name), legend)
+    util.save_froc([baseline.hardie, ops], '{}_hybrid'.format(_model.name), legend, with_std=True)
 
     return ops
 
@@ -1576,6 +1578,23 @@ def hyp_cnn_lsvm_hybrid(detections_source, fname, network):
 
 #def pretrain_convnet(model, extractor_key, network):
 
+# BOVW models
+
+def compare_bovw_models(detections_source, fname, model_names, labels, exp_name):
+    op_set = []
+    op_set.append(baseline.hardie)
+
+    legend = []
+    legend.append('Hardie et al.')
+
+    for i in range(len(model_names)):
+        ops = classify_foldwise(detections_source, fname, model_names[i], save_froc=False)
+        op_set.append(ops)
+        legend.append(labels[i])
+
+    util.save_froc(op_set, exp_name, legend)
+    return ops
+
 if __name__=="__main__": 
     
     # TRADITIONAL PIPELINES
@@ -1596,7 +1615,7 @@ if __name__=="__main__":
     parser.add_argument('--label', help='Options: nodule, sublety.', default='nodule')
 
     # BAG OF VISUAL WORDS
-    parser.add_argument('--bovw', help='Options: check available configs on bovw.py', default='none')
+    parser.add_argument('--bovw', help='Options: check available configs on bovw.py.', default='none')
     parser.add_argument('--clf-foldwise', help='Performs classification loading features foldwise.', default='none')
     
     # DEEP LEARNING
@@ -1663,7 +1682,8 @@ if __name__=="__main__":
         bovw_folds(_model, extractor_key, args.bovw)
 
     elif args.clf_foldwise != 'none':
-        _model.name = 'bovw-{}'.format(args.clf_foldwise)
+        _model.name = 'data/bovw-{}-clf-{}'.format(args.clf_foldwise, args.classifier)
+        _model.clf = model.classifiers[args.classifier]
         classify_foldwise(_model, extractor_key, args.clf_foldwise)
 
     elif args.cmp_cnn == 'opts':
@@ -1753,6 +1773,17 @@ if __name__=="__main__":
         elif args.cmp == 'clf':
             _model.name = '{}_{}'.format(_model.name, extractor_key)
             protocol_clf_eval_froc(_model, '{}'.format(extractor_key))
+        elif args.cmp == 'bovw':
+            models = ['img-hard', 'img-soft', 'hog-hard', 'hog']
+            labels = ['IMG features, hard pooling', 'IMG feature, soft pooling', 'HOG features, hard pooling', 'HOG features, soft pooling'] 
+            _model.clf = model.classifiers[args.classifier]
+            compare_bovw_models(_model, extractor_key, models, labels, 'data/bovw-{}'.format(args.classifier))
+
+        elif args.cmp == 'bovw-soft-k':
+            models = ['hog-soft-16', 'hog-soft-32', 'hog-soft-64', 'hog-soft-256', 'hog-soft-512', 'hog-soft-1024']
+            labels = ['hog-soft, k=16', 'hog-soft, k=32', 'hog-soft, k=64', 'hog-soft, k=256', 'hog-soft, k=512', 'hog-soft, k=1024']
+            _model.clf = model.classifiers[args.classifier]
+            compare_bovw_models(_model, extractor_key, models, labels, 'data/bovw-hsoft-k-{}'.format(args.classifier))
             
     elif args.hybrid:
         assert args.cnn != 'none'

@@ -99,6 +99,7 @@ class BOVW:
     def fit(self, X):
         assert len(X) > 0
         assert self.codebook_len > len(X)
+        # temporal assert
         self.samples_per_image = (self.codebook_len + len(X) - 1)/len(X)
         print("Samples per image {}".format(self.samples_per_image))
         test = X[0]
@@ -114,6 +115,7 @@ class BOVW:
         V = np.zeros(shape=(len(X) * self.samples_per_image, v_len), dtype='float32')
         it = 0
         for img in X:
+            assert len(img) == 1
             if len(img.shape) == 3:
                 img = img[0]
             coords = np.random.uniform(low=0, high=test.shape[0] - self.size[0], size=(self.samples_per_image, 2)).astype(np.int)
@@ -195,8 +197,22 @@ def create_model(config):
         model = BOVW(IMG(), k=600, size=(15, 15), pad=(1, 1), pool='soft')
     elif config == 'hog-hard':
         model = BOVW(HOG(cell=(5, 5)), k=600, size=(15, 15), pad=(1, 1), pool='hard')
-    elif config == 'hog-soft':
-        model = BOVW(HOG(cell=(5, 5)), k=600, size=(15, 15), pad=(1, 1), pool='soft')
+    elif config == 'hog-soft-16':
+        model = BOVW(HOG(cell=(5, 5)), k=16, size=(15, 15), pad=(1, 1), pool='soft')
+    elif config == 'hog-soft-32':
+        model = BOVW(HOG(cell=(5, 5)), k=32, size=(15, 15), pad=(1, 1), pool='soft')
+    elif config == 'hog-soft-64':
+        model = BOVW(HOG(cell=(5, 5)), k=64, size=(15, 15), pad=(1, 1), pool='soft')
+    elif config == 'hog-soft-128':
+        model = BOVW(HOG(cell=(5, 5)), k=128, size=(15, 15), pad=(1, 1), pool='soft')
+    elif config == 'hog-soft-256':
+        model = BOVW(HOG(cell=(5, 5)), k=256, size=(15, 15), pad=(1, 1), pool='soft')
+    elif config == 'hog-soft-512':
+        model = BOVW(HOG(cell=(5, 5)), k=512, size=(15, 15), pad=(1, 1), pool='soft')
+    elif config == 'hog-soft-512-norm':
+        model = BOVW(HOG(cell=(5, 5)), k=512, size=(15, 15), pad=(1, 1), pool='soft')
+    elif config == 'hog-soft-1024':
+        model = BOVW(HOG(cell=(5, 5)), k=1024, size=(15, 15), pad=(1, 1), pool='soft')
  
     return model
         

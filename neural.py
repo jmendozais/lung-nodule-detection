@@ -38,15 +38,17 @@ def get_optimizer(config):
         config.pop('opt', None)
         if optimizer == 'sgd-nesterov':
             return SGD(lr=config['lr'], momentum=config['momentum'], decay=config['decay'], nesterov=config['nesterov'])
-        if optimizer == 'adagrad':
+        elif optimizer == 'adagrad':
             return Adagrad(lr=config['lr'], epsilon=config['epsilon'], decay=config['decay']) 
-        if optimizer == 'adadelta':
+        elif optimizer == 'adadelta':
             return Adadelta(lr=config['lr'], rho=config['rho'], epsilon=config['epsilon'], decay=config['decay'])
-        if optimizer == 'adam':
+        elif optimizer == 'adam':
             return Adam(lr=config['lr'], beta_1=config['beta_1'], beta_2=config['beta_2'], epsilon=config['epsilon'], decay=config['decay'])
 
-# Feature blocks 
+    print('Undefined optimizer. Using SGD')
+    return SGD(lr=config['lr'], momentum=config['momentum'], decay=config['decay'], nesterov=config['nesterov'])
 
+# Feature blocks 
 def convpool_block(inp, depth=2, nb_filters=64, nb_conv=3, nb_pool=2, init='orthogonal', activation='relu', batch_norm=False, regularizer=None, **junk):
     out = inp
     for i in range(depth):
@@ -621,7 +623,16 @@ def create_network(model, input_shape, fold=-1, streams=-1):
     elif model == '3P':
         network = lnd_a_3p((1, 32, 32))
         schedule=[20, 30, 35]
-        train_params = {'schedule':schedule, 'nb_epoch':10, 'batch_size':32, 
+        train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3P-sub':
+        network = lnd_a_3p((1, 32, 32))
+        schedule=[20, 30, 35]
+        train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         augment_params = default_augment_params
         augment_params['output_shape'] = (32, 32)
@@ -862,6 +873,14 @@ def create_network(model, input_shape, fold=-1, streams=-1):
         net_model = NetModel(network, train_params, augment_params)
 
     elif model == '6P':   
+        network = lnd_a_6p((1,128, 128))
+        schedule=[25, 60, 60]
+        train_params = {'opt':'sgd', 'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (128, 128)
+        net_model = NetModel(network, train_params, augment_params, {})
+
+    elif model == '6P-sub':   
         network = lnd_a_6p((1,128, 128))
         schedule=[25, 60, 60]
         train_params = {'opt':'sgd', 'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}

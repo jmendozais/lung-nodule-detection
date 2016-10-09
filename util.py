@@ -279,6 +279,9 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     plt.clf()
 
 def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True):
+    if legend != None:
+        assert len(legend) == len(op_set)
+
     ax = plt.gca()
     ax.grid(True)
 
@@ -300,6 +303,9 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
             plt.fill_between(ops[0], ops[1] - ops[2], ops[1] + ops[2], facecolor=line_format[i%13][0], alpha=0.3)  
         else:
             plt.plot(ops[0], ops[1], line_format[i%28], marker=markers[i%13], markersize=3, fillstyle='none')
+        if legend != None:
+            auc_ = auc(np.array(op_set[i]), range=(0.0, 10.0))
+            legend[i] = '{} (AUC = {:.2f})'.format(legend[i], auc_)
 
     '''
     import baseline
@@ -317,7 +323,6 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
     plt.ylabel('Sensitivity')
 
     if legend != None:
-        assert len(legend) == len(op_set)
         plt.legend(legend, loc=4, fontsize='small', numpoints=1)
 
     if not unique:
