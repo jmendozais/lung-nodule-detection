@@ -10,8 +10,7 @@ class DataProvider:
     def __len__(self):
         return len(self.img_paths)
 
-    def get(self, i, downsample=True):
-        dsize = (512, 512)
+    def get(self, i, downsample=True, dsize=(512, 512)):
         img = np.load(self.img_paths[i]).astype(np.float)
         ll_mask = cv2.imread(self.ll_paths[i])
         lr_mask = cv2.imread(self.lr_paths[i])

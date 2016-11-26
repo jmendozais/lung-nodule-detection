@@ -3,7 +3,7 @@ import sys
 
 import skimage.io as io
 from skimage.exposure import equalize_hist
-#from skimage.restoration import denoise_nl_means
+from skimage.restoration import denoise_nl_means
 
 from sklearn import neighbors
 from sklearn import lda
@@ -141,39 +141,123 @@ class BaselineModel(object):
         if self.feature_set != None:
             np.save(self.feature_set, '{}_fs.npy'.format(self.extractor.name))
         '''
-    def preprocess_rois(self, rois):
-        if self.preprocessor == 'heq':
-            for i in range(len(rois)):
-                for k in range(len(rois[i])):
-                    rois[i][k] = equalize_hist(rois[i][k])
-        elif self.preprocessor == 'nlm':
-            for i in range(len(rois)):
-                for k in range(len(rois[i])):
-                    rois[i][k] = denoise_nl_means(rois[i][k])
+    def preprocess_rois(self, roi_set, range_values):
+        assert self.preprocess_roi != 'none'
+        range_non_channel = [range_values.T[0].min(), range_values.T[1].max()]
+        result = []
+        has_op = False
+        for i in range(len(roi_set)):
+            rois = roi_set[i]
+            result.append([])
+            for j in range(len(rois)): 
+                print 'pre rois {} {}'.format(i, j)
+                result[-1].append([])
+                for k in range(len(rois[j])):
+                    if 'norm' in self.preprocess_lung:
+                        result[-1][-1].append(normalize(rois[j][k], np.ones(shape=rois[j][k].shape)))
+                    if 'heq' in self.preprocess_roi:
+                        result[-1][-1].append(equalize_hist(rois[j][k]))
+                    if 'nlm' in self.preprocess_roi:
+                        result[-1][-1].append(denoise_nl_means(rois[j][k]))
+                    if 'max_white' in self.preprocess_roi:
+                        result[-1][-1].append(max_white(rois[j][k], range_values[k][0], range_values[k][1]))
+                    if 'stretch' in self.preprocess_roi:
+                        result[-1][-1].append(stretch(rois[j][k], range_values[k][0], range_values[k][1]))
 
-    def create_rois(self, data, blob_set, mode=None, downsample=False):
-        LCE_POS = 1
+                result[-1][-1] = np.array(result[-1][-1])
+                if 'grey_world' in self.preprocess_roi:
+                    result[-1][-1].append(grey_world(rois[j], range_non_channel[0], range_non_channel[1]))
+                if 'retinex' in self.preprocess_roi:
+                    result[-1][-1].append(retinex(rois[j], range_non_channel[0], range_non_channel[1]))
+                if 'retinex_adjust' in self.preprocess_roi:
+                    result[-1][-1].append(retinex_adjust(rois[j], range_non_channel[0], range_non_channel[1]))
+
+                has_op = len(result[-1][-1]) > 0
+            result[-1] = np.array(result[-1])
+        if not has_op:
+            return roi_set
+        return np.array(result)  
+
+    def create_rois(self, data, blob_set, mode=None):
         dsize = (int(self.roi_size * 1.15), int(self.roi_size * 1.15))
         print 'dsize: {} rsize: {}'.format(dsize, self.roi_size)
         # Create image set
         img_set = []
-        for i in range(len(data)):
-            img, lung_mask = data.get(i)
-            sampled, lce, norm = preprocess(img, lung_mask)
-            _, ci, _ = wmci_proba(lce, lung_mask, 0.5)
-            if not downsample:
-                img, lung_mask = data.get(i, downsample=downsample)
-                _, lce, norm = preprocess(img, lung_mask, downsample=downsample)
-                ci = cv2.resize(ci, img.shape, interpolation=cv2.INTER_CUBIC)
 
+        print 'Calc min max value'
+        min_value = []
+        max_value = []
+        for i in range(len(data)):
+            img, mask = data.get(i, downsample=True) # img 2048 side, lung mask downsampled
+            img = antialiasing_dowsample(img, True) # img downsampled
+            img = img * mask
+            min_value.append(np.min(img[np.nonzero(img)]))
+            max_value.append(np.max(img[np.nonzero(img)]))
+            
+        img_set = np.array(img_set)
+        min_value = np.array(min_value).min()
+        max_value = np.array(max_value).max()
+        print 'Min {} Max {}'.format(min_value, max_value)
+
+        img_set = []
+        for i in range(len(data)):
+            print 'Create rois. Preprocess image {}.'.format(i)
+            '''
+            img, lung_mask = data.get(i, downsample=True)
+            sampled, lce, norm = preprocess(img, lung_mask, downsample=True)
+            _, ci, _ = wmci_proba(lce, lung_mask, 0.5)
+            if not self.downsample:
+                img, lung_mask = data.get(i, downsample=self.downsample)
+                sampled, lce, norm = preprocess(img, lung_mask, downsample=self.downsample)
+                ci = cv2.resize(ci, img.shape, interpolation=cv2.INTER_CUBIC)
+            '''
+            img, lung_mask = data.get(i, downsample=self.downsample) # img 2048 side, lung mask downsampled
+            img = antialiasing_dowsample(img, self.downsample) # img downsampled
+
+            results = []
+            lce_ = None
+            if 'original' in self.preprocess_lung:
+                results.append(img) 
+            if 'norm' in self.preprocess_lung:
+                results.append(normalize(img, lung_mask))
+            if 'lce' in self.preprocess_lung:
+                lce_ = lce(img, self.downsample)
+                results.append(lce_) 
+            if 'wmci' in self.preprocess_lung:
+                sampled_lce = lce_
+                sampled_mask = lung_mask
+                if not self.downsample:
+                    sampled_img, sampled_mask = data.get(i, downsample=True)
+                    sampled_lce = lce(sampled_img, downsample=True)
+                _, ci, _ = wmci_proba(sampled_lce, sampled_mask, 0.5)
+                if not self.downsample:
+                    ci = cv2.resize(ci, img.shape, interpolation=cv2.INTER_CUBIC)
+                results.append(ci)
+            if 'stretch' in self.preprocess_lung:
+                results.append(stretch(img, min_value, max_value))
+            if 'max_white' in self.preprocess_lung:
+                results.append(max_white(img, min_value, max_value))
+
+            # Multi-channel preprocessing
+            results = np.array(results)
+            if 'grey_world' in self.preprocess_lung:
+                results = grey_world(results, min_value, max_value)
+            elif 'retinex' in self.preprocess_lung:
+                results = retinex(results, min_value, max_value)
+            elif 'retinex_adjust' in self.preprocess_lung:
+                results = retinex_adjust(results, min_value, max_value)
+            img_set.append(results)
+
+            '''
             if self.use_transformations or self.streams != 'none':
                 img_set.append(np.array([lce, norm, ci]))
                 #img_set.append(np.array([lce, ci]))
                 #img_set.append(np.array([lce, norm]))
             else:
                 img_set.append(np.array([lce]))
+            '''
 
-        print 'preproc: {}'.format(self.preprocessor)
+        print 'preprocess rois {}'.format(self.preprocess_roi)
         # Create roi set
         roi_set = []
         if self.streams == 'trf':
@@ -183,8 +267,16 @@ class BaselineModel(object):
         elif self.streams == 'fovea':
             roi_set = [[], []]
 
+        channels = len(img_set[0])
+        range_values = np.zeros(shape=(channels, 2), dtype=np.float)
+        for i in range(channels):
+            range_values[i][0] = 1e9
+            range_values[i][1] = -1e9
+
         for i in range(len(img_set)):
             img = img_set[i]
+            print 'img shape {}'.format(img.shape)
+            print 'img[0] shape {}'.format(img[0].shape)
             rois = []
             masks = []
 
@@ -194,7 +286,7 @@ class BaselineModel(object):
             
             for j in range(len(blob_set[i])):
                 sample_factor = 1
-                if not downsample:
+                if not self.downsample:
                     sample_factor = 4
 
                 x, y, r = blob_set[i][j]
@@ -223,16 +315,27 @@ class BaselineModel(object):
                     for k in range(img.shape[0]):
                         roi[k] *= mask.astype(np.float32)
                 '''
-
+                
                 rois.append(np.array(roi))
-
-            self.preprocess_rois(rois)
+            rois = np.array(rois)
+            roi_set.append(rois)
+            
+            # Update range values
+            min_by_channels = np.min(rois, axis=(0, 2, 3))
+            max_by_channels = np.max(rois, axis=(0, 2, 3))
+            for i in range(channels):
+                range_values[i][0] = min(range_values[i][0], min_by_channels[i])
+                range_values[i][1] = max(range_values[i][1], max_by_channels[i])
+            
             '''
             for i in range(len(rois)):
                 util.imwrite('after_heq_{}.jpg'.format(i), rois[i])
             '''
-            rois = np.array(rois)
 
+        if self.preprocess_roi != 'none':
+            self.preprocess_rois(roi_set, range_values)
+        '''
+            # Fix segment
             if self.streams == 'trf':
                 #rois = np.swapaxes(np.swapaxes(np.swapaxes(rois, 2, 3), 1, 2), 0, 1)
                 rois = np.swapaxes(rois, 0, 1)
@@ -261,36 +364,17 @@ class BaselineModel(object):
                 roi_set[1].append(fovea_rois)
             else:
                 roi_set.append(rois)
+        '''
 
         return np.array(roi_set)
 
     def detect_blobs(self, img, lung_mask, threshold=0.5):
         sampled, lce, norm = preprocess(img, lung_mask)
-
         blobs, ci = wmci(lce, lung_mask, threshold)
-
         return blobs, norm, lce, ci
-
-    def detect_blobs_proba(self, img, lung_mask, threshold=0.5, method='wmci'):
-        sampled, lce, norm = preprocess(img, lung_mask)
-        
-        if method == 'wmci':
-            blobs, ci, proba = wmci_proba(lce, lung_mask, threshold)
-        elif method == 'log':
-            blobs, proba = log_(lce, lung_mask, threshold, proba=True)
-            ci = norm
-        elif method == 'dog':
-            blobs, proba = dog(lce, lung_mask, threshold, proba=True)
-            ci = norm
-        elif method == 'doh':
-            blobs, proba = doh(lce, lung_mask, threshold, proba=True)
-            ci = norm
-
-        return blobs, norm, lce, ci, proba
 
     def segment(self, img, blobs):
         blobs, nod_masks = adaptive_distance_thold(img, blobs)
-
         return blobs, nod_masks
 
     def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
@@ -299,7 +383,7 @@ class BaselineModel(object):
     def extract_feature_set(self, data):
         feature_set = []
         blob_set = []
-        print "extract_feature_set"
+        print "extract feature set"
         print '[',
         for i in range(len(data)):
             if i % (len(data)/10) == 0:
@@ -400,40 +484,14 @@ class BaselineModel(object):
     def train_with_feature_set_keras(self, feats_tr, pred_blobs_tr, real_blobs_tr,
                                         feats_test=None, pred_blobs_test=None, real_blobs_test=None,
                                         model='shallow_1', fold=None, network_init=None):
-
-        nb_classes = 2
-        X_train, y_train = [], []
-        if self.streams != 'none':
-            num_streams = len(feats_tr)
-            for i in range(num_streams):
-                tmp, y_train = classify.create_training_set_from_feature_set(feats_tr[i], pred_blobs_tr, real_blobs_tr)
-                X_train.append(tmp.astype('float32'))
-        else:
-            X_train, y_train = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr)
-            X_train = X_train.astype('float32')
-                
-        Y_train= np_utils.to_categorical(y_train, nb_classes)
-
-        X_test, Y_test = None, None
-        if feats_test != None:
-            X_test, y_test = [], []
-            if self.streams != 'none':
-                num_streams = len(feats_test)
-                for i in range(num_streams):
-                    tmp, y_test = classify.create_training_set_from_feature_set(feats_test[i], pred_blobs_test, real_blobs_test)
-                    X_test.append(tmp.astype('float32'))
-            else:
-                X_test, y_test = classify.create_training_set_from_feature_set(feats_test, pred_blobs_test, real_blobs_test)
-                X_test = X_test.astype('float32')
-
-            Y_test = np_utils.to_categorical(y_test, nb_classes)
-        
+        X_train, Y_train, X_test, Y_test = neural.create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr, 
+                                                feats_test, pred_blobs_test, real_blobs_test, streams=self.streams)
         self.network = neural.create_network(model, X_train.shape, fold, self.streams) 
         if network_init is not None:
             self.load_cnn_weights('data/{}_fold_{}'.format(network_init, fold))
 
-        history = self.network.fit(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=(self.roi_size, self.roi_size), checkpoint_prefix='data/{}-fold-{}'.format(model, fold))
-
+        name =  'data/{}_fold_{}'.format(model, fold)
+        history = self.network.fit(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=(self.roi_size, self.roi_size), checkpoint_prefix=name, checkpoint_interval=2)
         return history
 
     def predict_proba(self, data):
@@ -576,7 +634,6 @@ class BaselineModel(object):
             #show_blobs("Predict result ...", lce, filtered_blob)
             data_blobs.append(np.array(filtered_blobs)) 
             data_probs.append(np.array(filtered_probs))
-
         return np.array(data_blobs), np.array(data_probs)
 
     def extract_features_from_network(self, roi_set, layer):
@@ -607,9 +664,9 @@ class BaselineModel(object):
 
         return np.array(data_blobs), np.array(data_probs)
 
-    def pretrain(self, model, X, fold=None, streams=False):
+    def pretrain(self, model, X, fold=None, streams=False, nb_epoch=1):
         self.network = neural.create_network(model, X.shape, fold, streams)
-        ae.pretrain_layerwise(self.network.network, X, nb_epoch=15)
+        ae.pretrain_layerwise(self.network.network, X, nb_epoch=nb_epoch)
         #return history
 
     def fit_transform_bovw(self, rois_tr, pred_blobs_tr, blobs_tr, rois_te, pred_blobs_te, blobs_te,  model):

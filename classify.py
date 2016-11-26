@@ -219,6 +219,48 @@ def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs):
     Y = np.array(Y)
     return X, Y
 
+def create_training_set_for_detector(feature_set, pred_blobs, real_blobs):
+    MAX_DIST = 35
+
+    size = len(real_blobs)
+
+    X = []
+    Y = []
+
+    # create positives
+    print "Creating positives ..."
+    for i in range(size):
+        #print "real {} pred {} ft {}".format(real_blobs[i][2], len(pred_blobs), len(feature_set))
+        if real_blobs[i][2] == -1:
+            continue
+        for j in range(len(pred_blobs[i])):
+            x, y, z = pred_blobs[i][j]#
+            dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
+            if dst < MAX_DIST:
+                X.append(feature_set[i][j])
+                Y.append(1.0 - ((MAX_DIST - dst) * 1.0 / MAX_DIST) ** 2)
+
+    # create negatives
+    print "Creating negatives ..."
+    for i in range(size):
+
+        neg_idx = []
+        for j in range(len(pred_blobs[i])):
+            x, y, z = pred_blobs[i][j]
+            dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
+            if dst > MAX_DIST:
+                neg_idx.append(j)
+
+        for idx in neg_idx:
+            X.append(feature_set[i][idx])
+            Y.append(0.0)
+
+    X = np.array(X)
+    Y = np.array(Y)
+    return X, Y
+
+
+
 def train(X, Y, clf, scaler, selector, weights=False):
     iters = 1
     trs = int(0.7 * len(Y))

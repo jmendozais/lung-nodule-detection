@@ -239,7 +239,7 @@ def show_blob(path, img, blob):
 
     imshow(path, img_roi)
 
-def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, unique=True, with_std=False):
+def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, unique=True, with_std=False, fppi_max=10.0):
     ax = plt.gca()
     ax.grid(True)
 
@@ -265,11 +265,11 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
         idx += 1
         legend.append(froc_legend[i])
 
-    x_ticks = np.linspace(0.0, 10.0, 11)
+    x_ticks = np.linspace(0.0, fppi_max, 11)
     y_ticks = np.linspace(0.0, 1.0, 11)
     plt.xticks(x_ticks, x_ticks)
     plt.yticks(y_ticks, y_ticks)
-    plt.xlim([0, 10.0])
+    plt.xlim([0, fppi_max])
     plt.ylim([0, 1.00])
     plt.ylabel('Sensitivity')
     plt.xlabel('Average FPs per Image')
@@ -278,9 +278,10 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     plt.savefig('{}_cmp.pdf'.format(name))
     plt.clf()
 
-def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True):
+def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True, fppi_max=10.0):
     if legend != None:
         assert len(legend) == len(op_set)
+    legend = list(legend)
 
     ax = plt.gca()
     ax.grid(True)
@@ -304,7 +305,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
         else:
             plt.plot(ops[0], ops[1], line_format[i%28], marker=markers[i%13], markersize=3, fillstyle='none')
         if legend != None:
-            auc_ = auc(np.array(op_set[i]), range=(0.0, 10.0))
+            auc_ = auc(np.array(op_set[i]), range=(0.0, fppi_max))
             legend[i] = '{} (AUC = {:.2f})'.format(legend[i], auc_)
 
     '''
@@ -313,11 +314,11 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
         print 'fp {}: {}'.format(fp, ops[1][int(fp * 10)])
     '''
 
-    x_ticks = np.linspace(0.0, 10.0, 11)
+    x_ticks = np.linspace(0.0, fppi_max, 11)
     y_ticks = np.linspace(0.0, 1.0, 11)
     plt.xticks(x_ticks, x_ticks)
     plt.yticks(y_ticks, y_ticks)
-    plt.xlim([0, 10.0])
+    plt.xlim([0, fppi_max])
     plt.ylim([0, 1.00])
     plt.xlabel('Average FPs per Image')
     plt.ylabel('Sensitivity')
@@ -332,10 +333,9 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
     plt.clf()
 
 def auc(ops, range):
-    print 'ops.shape {}'.format(ops.shape)
     ops = ops.T
     lower = ops[0].searchsorted(range[0])
-    upper = ops[0].searchsorted(range[1])
+    upper = ops[0].searchsorted(range[-1])
     return metrics.auc(ops[0][lower:upper], ops[1][lower:upper])
 
 def save_auc(epochs, aucs, name):
@@ -450,7 +450,32 @@ def save_loss_acc(history, name):
     save_loss(history, name + '_loss')
     save_acc(history, name + '_acc')
 
-def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random):
+def add_random_blobs(data, blobs, blobs_by_image=100, rng=np.random):
+    assert len(data) == len(blobs)
+    augmented_blobs = []
+    for i in range(len(data)):
+        img, lung_mask = data.get(i)
+        side = lung_mask.shape[0]
+        cnt = 0
+        assert len(blobs[i]) == 1
+
+        augmented_blobs.append([])
+        rx, ry, _ = blobs[i][0]
+        if rx >= 0 or ry >= 0:
+            assert lung_mask[rx, ry] > 0
+            augmented_blobs[i].append(blobs[i][0])
+
+        while cnt < blobs_by_image:
+            rx = int(rng.uniform(0, side))
+            ry = int(rng.uniform(0, side))
+            if lung_mask[rx, ry] > 0:
+                augmented_blobs[i].append([rx, ry, 25])
+                cnt += 1
+        augmented_blobs[i] = np.array(augmented_blobs[i])
+
+    return np.array(augmented_blobs)
+
+def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random, flat=True):
     rois = []
     if data != None:
         for i in range(len(data)):

@@ -149,6 +149,7 @@ class ImageDataGenerator:
         translation_range=(0.,0.), 
         flip=False,
         zoom_range=(1.,1.),
+        intensity_shift_std=True,
         output_shape=(64, 64),
 
         batch_size=32,
@@ -159,6 +160,7 @@ class ImageDataGenerator:
         self.translation_range = translation_range
         self.flip = flip
         self.zoom_range = zoom_range
+        self.intensity_shift_std = intensity_shift_std
         self.output_shape = output_shape
 
         self.batch_size = batch_size
@@ -238,10 +240,12 @@ class ImageDataGenerator:
             do_flip=self.flip)
         tform_augment = tform_ucenter + tform_augment + tform_center
 
+        intensity_shift = np.random.uniform(*self.intensity_shift_range)
+
         new_x = np.full(shape=(x.shape[0], self.output_shape[0], self.output_shape[1]), dtype=np.float32, fill_value=0)
         for i in range(x.shape[0]):
             new_x[i] = self.fast_warp(x[i], tform_centering + tform_augment, output_shape=self.output_shape, mode='constant').astype('float32')
-
+            new_x[i] += intensity_shift
         '''
         tmp = np.random.randint(10000)
         for i in range(len(new_x)):
@@ -266,15 +270,31 @@ class ImageDataGenerator:
 
     def augment(self, X, y, cropped_shape):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
+        if self.intensity_shift_std:
+            std = np.std(X)
+            self.intensity_shift_range = (-std, std)
+        
         factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
         # balance
         print 'Mode: {} ...'.format(self.mode)
         if self.mode == 'balance_batch':
+            '''
+            idx = y.T[1].astype(np.int)
+            '''
             idx = y.T[1]
+            '''
             positives = X[idx > 0]
             negatives = X[idx == 0]
             l_pos = y[idx > 0][0]
             l_neg = y[idx == 0][0]
+            '''
+            thold = 0.8
+            positives = X[idx >= thold]
+            negatives = X[idx < thold]
+            l_pos = y[idx >= thold][0]
+            l_neg = y[idx < thold][0]
+            print 'len pos {}, len neg {}'.format(len(positives), len(negatives))
+
             aX = np.zeros((2 * negatives.shape[0],) + X[0].shape, dtype=X[0].dtype)
             ay = np.zeros((2 * negatives.shape[0],) + y[0].shape, dtype=y[0].dtype)
             n_batches = int(math.ceil(float(2 * negatives.shape[0]) / self.batch_size))
@@ -324,6 +344,7 @@ class ImageDataGenerator:
         gc.collect()
         return np.array(new_X), ay    
         
+    '''
     def augment2(self, X, y, output_shape):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
 
@@ -375,7 +396,6 @@ class ImageDataGenerator:
                 aX = np.array(new_X)
 
         return aX, ay
-
     def online_augment(self, X, y):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
         factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
@@ -407,6 +427,7 @@ class ImageDataGenerator:
                 yield aX, ay
         elif self.mode == 'balance_dataset':
             print "ERR: Not supported"
+        '''
 
 # Test
 if __name__ == '__main__':

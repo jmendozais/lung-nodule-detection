@@ -86,7 +86,7 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
     frocs_ = []
     for tr_idx, te_idx in folds:    
         print "Fold {}".format(fold),
-            
+
         data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
         paths_te = paths[te_idx]
 
@@ -266,7 +266,7 @@ def classify_foldwise(_model, fname, config, save_fw=False, save_froc=True):
 
 def extract_features_cnn(_model, fname, network_model, layer):
     print "Extract cnn features"
-    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
@@ -392,10 +392,10 @@ def froc_by_epoch(_model, paths, left_masks, right_masks, blobs, pred_blobs, roi
             blobs_te.append([bl])
         blobs_te = np.array(blobs_te)
 
-        print 'load model {} ...'.format('data/{}_fold_{}'.format(network_model, fold))
+        name = 'data/{}_fold_{}.epoch_{}'.format(network_model, fold,epoch)
+        print 'load model {} ...'.format(name)
         _model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
-        print 'load weights {} ...'.format('data/{}_fold_{}'.format(network_model, fold))
-        _model.load_cnn_weights('data/{}.fold-{}.epoch-{}.h5'.format(network_model, fold, epoch))
+        _model.load_cnn_weights(name)
         print "predict ..."
 
         rois_tr = []
@@ -443,14 +443,14 @@ def frocs_by_epoch(_model, fname, network_model):
     frocs = []
     frocs.append(baseline.hardie)
 
-    EPOCH_INTERVAL = 5
+    epoch_interval = 2
     aucs1 = []
     aucs2 = []
     epoch = 0
     while True:
-        epoch += EPOCH_INTERVAL
+        epoch += epoch_interval
         print 'data/{}.fold-1.epoch-{}.h5'.format(network_model, epoch)
-        if path.isfile('data/{}.fold-1.epoch-{}.h5'.format(network_model, epoch)):
+        if path.isfile('data/{}_fold_1.epoch_{}_weights.h5'.format(network_model, epoch)):
             ops = froc_by_epoch(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, epoch)
             frocs.append(ops)
             legends.append('{}, epoch {}'.format(network_model, epoch))
@@ -460,11 +460,11 @@ def frocs_by_epoch(_model, fname, network_model):
             break
 
     util.save_froc(frocs, 'data/{}-on-epochs'.format(network_model), legends, with_std=False, use_markers=False)
-    util.save_auc(np.array(range(1, len(aucs1)+1)) * EPOCH_INTERVAL, aucs1, 'data/{}-auc-2-4'.format(network_model))
-    util.save_auc(np.array(range(1, len(aucs2)+1)) * EPOCH_INTERVAL, aucs2, 'data/{}-auc-0-5'.format(network_model))
+    util.save_auc(np.array(range(1, len(aucs1)+1)) * epoch_interval, aucs1, 'data/{}-auc-2-4'.format(network_model))
+    util.save_auc(np.array(range(1, len(aucs2)+1)) * epoch_interval, aucs2, 'data/{}-auc-0-5'.format(network_model))
     return frocs
 
-def pretrain_cnn(_model, fname, network_model, init_name=None):
+def pretrain_cnn(_model, fname, network_model, init_name=None, nb_epoch=1):
     print "pretrain with cnn"
     paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
@@ -480,7 +480,7 @@ def pretrain_cnn(_model, fname, network_model, init_name=None):
     print "Loading blobs ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
-    rois = _model.create_rois(data, pred_blobs, downsample=True)
+    rois = _model.create_rois(data, pred_blobs)
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
     folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
@@ -493,7 +493,7 @@ def pretrain_cnn(_model, fname, network_model, init_name=None):
         X = util.extract_random_rois(data_tr, (_model.roi_size, _model.roi_size))
         print 'Pretraining Fold {}'.format(fold)
         print 'Pretraining dataset len: {} ...'.format(len(X))    
-        _model.pretrain(network_model, X)
+        _model.pretrain(network_model, X, nb_epoch=nb_epoch)
         print 'Save ...'
         if init_name == None:
             init_name = network + '_init'
@@ -607,7 +607,7 @@ def get_froc_on_folds_hybrid(_model, paths, left_masks, right_masks, blobs, pred
     return av_froc
 
 def protocol_two_stages():
-    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
     size = len(paths)
@@ -663,7 +663,7 @@ def protocol_two_stages():
 
 def protocol_froc_1(_model, fname):
     print '# {}'.format(fname)
-    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
     '''
@@ -700,7 +700,7 @@ def protocol_froc_1(_model, fname):
     np.save('data/{}_pred.blb.npy'.format(fname), pred_blobs)
 
 def protocol_froc_2(_model, fname, save_fw=False):
-    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
     size = len(paths)
@@ -1182,11 +1182,6 @@ Deep learning protocols
 '''
 
 def protocol_cnn_froc(detections_source, fname, network_model):
-    '''
-    paths, locs, rads, subs = jsrt.jsrt(set=None)
-    left_masks = jsrt.left_lung(set=None)
-    right_masks = jsrt.right_lung(set=None)
-    '''
     paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
@@ -1596,10 +1591,10 @@ def compare_bovw_models(detections_source, fname, model_names, labels, exp_name)
     return ops
 
 if __name__=="__main__": 
-    
     # TRADITIONAL PIPELINES
     parser = argparse.ArgumentParser(prog='lnd.py')
-    parser.add_argument('-p', '--preprocessor', help='Options: heq, nlm, cs.', default='none')
+    parser.add_argument('--preprocess-lung', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='lce')
+    parser.add_argument('--preprocess-roi', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='none')
     parser.add_argument('-b', '--blob_detector', help='Options: wmci(default), TODO hog, log.', default='wmci')
     parser.add_argument('--eval-wmci', help='Measure sensitivity and fppi without classification', action='store_true')
     parser.add_argument('-d', '--descriptor', help='Options: baseline.hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='baseline.hardie')
@@ -1610,7 +1605,7 @@ if __name__=="__main__":
     parser.add_argument('--clf', help='Performs classification.', action='store_true')
     parser.add_argument('--hyp', help='Performs hyperparameter search. The target method to evaluate should be specified using -t.', action='store_true')
     parser.add_argument('-t', '--target', help='Method to be optimized. Options wmci, pca, lda, rlr, rfe, svm, ', default='svm')
-    parser.add_argument('--cmp', help='Compare results of different models via froc. Options: hog, hog-impls, lbp, clf.', default='none')
+    parser.add_argument('--cmp', help='Compares results of different models via froc. Options: hog, hog-impls, lbp, clf.', default='none')
     parser.add_argument('--fw', help='Plot the importance of individual features ( selected clf coef vs anova ) ', action='store_true')
     parser.add_argument('--label', help='Options: nodule, sublety.', default='nodule')
 
@@ -1650,6 +1645,7 @@ if __name__=="__main__":
     # Options
     parser.add_argument('-a', '--augment', help='Augmentation configurations: bt, zcabt, xbt.', default='bt')
     parser.add_argument('--roi-size', help='Layer index used to extract feature from cnn model.', default=64, type=int)
+    parser.add_argument('--epochs', help='Number of epochs for pretraining.', default=1, type=int)
 
     # Evals
     parser.add_argument('--frocs-by-epoch', help='Generate a figure with froc curves every 5 epochs', action='store_true')
@@ -1660,14 +1656,15 @@ if __name__=="__main__":
     _model = model.BaselineModel("data/default")
     _model.name = 'data/{}'.format(extractor_key)
     _model.extractor = model.extractors[args.descriptor]
-    _model.preprocessor = args.preprocessor
+    _model.preprocess_lung = args.preprocess_lung
+    _model.preprocess_roi = args.preprocess_roi
     _model.roi_size = args.roi_size
     _model.use_transformations = args.trf_channels
     _model.streams = args.streams 
     _model.label = args.label
-    
-    #TODO
+    # TODO 
     _model.augment = args.augment
+    _model.downsample = True
 
     # default: clf -d baseline.hardie
          
@@ -1749,7 +1746,7 @@ if __name__=="__main__":
         hyp_cnn_lsvm_hybrid(_model, '{}'.format(extractor_key), args.cnn)
 
     elif args.pre_tr == 'conv':
-        pretrain_convnet(_model, args.extractor_key, args.cnn)
+        pretrain_convnet(_model, args.extractor_key, args.cnn, nb_epoch=args.epochs)
 
     elif args.cmp != 'none':
         if args.clf:
@@ -1792,7 +1789,7 @@ if __name__=="__main__":
 
     elif args.cnn != 'none':
         if args.pre_tr:
-            pretrain_cnn(_model, extractor_key, args.cnn, args.init)
+            pretrain_cnn(_model, extractor_key, args.cnn, args.init, nb_epoch=args.epochs)
         # extract features fron a specific layer. 
         elif args.fts:
             extract_features_cnn(_model, extractor_key, args.cnn, args.layer)

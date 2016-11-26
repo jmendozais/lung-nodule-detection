@@ -190,7 +190,7 @@ def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random):
     return np.array(roi_set)
 
 
-def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None):
+def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False):
     img_set = []
     if data != None:
         for i in range(len(data)):
@@ -216,14 +216,12 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None):
         dist = np.linalg.norm(pred[i][:,:2] - real[i][0][:2], axis=1)
         entry = []
         entry.append(probs[i])
-        print 'probs[i]: {}'.format(probs[i])
         entry.append(dist)
         entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
         entry.append(np.arange(len(probs[i]), dtype=np.float))
         if jsrt_idx != None:
             entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
         #print np.array(entry).T.shape
-        print entries.shape
         entries = np.append(entries, np.array(entry).T, axis=0)
     
     entries = sorted(entries, key=itemgetter(0))
@@ -254,7 +252,8 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None):
                     foo=1
                     #util.imwrite('{}-{}-tp.jpg'.format(int(entries[i][0] * 1000000) * 0.0001, entries[i][4]), tmp[k])
                     #print 'check {} : {} - {}'.format(i, entries[i][2], entries[i][3])
-                    #util.save_blob('{}-{}-tp.jpg'.format(int(entries[i][0] * 1000000000000) * 0.0000000001, entries[i][4]), img_set[entries[i][2]][0], pred[entries[i][2]][entries[i][3]])
+                    if save_rois:
+                        util.save_blob('{}-{}-tp.jpg'.format(int(entries[i][0] * 1000000000000) * 0.0000000001, entries[i][4]), img_set[entries[i][2]][0], pred[entries[i][2]][entries[i][3]])
         else:
             fppi[idx] += 1
             if rois != None and entries[i][1] > 31.43:
@@ -263,9 +262,11 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None):
                     foo=1
                     #util.imwrite('{}-{}-fp.jpg'.format(int(entries[i][0] * 1000000) * 0.0001, entries[i][4]), tmp[k])
                     #print 'check {} : {} - {}'.format(i, entries[i][2], entries[i][3])
-                    #util.save_blob('{}-{}-fp.jpg'.format(int(entries[i][0] * 1000000000000) * 0.0000000001, entries[i][4]), img_set[entries[i][2]][0], pred[entries[i][2]][entries[i][3]])
+                    if save_rois:
+                        util.save_blob('{}-{}-fp.jpg'.format(int(entries[i][0] * 1000000000000) * 0.0000000001, entries[i][4]), img_set[entries[i][2]][0], pred[entries[i][2]][entries[i][3]])
 
     froc.append([np.mean(fppi), tp / p])
+    froc.append([1000.0, tp / p])
     targets = [2., 4., 10.]
     ops = []
     for i in range(len(targets)):
@@ -276,6 +277,7 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None):
         ops.append(best_op)
     ops.append(froc[-1])
     print "fppi operating point: {}".format(ops)
+    print "mean fppi {}, tp {}, p {}".format(np.mean(fppi), tp, p)
 
     return np.array(froc)   
 
