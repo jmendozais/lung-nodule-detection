@@ -13,12 +13,19 @@ from scipy import ndimage
 from scipy import linalg
 from skimage import transform
 
+import cv2
 import util
 
 def gaussian_noise(x, mean=0, std=0.1):	
-    noise = mean + random.randn(x.shape) * std
+    noise = np.random.normal(loc=mean, scale=std, size=x.shape)
     scale_factor = np.max(x)
-    return x + noise * scale_factor
+    return noise * scale_factor
+
+def gaussian_smooth(x, ksize=5, sigma=0.5):	
+    ksize = (ksize, ksize)
+    sigma *= np.random.uniform()
+    smt = cv2.GaussianBlur(x, ksize, sigma)
+    return smt
 
 class Preprocessor:
     def __init__(
@@ -154,6 +161,10 @@ class ImageDataGenerator:
 
         batch_size=32,
         ratio=1.,
+        gn_mean=.0,
+        gn_std=.0,
+        gs_size=0,
+        gs_sigma=.0,
         mode='balance_batch'):
 
         self.rotation_range = rotation_range
@@ -165,6 +176,10 @@ class ImageDataGenerator:
 
         self.batch_size = batch_size
         self.ratio = ratio
+        self.gn_mean = gn_mean
+        self.gn_std = gn_std
+        self.gs_size = gs_size
+        self.gs_sigma = gs_sigma
         self.mode = mode
 
         self.rng = np.random.RandomState(113)
@@ -246,6 +261,10 @@ class ImageDataGenerator:
         for i in range(x.shape[0]):
             new_x[i] = self.fast_warp(x[i], tform_centering + tform_augment, output_shape=self.output_shape, mode='constant').astype('float32')
             new_x[i] += intensity_shift
+            if self.gs_sigma != .0 and self.gs_size != 0:
+                new_x[i] = gaussian_smooth(new_x[i], self.gs_size, self.gs_sigma)
+            if self.gn_std != .0:
+                new_x[i] += gaussian_noise(new_x[i], self.gn_mean, self.gn_std)
         '''
         tmp = np.random.randint(10000)
         for i in range(len(new_x)):

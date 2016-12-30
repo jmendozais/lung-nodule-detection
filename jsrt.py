@@ -13,8 +13,8 @@ RMPATH = '../dbs/scr/masks/right_masks.txt'
 DATASET_LEN = 257
 NUM_POSITIVES = 154
 
-sublety_labels = ['False positive', 'Extremely subtle', 'Very subtle', 'Subtle', 'Relatively subtle', 'Obvious']
-size_labels = [u'False positive', u'< 10 mm.', u' > 10 mm. and < 20 mm.', u'< 20mm.']
+sublety_labels = ['False positive', 'Extremely subtle', 'Very subtle', 'Subtle', 'Relatively obvious', 'Obvious']
+size_labels = [u'False positive', u'< 10 mm.', u'>= 10 mm. and < 20 mm.', u'>= 20mm.']
 severity_labels = ['False positive', 'Benign', 'Malignant']
 
 def get_paths(root = PATH, suffix = 'npy'):

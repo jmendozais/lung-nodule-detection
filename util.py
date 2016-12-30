@@ -278,7 +278,7 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     plt.savefig('{}_cmp.pdf'.format(name))
     plt.clf()
 
-def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True, fppi_max=10.0):
+def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True, fppi_max=10.0, with_auc=True):
     if legend != None:
         assert len(legend) == len(op_set)
     legend = list(legend)
@@ -304,7 +304,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
             plt.fill_between(ops[0], ops[1] - ops[2], ops[1] + ops[2], facecolor=line_format[i%13][0], alpha=0.3)  
         else:
             plt.plot(ops[0], ops[1], line_format[i%28], marker=markers[i%13], markersize=3, fillstyle='none')
-        if legend != None:
+        if legend != None and with_auc:
             auc_ = auc(np.array(op_set[i]), range=(0.0, fppi_max))
             legend[i] = '{} (AUC = {:.2f})'.format(legend[i], auc_)
 
@@ -450,20 +450,25 @@ def save_loss_acc(history, name):
     save_loss(history, name + '_loss')
     save_acc(history, name + '_acc')
 
-def add_random_blobs(data, blobs, blobs_by_image=100, rng=np.random):
+def add_random_blobs(data, blobs, blobs_by_image=100, rng=np.random, pred_blobs=None):
     assert len(data) == len(blobs)
     augmented_blobs = []
     for i in range(len(data)):
         img, lung_mask = data.get(i)
         side = lung_mask.shape[0]
-        cnt = 0
-        assert len(blobs[i]) == 1
+        #assert len(blobs[i]) == 1
 
         augmented_blobs.append([])
-        rx, ry, _ = blobs[i][0]
+        #rx, ry, _ = blobs[i][0]
+        rx, ry, _ = blobs[i]
         if rx >= 0 or ry >= 0:
             assert lung_mask[rx, ry] > 0
-            augmented_blobs[i].append(blobs[i][0])
+            #augmented_blobs[i].append(blobs[i][0])
+            augmented_blobs[i].append(blobs[i])
+
+        if pred_blobs != None:
+            augmented_blobs[i] += list(pred_blobs[i])
+        cnt = len(augmented_blobs[i])
 
         while cnt < blobs_by_image:
             rx = int(rng.uniform(0, side))

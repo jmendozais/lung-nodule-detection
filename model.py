@@ -153,8 +153,13 @@ class BaselineModel(object):
                 print 'pre rois {} {}'.format(i, j)
                 result[-1].append([])
                 for k in range(len(rois[j])):
-                    if 'norm' in self.preprocess_lung:
+                    if 'norm' in self.preprocess_roi:
                         result[-1][-1].append(normalize(rois[j][k], np.ones(shape=rois[j][k].shape)))
+                    if 'norm3' in self.preprocess_roi:
+                        norm = normalize(rois[j][k], np.ones(shape=rois[j][k].shape))
+                        result[-1][-1].append(norm)
+                        result[-1][-1].append(norm)
+                        result[-1][-1].append(norm)
                     if 'heq' in self.preprocess_roi:
                         result[-1][-1].append(equalize_hist(rois[j][k]))
                     if 'nlm' in self.preprocess_roi:
@@ -178,10 +183,13 @@ class BaselineModel(object):
             return roi_set
         return np.array(result)  
 
-    def create_rois(self, data, blob_set, mode=None):
-        dsize = (int(self.roi_size * 1.15), int(self.roi_size * 1.15))
+    def create_rois(self, data, blob_set, mode=None, pad=True):
+        if pad:
+            dsize = (int(self.roi_size * 1.15), int(self.roi_size * 1.15))
+        else:
+            dsize = (self.roi_size, self.roi_size)
         print 'dsize: {} rsize: {}'.format(dsize, self.roi_size)
-        # Create image set
+        #input_shape Create image set
         img_set = []
 
         print 'Calc min max value'
@@ -334,6 +342,7 @@ class BaselineModel(object):
 
         if self.preprocess_roi != 'none':
             self.preprocess_rois(roi_set, range_values)
+
         '''
             # Fix segment
             if self.streams == 'trf':
@@ -483,12 +492,16 @@ class BaselineModel(object):
         
     def train_with_feature_set_keras(self, feats_tr, pred_blobs_tr, real_blobs_tr,
                                         feats_test=None, pred_blobs_test=None, real_blobs_test=None,
-                                        model='shallow_1', fold=None, network_init=None):
+                                        model='shallow_1', fold=None, network_init=None, mode=None):
         X_train, Y_train, X_test, Y_test = neural.create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr, 
-                                                feats_test, pred_blobs_test, real_blobs_test, streams=self.streams)
+                                                feats_test, pred_blobs_test, real_blobs_test, streams=self.streams )
+
         self.network = neural.create_network(model, X_train.shape, fold, self.streams) 
         if network_init is not None:
-            self.load_cnn_weights('data/{}_fold_{}'.format(network_init, fold))
+            if mode != None: 
+                self.load_cnn_weights('data/{}_fold_{}'.format(network_init, fold))
+            else:
+                self.load_cnn_weights(network_init)
 
         name =  'data/{}_fold_{}'.format(model, fold)
         history = self.network.fit(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=(self.roi_size, self.roi_size), checkpoint_prefix=name, checkpoint_interval=2)
@@ -667,6 +680,18 @@ class BaselineModel(object):
     def pretrain(self, model, X, fold=None, streams=False, nb_epoch=1):
         self.network = neural.create_network(model, X.shape, fold, streams)
         ae.pretrain_layerwise(self.network.network, X, nb_epoch=nb_epoch)
+        #return history
+
+    def unsupervised_augment(self, model, X_train, Y_train, X_test, Y_test, fold=None, streams=False, nb_epoch=1, pos_neg_ratio=1.0, mode=None):
+        self.network = neural.create_network(model, X_train.shape, fold, streams)
+        self.load_cnn_weights('data/{}_fold_{}'.format(model, fold))
+        cropped_shape = (self.roi_size, self.roi_size)
+        if mode in {'add-random'}:
+            self.network.generator.ratio = pos_neg_ratio
+            self.network.generator.mode = 'balance_dataset'
+
+        X_train, Y_train, X_test, Y_test = self.network.preprocess_augment(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=cropped_shape)
+        _, self.helper_model = ae.swwae_augment(self.network.network, X_train, Y_train, X_test, Y_test, nb_epoch=nb_epoch)
         #return history
 
     def fit_transform_bovw(self, rois_tr, pred_blobs_tr, blobs_tr, rois_te, pred_blobs_te, blobs_te,  model):

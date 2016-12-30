@@ -307,13 +307,13 @@ class NetModel:
         joblib.dump(self.preprocessor, '{}_pre.pkl'.format(name))
         joblib.dump(self.generator, '{}_gen.pkl'.format(name))
 
-    def fit(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, checkpoint_prefix=None, checkpoint_interval=5, loss='categorical_crossentropy'):
+    def preprocess_augment(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None):
         gc.collect()
-        print 'Fit network ...'
         if streams:
             num_streams = len(X_train)
             num_channels = len(X_train[0][0])
 
+            print "Augment & Preprocess train set ..."
             print 'Augment ...'
             print self.generator.__dict__
             tmp = Y_train
@@ -321,26 +321,35 @@ class NetModel:
             for k in range(num_streams):
                 self.generator.rng.set_state(rng_state)
                 X_train[k], Y_train = self.generator.augment(X_train[k], tmp, cropped_shape)
+            gc.collect()
 
             print 'Preprocess ...'
             print self.preprocessor.__dict__
             X_train[0] = self.preprocessor.fit_transform(X_train[0], Y_train)
             for i in range(1, num_streams):
                 X_train[i] = self.preprocessor.transform(X_train[i])
+            gc.collect()
 
-            print 'input shape: {} {}'.format(len(X_train), X_train[0].shape)
-            for i in range(96):
+            print "Augment & Preprocess test set ..."
+            if X_test != None:
+                num_streams = len(X_test)
+                tmp = Y_test
+                rng_state = self.generator.rng.get_state()
                 for k in range(num_streams):
-                    print 'sample shape {}'.format(X_train[k][i][0].shape)
-                    for c in range(num_channels):
-                        util.imwrite('aug_str_trf_{}_{}_{}.jpg'.format(i, k, c), X_train[k][i][c])
-                        print 'aug {} {} {}: {} {} '.format(i, k, c, np.min(X_train[k][i][c]), np.max(X_train[k][i][c]))
+                    self.generator.rng.set_state(rng_state)
+                    X_test[k], Y_test = self.generator.augment(X_test[k], tmp, cropped_shape)
+                gc.collect()
+
+                X_test[0] = self.preprocessor.fit_transform(X_test[0], Y_test)
+                for k in range(1, num_streams):
+                    X_test[k] = self.preprocessor.transform(X_test[k])
+                gc.collect()
+
         else:
             num_channels = len(X_train[0])
-
+            print "Augment & Preprocess train set ..."
             print 'Augment ...'
             print self.generator.__dict__
-            print 'Shapes x {}, y {}'.format(X_train.shape, Y_train.shape)
             X_train, Y_train = self.generator.augment(X_train, Y_train, cropped_shape)
             gc.collect()
 
@@ -349,20 +358,23 @@ class NetModel:
             X_train = self.preprocessor.fit_transform(X_train, Y_train)
             gc.collect()
 
-            print 'input shape: {}'.format(X_train.shape)
-            '''
-            for i in range(96):
-                    print 'sample shape {}'.format(X_train[i][0].shape)
-                    for c in range(num_channels):
-                        util.imwrite('aug_{}_{}.jpg'.format(i, c), X_train[i][c])
-                        print 'aug {} {}: {} {} '.format(i, c, np.min(X_train[i][c]), np.max(X_train[i][c]))
-            '''
+            print "Augment & Preprocess test set ..."
+            if X_test != None:
+                X_test, Y_test = self.generator.augment(X_test, Y_test, cropped_shape)
+                gc.collect()
+                X_test = self.preprocessor.transform(X_test)
+                gc.collect()
  
         print 'negatives: {}'.format(np.sum(Y_train.T[0]))
         print 'positives: {}'.format(np.sum(Y_train.T[1]))
 
+        return X_train, Y_train, X_test, Y_test
+
+    def fit(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, checkpoint_prefix=None, checkpoint_interval=5, loss='categorical_crossentropy'):
+        X_train, Y_train, X_test, Y_test = self.preprocess_augment(X_train, Y_train, X_test, Y_test, streams, cropped_shape)
+
+        print 'Fit network ...'
         opt = get_optimizer(self.training_params)
-        #opt = SGD(lr=self.training_params['lr'], decay=self.training_params['decay'], momentum=self.training_params['momentum'], nesterov=self.training_params['nesterov'])
 
         self.network.compile(loss=loss, optimizer=opt, metrics=['accuracy'])
         batch_size = self.training_params['batch_size']
@@ -377,33 +389,12 @@ class NetModel:
             lr_scheduler = StageScheduler(self.training_params['schedule'])
             callbacks.append(lr_scheduler)
 
-        print 'fit network  ...'
-
         history = None
         if X_test is None:
             history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=callbacks, shuffle=False, validation_split=0.1, show_accuracy=True)
         else:
-            if streams:
-                num_streams = len(X_test)
-                tmp = Y_test
-                rng_state = self.generator.rng.get_state()
-                for k in range(num_streams):
-                    self.generator.rng.set_state(rng_state)
-                    X_test[k], Y_test = self.generator.augment(X_test[k], tmp, cropped_shape)
-
-                X_test[0] = self.preprocessor.fit_transform(X_test[0], Y_test)
-                for k in range(1, num_streams):
-                    X_test[k] = self.preprocessor.transform(X_test[k])
-                print 'input shape: # streams {} shape {}'.format(len(X_train), X_train[0].shape)
-            else:
-                X_test, Y_test = self.generator.augment(X_test, Y_test, cropped_shape)
-                gc.collect()
-                X_test = self.preprocessor.transform(X_test)
-                gc.collect()
-                print 'input shape: {}'.format(X_train.shape)
-
             history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=callbacks, shuffle=False, validation_data=(X_test, Y_test))
-            gc.collect()
+        gc.collect()
 
         print 'history obj'
         print history.history
@@ -436,8 +427,8 @@ default_preproc_params = {'zmuv':True}
 def lnd_a(input_shape):
     network = standard_cnn(Sequential(), nb_modules=3, module_depth=1, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 128], input_shape=input_shape, init='orthogonal')
 
-def lnd_a_3p(input_shape, repeats=1):
-    network = standard_cnn(Sequential(), nb_modules=3, module_depth=repeats, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal')
+def lnd_a_3p(input_shape, repeats=1, nb_classes=2, base_filters=32):
+    network = standard_cnn(Sequential(), nb_modules=3, module_depth=repeats, nb_filters=[base_filters, 2*base_filters, 3*base_filters], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal', nb_classes=2)
     return network
 
 def lnd_a_3p_fat(input_shape):
@@ -448,8 +439,9 @@ def lnd_a_4p(input_shape, repeats):
     network = standard_cnn(Sequential(), nb_modules=4, module_depth=repeats, nb_filters=[32, 64, 96, 128], conv_size=[3, 3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal')
     return network
 
-def lnd_a_5p(input_shape, repeats):
-    network = standard_cnn(Sequential(), nb_modules=5, module_depth=repeats, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal', activation='leaky_relu')
+def lnd_a_5p(input_shape, repeats, base_filters=32):
+    nb_filters = (np.array(range(5)) + 1) * base_filters
+    network = standard_cnn(Sequential(), nb_modules=5, module_depth=repeats, nb_filters=nb_filters, conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal', activation='leaky_relu')
     return network
 
 def lnd_a_5p_do(input_shape):
@@ -580,6 +572,8 @@ def lnd_a_3p_streams(input_shape, num_streams=3, late_fusion=False):
     out = Activation('softmax')(out)
     return Model(input=ins, output=out)
 
+# Detector 
+
 def dxp(input_shape, detector=False, blocks=2, kernels=[32, 32]):
     activation = 'relu'
     init = 'orthogonal'
@@ -627,7 +621,37 @@ def dxp(input_shape, detector=False, blocks=2, kernels=[32, 32]):
 
     return Model(input=inp, output=out)
 
-def vgg16():
+def _3pnd(input_shape, activation='relu', init='orthogonal'):
+    kernels = [32, 64, 96]
+    nb_pool = 2
+    dense_units = 512
+    nb_classes = 2
+
+    inp = Input(shape=input_shape, dtype='float32', name='input')   
+    out = Convolution2D(kernels[0], 3, 3, border_mode='same', init=init)(inp)
+    out = Activation(activation)(out)
+    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+    out = Convolution2D(kernels[1], 3, 3, border_mode='same', init=init)(out)
+    out = Activation(activation)(out)
+    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+    out = Convolution2D(kernels[2], 3, 3, border_mode='same', init=init)(out)
+    out = Activation(activation)(out)
+    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+    out = Flatten()(out)
+
+    out = Dense(dense_units, init=init)(out)
+    out = Activation(activation)(out)
+    out = Dropout(0.5)(out)
+    out = Dense(dense_units, init=init)(out)
+    out = Activation(activation)(out)
+    out = Dropout(0.5)(out)
+    out = Dense(nb_classes)(out)
+    out = Activation('softmax')(out)
+
+    return Model(input=inp, output=out)
+
+
+def vgg16(mode='fc'):
     model = Sequential()
     model.add(ZeroPadding2D((1,1),input_shape=(3,224,224)))
     model.add(Convolution2D(64, 3, 3, activation='relu'))
@@ -678,6 +702,10 @@ def vgg16():
     
     model.pop()
     model.add(Dense(2, activation='softmax'))
+
+    if mode == 'fc':
+        for i in range(len(model.layers) - 5):
+            model.layers[i].trainable = False
 
     return model
 
@@ -766,6 +794,9 @@ def create_network(model, input_shape, fold=-1, streams=-1, detector=False):
     if detector:
         input_shape = (1, 512, 512)
  
+    if model[-3:] == '_ua':
+        model = model[:-3]
+
     if model == 'resnet_56':
         network = resnet(input_shape, nb_classes=2, depth=56)
         train_params = {'schedule':schedule, 'nb_epoch':30, 'batch_size':128, 
@@ -811,6 +842,26 @@ def create_network(model, input_shape, fold=-1, streams=-1, detector=False):
 
     elif model == '3P':
         network = lnd_a_3p((1, 32, 32))
+        schedule=[15, 36, 36]
+        train_params = {'schedule':schedule, 'nb_epoch':35, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3PND':
+        network = _3pnd((1, 32, 32))
+        schedule=[50, 50, 50]
+        train_params = {'schedule':schedule, 'nb_epoch':50, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+
+
+    elif model == '3P-imagenet':
+        network = lnd_a_3p((1, 32, 32), nb_classes=2)
         schedule=[15, 36, 36]
         train_params = {'schedule':schedule, 'nb_epoch':35, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
@@ -885,6 +936,16 @@ def create_network(model, input_shape, fold=-1, streams=-1, detector=False):
         augment_params['output_shape'] = input_shape
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
 
+    elif model == '5P-A-wide':
+        input_shape = (128, 128)
+        network = lnd_a_5p((1,) + input_shape, 1, base_filters=64)
+        schedule=[65, 65, 65]
+        train_params = {'schedule':schedule, 'nb_epoch':65, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = input_shape
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
     elif model == '5P-B':
         input_shape = (128, 128)
         network = lnd_a_5p((1,) + input_shape, 2)
@@ -941,7 +1002,7 @@ def create_network(model, input_shape, fold=-1, streams=-1, detector=False):
         augment_params['output_shape'] = (32, 32)
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
 
-    elif model == '3P-norm-norm':
+    elif model in {'3P-norm-norm', '3P-us-1', '3P-us-2', '3P-us-4', '3P-us-8', '3P-us-16', '3P-us-12', '3P-us-32', '3P-us-init'}:
         network = lnd_a_3p((1, 32, 32))
         schedule=[30, 50, 50]
         train_params = {'schedule':schedule, 'nb_epoch':50, 'batch_size':32, 
@@ -949,6 +1010,40 @@ def create_network(model, input_shape, fold=-1, streams=-1, detector=False):
         augment_params = default_augment_params
         augment_params['output_shape'] = (32, 32)
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3P-GN':
+        network = lnd_a_3p((1, 32, 32))
+        schedule=[35, 60, 60]
+        train_params = {'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        augment_params['gn_mean'] = .0
+        augment_params['gn_std'] = .1
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model == '3P-GS':
+        network = lnd_a_3p((1, 32, 32))
+        schedule=[60, 60, 60]
+        train_params = {'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        augment_params['gs_size'] = 5
+        augment_params['gs_sigma'] = .5
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+
+    elif model in {'3P-wide', '3P-us-24', '3P-us-24-b', '3P-wus-24-ar'}:
+        network = lnd_a_3p((1, 32, 32), base_filters=64)
+        schedule=[45, 65, 65]
+        train_params = {'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['output_shape'] = (32, 32)
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+
 
     elif model == '3P-norm-nlm':
         network = lnd_a_3p((1, 32, 32))
@@ -1381,8 +1476,8 @@ def create_network(model, input_shape, fold=-1, streams=-1, detector=False):
         augment_params['output_shape'] = (128, 128)
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
 
-    elif model == 'VGG16':
-        network = vgg16(input_shape)
+    elif model == 'vgg16-fc':
+        network = vgg16(mode='fc')
         schedule=[40, 40, 40]
         train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 'lr':0.0001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         augment_params = default_augment_params

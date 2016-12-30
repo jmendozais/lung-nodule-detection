@@ -18,6 +18,7 @@ from keras import backend as K
 from keras.engine import InputSpec
 from scipy.misc import imresize
 from theano import tensor as T
+import gc
 
 from itertools import product
 
@@ -108,18 +109,6 @@ class _Pooling2D(Layer):
         base_config = super(_Pooling2D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-class KMaxPooling2D(_Pooling2D):
-    def __init__(self, pool_size=(2, 2), strides=None, border_mode='valid',
-                 dim_ordering='th', **kwargs):
-        super(KMaxPooling2D, self).__init__(pool_size, strides, border_mode,
-                                           dim_ordering, **kwargs)
-
-    def _pooling_function(self, inputs, pool_size, strides,
-                          border_mode, dim_ordering):
-        output = K.pool2d(inputs, pool_size, strides,
-                          border_mode, dim_ordering, pool_mode='max')
-        return output
-
 class WhatWhereMaxPooling2D(_Pooling2D):
     def __init__(self, pool_size=(2, 2), strides=None, border_mode='valid',
                  dim_ordering='th', **kwargs):
@@ -181,6 +170,13 @@ def get_trainable_layers(layers):
         if isinstance(L, Convolution2D) or isinstance(L, Dense):
             trainable_layers.append(L)
     return trainable_layers
+
+def get_trainable_layers_idx(layers):
+    trainable_layers_idx = []
+    for i in range(len(layers)):
+        if isinstance(layers[i], Convolution2D) or isinstance(layers[i], Dense):
+            trainable_layers_idx.append(i)
+    return trainable_layers_idx
 
 def invert_kernel(kernel, dim_ordering='th'):
     new_kernel = np.copy(kernel)
@@ -314,7 +310,6 @@ def pretrain_swwae(network, X, nb_modules=-1, batch_size=32, nb_epoch=12, nb_cla
         for j in range(len(modules[i])):
             print('Layer {}, {} ...'.format(i, j))
             print(modules[i][j].__class__)
-            #print(modules[i][j].get_config())
 
             # Use same activations objects because there is not a straightforward way to build custom activation from config
             if isinstance(modules[i][j], Activation):
@@ -327,7 +322,6 @@ def pretrain_swwae(network, X, nb_modules=-1, batch_size=32, nb_epoch=12, nb_cla
             
             if isinstance(new_layer, MaxPooling2D):
                 new_layer = WhatWhereMaxPooling2D(**modules[i][j].get_config())
-                #new_layer = KMaxPooling2D(**modules[i][j].get_config())
                 new_layer.batch_size = batch_size
                 mp_layers[-1] = new_layer
 
@@ -419,9 +413,9 @@ def clone_layer(layer):
 def print_trainable_state(layers):
     for k in range(len(layers)):
         if isinstance(layers[k], Dense):
-            print("Layer {} trainable {} weight sample {}".format(k, layers[k].trainable, layers[k].get_weights()[0][0][0]))
+            print("Layer {} - {} trainable {} weight sample {}".format(k, layers[k].name, layers[k].trainable, layers[k].get_weights()[0][0][0]))
         elif isinstance(layers[k], Convolution2D):
-            print("Layer {} trainable {} weight sample {}".format(k, layers[k].trainable, layers[k].get_weights()[0][0][0][0][0]))
+            print("Layer {} - {} trainable {} weight sample {}".format(k, layers[k].name, layers[k].trainable, layers[k].get_weights()[0][0][0][0][0]))
     print("")
 
 def get_unpooled_input(layers, layer_idx):
@@ -463,19 +457,43 @@ def get_conv_output(layers, layer_idx):
         if layer_idx == len_layers:
             return layers[layer_idx-1].get_output_at(0)
         else:
-            if isinstance(layers[layer_idx], Activation) or isinstance(layers[layer_idx], LeakyReLu):
+            if isinstance(layers[layer_idx], Activation):
                 return layers[layer_idx].get_output_at(0)
  
+def get_encoder_acts(layers):
+    weighted_layer_idx = []
+    for i in range(len(layers)):
+        layer = layers[i]
+        if isinstance(layer, Convolution2D) or isinstance(layer, Dense):
+            weighted_layer_idx.append(i)
+
+    encoder_len = len(weighted_layer_idx)
+    acts = []
+    for i in range(encoder_len):
+        acts.append(get_conv_input(layers, weighted_layer_idx[i]))
+    return acts
+
+def get_decoder_acts(layers):
+    weighted_layer_idx = []
+    for i in range(len(layers)):
+        layer = layers[i]
+        if isinstance(layer, Convolution2D) or isinstance(layer, Dense):
+            weighted_layer_idx.append(i)
+
+    decoder_len = len(weighted_layer_idx)
+    acts = []
+    for i in range(decoder_len):
+        acts.append(get_conv_output(layers, weighted_layer_idx[i]))
+    return list(reversed(acts))
+
 def get_encoder_decoder_acts(model):
-    weighted_layers = []
     weighted_layer_idx = []
     for i in range(len(model.layers)):
         layer = model.layers[i]
         if isinstance(layer, Convolution2D) or isinstance(layer, Dense):
-            weighted_layers.append(layer)
             weighted_layer_idx.append(i)
 
-    encoder_len = len(weighted_layers) / 2
+    encoder_len = len(weighted_layers_idx) / 2
     encoder_acts = []
     decoder_acts = []
     
@@ -487,189 +505,233 @@ def get_encoder_decoder_acts(model):
     return encoder_acts, decoder_acts
     
 
-EPS = 1e-6
-def l2_norm(X):
-    assert len(X)%2 == 0
-    size = len(X)/2
-    total_loss = K.sqrt(K.sum(K.square(X[0] - X[size]), axis=None))
-    for i in range(1, size):
-        total_loss += K.sqrt(K.sum(K.square(X[i] - X[i + size]), axis=None))
-    return total_loss
-    #return K.sqrt(K.sum(K.sum(K.sum(K.square(x - y), axis=1, keepdims=True), axis=2, keepdims=True), axis=3, keepdims=True))
-    #return K.sqrt(K.sum(K.square(x - y), axis=None))
+# Loss functions for 4D tensors
+def l2_loss(y_true, y_pred):
+    return T.mean(K.sqrt(K.sum(K.sum(K.sum(K.square(y_true - y_pred), axis=1, keepdims=True), axis=2, keepdims=True), axis=3, keepdims=True)))
 
- 
-def l2_norm_output_shape(shapes):
-    shape1 = shapes[0]
-    return shape1
+def l22_loss(y_true, y_pred):
+    return T.mean(K.sum(K.sum(K.sum(K.square(y_true - y_pred), axis=1, keepdims=True), axis=2, keepdims=True), axis=3, keepdims=True))
+
+class IntermediaryLoss:
+    def __init__(self, loss, multipliers=None):
+        self.loss = loss
+        self.multipliers = multipliers
+    def call(self, tensors):
+        assert len(tensors)%2 == 0
+        size = len(tensors)/2
+        if self.multipliers == None:
+            self.multipliers = np.fill(shape=(size,), fill_value=1, dtype=np.float)
+        else:
+            assert len(self.multipliers) == size
+        total_loss = self.multipliers[0] *self.loss(tensors[0], tensors[size])
+        for i in range(1, size):
+            total_loss += self.multipliers[i] * self.loss(tensors[i], tensors[i + size])
+        print("total_loss {}".format(total_loss))
+        return total_loss
+
+def loss_output_shape(shapes):
+    return shapes[0]
 
 def average_loss(y_true,y_pred):    
     return T.mean(y_pred)
 
-def create_and_fit(model, X, Y, supervised_output, encoder_input, optimizer, batch_size, nb_epoch, mode='all'):
-    print("LAMBDA network")
-    encoder_tensors, decoder_tensors = get_encoder_decoder_acts(model) 
-    import random
-    suffix = 1
-    if mode == 'first':
-        L2_intermediary = Lambda(l2_norm, output_shape=l2_norm_output_shape, name='lambda')([encoder_tensors[0], decoder_tensors[0]])
-    elif mode == 'all':
-        L2_intermediary = Lambda(l2_norm, output_shape=l2_norm_output_shape, name='lambda')(encoder_tensors + decoder_tensors)
+def create_and_fit(encoder_layers, decoder_layers, X, Y, supervised_output, encoder_input, optimizer, batch_size, nb_epoch, mode='all', loss=l22_loss, multipliers=None):
+    print("Augmented network")
+    encoder_tensors = get_encoder_acts(encoder_layers)
+    decoder_tensors = get_decoder_acts(decoder_layers) 
+    intermediary_loss = IntermediaryLoss(loss, multipliers).call
 
-    new_model = Model(input=[encoder_input], output=[L2_intermediary, supervised_output])
-    new_model.compile(optimizer,{'lambda':average_loss, 'supervised':'categorical_cross_entropy'})
+    if mode == 'first':
+        intermediary_output = Lambda(intermediary_loss, output_shape=loss_output_shape, name='intermediary_proxy')([encoder_tensors[0], decoder_tensors[0]])
+    elif mode == 'all':
+        intermediary_output = Lambda(intermediary_loss, output_shape=loss_output_shape, name='intermediary_proxy')(encoder_tensors + decoder_tensors)
+
+    new_model = Model(input=[encoder_input], output=[intermediary_output, supervised_output])
+    new_model.compile(optimizer,{'intermediary_proxy':average_loss, 'supervised':'categorical_crossentropy'})
     new_model.summary()
 
     shape = encoder_tensors[0]._keras_shape
     shape = (X.shape[0],) + shape[1:]
-    L2_intermediary_dummy = np.zeros(shape, dtype='float32')
-    new_model.fit({'input':X},{'lambda':L2_intermediary_dummy, 'supervised': Y}, batch_size=batch_size, nb_epoch=nb_epoch)
-    return new_model, L2_intermediary_dummy
 
-def l2_loss(y_true, y_pred):
-    return T.mean(K.sqrt(K.sum(K.sum(K.sum(K.square(y_true - y_pred), axis=1, keepdims=True), axis=2, keepdims=True), axis=3, keepdims=True)))
+    intermediary_holder = np.zeros(shape, dtype='float32')
+    new_model.fit({'input_1':X},{'intermediary_proxy':intermediary_holder, 'supervised': Y}, batch_size=batch_size, nb_epoch=nb_epoch)
+    return new_model, intermediary_holder
 
-def swwae_augment(network, X, Y, mode='layerwise', nb_modules=-1, batch_size=32, nb_epoch=12, nb_classes=2, bias=True, fixed_encoder=True, loss=l2_loss):
+def fit_intermediary(model, X_train, Y_train, X_test, Y_test, intermediary_holder, supervised_output, encoder_input, optimizer, batch_size, nb_epoch, mode='all'):
+    model.compile(optimizer,{'intermediary_proxy':average_loss, 'supervised':'categorical_crossentropy'})
+    print_trainable_state(model.layers)
+    tmp = np.zeros(shape=(len(Y_test),) + intermediary_holder.shape[1:])
+    model.fit({'input_1':X_train},{'intermediary_proxy':intermediary_holder, 'supervised': Y_train}, batch_size=batch_size, nb_epoch=nb_epoch, 
+        validation_data=({'input_1':X_test}, {'intermediary_proxy':tmp, 'supervised':Y_test}))
+
+def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modules=-1, batch_size=32, nb_epoch=12, nb_classes=2, bias=True, fixed_encoder=True, unsupervised_loss=l22_loss):
     nb_layers = len(network.layers)
     assert nb_layers > 2
     assert isinstance(network.layers[0], InputLayer)
     assert isinstance(network.layers[1], Convolution2D) or isinstance(network.layers[1], Dense)
 
-    optimizer = SGD(lr=0.1, clipnorm=10.)
-    supervised_output = network.layers[-1].get_output_at(0)
-    network.layers[-1].name = 'supervised'
 
-    # Divide layers in modules
-    modules = []
-    i = 1
-    nb_dense = 0
-    while True:
-        module = []
-        while True:
-            #TODO: fix
-            module.append(network.layers[i])
-            if isinstance(network.layers[i], Dense):
-                nb_dense += 1
-            i += 1
-            if  i >= nb_layers or isinstance(network.layers[i], Convolution2D) or isinstance(network.layers[i], Dense):
-                break
-        modules.append(module)
-        if len(modules) == nb_modules or i >= nb_layers:
-            break
+    optimizer = SGD(lr=0.00003, nesterov=True, momentum=0.9)
+    layerwise_epochs = 6
+    ''' Worst case loss contrib by the number of units VGG16
+    1 input layer: 150k: 0.09 * 1e-4 : 1e-5
+    2 layer : 800k: 0.5 : 1e-12 WTF! Maybe these terms are only to controll that difference between layers is not absurd
+    3 layer : 400k: 0.25 : 1e-12
+    4 layer : 200k: 0.12 : 1e-13
+    5 layer : 100k: 0.06 : 1e-11
+    '''
+
+    ''' Worst case loss contrib by the number of units
+    Option 1
+    1 input: 32 * 32: 0.04 * 3e-4       0.0000120
+    2 layer: 16 * 16 * 64: 0.64 * 1e-5  0.0000064
+    3 layer: 8 * 8 * 128: 0.32 * 1e-5   0.0000032
+
+    Option 2
+    1 input: 32 * 32: 0.04 * 1e-3       0.0000400
+    2 layer: 16 * 16 * 64: 0.64 * 1e-5  0.0000064
+    3 layer: 8 * 8 * 128: 0.32 * 1e-5   0.0000032
+    '''
+
+    #multipliers = [3e-4, 1e-5, 1e-5]
+    multipliers = [1e-3, 1e-5, 1e-5]
+    supervised_output = network.layers[-1].get_output_at(0)
+    #network.layers[-1].name = 'supervised'
 
     # Set input
     input_config = network.layers[0].get_config()
     input_layer = InputLayer(**input_config)
-    encoder_input = input_layer.inbound_nodes[0].output_tensors[0]
+    input_layer.name = 'input_1'
 
-    if nb_modules > len(modules) or nb_modules < 0:
+    # Group layers in modules
+    layers_idx_by_module = []
+    i = 1
+    while True:
+        print("i {}".format(i))
+        layers_idx = []
+        while i < nb_layers:
+            layers_idx.append(i)
+            next_is_dense = i + 1 < nb_layers and isinstance(network.layers[i + 1], Dense)
+            if not isinstance(network.layers[i], Flatten) and (isinstance(network.layers[i], MaxPooling2D) or next_is_dense):
+                i += 1
+                break
+            i += 1 
+        layers_idx_by_module.append(layers_idx)
+        if not i < nb_layers:
+            break
+
+    # Clone supervised pathway
+    nb_dense = 0
+    out = input_layer.inbound_nodes[0].output_tensors[0]
+    classification_layers = [input_layer]
+    for i in range(1, len(network.layers)):  
+        if isinstance(network.layers[i], MaxPooling2D):
+            new_layer = WhatWhereMaxPooling2D(**network.layers[i].get_config())
+            new_layer.batch_size = batch_size
+        else:
+            new_layer = clone_layer(network.layers[i])
+
+        out = new_layer(out)
+
+        if isinstance(new_layer, Convolution2D) or isinstance(new_layer, Dense):
+            new_layer.set_weights(network.layers[i].get_weights())
+            new_layer.trainable = False
+        if isinstance(new_layer, Dense):
+            nb_dense += 1
+        classification_layers.append(new_layer)
+
+    supervised_output = classification_layers[-1].get_output_at(0)
+    classification_layers[-1].name = 'supervised'
+
+    print_trainable_state(classification_layers)
+
+    if nb_modules > len(layers_idx_by_module) or nb_modules < 0:
         print('nb_modules fixed to the existing number of convolutional modules')
-        nb_modules = len(modules) - nb_dense
-    print("modules {}, ae modules {}".format(modules, nb_modules))
+        nb_modules = len(layers_idx_by_module) - nb_dense
+    print("modules {}, ae modules {}".format(len(layers_idx_by_module), nb_modules))
 
-    # Layerwise training
+    # Build reconstruction pathways
+    encoder_input = input_layer.inbound_nodes[0].output_tensors[0]
     encoder_output = encoder_input
-    encoder_trainable_layers = []
+    encoder_layers_idx = []
 
-    decoder_output = None
     decoder_layers = []
+    decoder_output = None
 
-    mp_layers = []
     input_shapes = []
-    input_shapes.append((None,) + X[0].shape)
+    input_shapes.append((None,) + X_train[0].shape)
+    encoder_outputs = []
 
     for i in range(nb_modules):
         print('Pretraining module {} ...'.format(i))
-        mp_layers.append(None)
         has_flatten = False
+        mp_layer_idx = -1
         convlike_input_shape = None
         conv_config = None
 
-        encoder_module_layers = []
-        
-        # Augment encoder
-        for j in range(len(modules[i])):
-            print('Layer {}, {} class {} ...'.format(i, j, modules[i][j].__class__))
-            #print(modules[i][j].get_config())
+        module_layers_idx = layers_idx_by_module[i] 
+        encoder_layers_idx += module_layers_idx
+        print("Module layers idx {}".format(module_layers_idx))
+        # Layerwise initialization
+        for j in range(len(module_layers_idx)):
+            layer_idx = layers_idx_by_module[i][j]
+            layer = classification_layers[layer_idx]
+            print('Layer {}, {} class {} ...'.format(i, j, layer.__class__))
 
-            # Clone layer
-            new_layer = clone_layer(modules[i][j])
-
-            # Modify Dropout and MaxPooling
-            if isinstance(new_layer, MaxPooling2D):
-                new_layer = WhatWhereMaxPooling2D(**modules[i][j].get_config())
-                new_layer.batch_size = batch_size
-                mp_layers[-1] = new_layer
-            '''
-            elif isinstance(new_layer, Dropout):
-                new_layer.p = 0.0
-            ''' 
-
-            # Connect new layer (.call for WWMP?)
-            tmp = encoder_output
-            encoder_output = new_layer(encoder_output)
-            new_layer.call(tmp)
-
-            if isinstance(new_layer, Flatten):
+            if isinstance(layer, Flatten):
                 has_flatten = True
 
-            if isinstance(new_layer, Convolution2D):
-                conv_config = modules[i][j].get_config()
+            if isinstance(layer, Convolution2D):
+                conv_config = layer.get_config()
+                input_shapes.append(layer.output_shape)
+                convlike_input_shape = layer.output_shape
 
-            if isinstance(new_layer, Convolution2D) or isinstance(new_layer, Dense):
-                new_layer.set_weights(modules[i][j].get_weights())
+            if isinstance(layer, Dense):
+                input_shapes.append(layer.output_shape)
 
-                encoder_module_layers.append(new_layer) 
-                encoder_trainable_layers.append(new_layer) 
-                input_shapes.append(modules[i][j].output_shape)
-
-            if isinstance(modules[i][j], Convolution2D) or isinstance(modules[i][j], MaxPooling2D):
-                convlike_input_shape = modules[i][j].output_shape
-
-            new_layer.trainable = False
+            if isinstance(layer, WhatWhereMaxPooling2D):
+                convlike_input_shape = layer.output_shape
+                mp_layer_idx = module_layers_idx[j]
 
         # Augment decoder
         print('Decoder input shape (no mp): {} ...'.format(input_shapes[-1]))
-        decoder_output = encoder_output
-        decoder_layer = None
+        decoder_output = classification_layers[layers_idx_by_module[i][-1]].get_output_at(0)
 
+        decoder_layer = None
         decoder_module_layers = []
+
         if has_flatten:
             decoder_layer = Reshape((convlike_input_shape[1], convlike_input_shape[2], convlike_input_shape[3]))
-            tmp = decoder_output
+            #tmp = decoder_output
             decoder_output = decoder_layer(decoder_output)
-            decoder_layer.call(tmp)
-
-            decoder_module_layers.append(decoder_layer)
-            has_flatten = False
-
-        if mp_layers[-1] != None:
-            decoder_layer = WhatWhereUnPooling2D(mp_layers[-1], size=mp_layers[-1].pool_size)
-            tmp = decoder_output
-            decoder_output = decoder_layer(decoder_output)
-            decoder_layer.call(tmp)
-
+            #decoder_layer.call(tmp)
             decoder_module_layers.append(decoder_layer)
 
-        for j in reversed(range(len(encoder_module_layers))):
-            print("Encoder module layer {}".format(j))
-            trainable_layer = encoder_module_layers[j]
+        if mp_layer_idx != -1:
+            pooling_layer = classification_layers[mp_layer_idx]
+            decoder_layer = WhatWhereUnPooling2D(pooling_layer, size=pooling_layer.pool_size)
+            #tmp = decoder_output
+            decoder_output = decoder_layer(decoder_output)
+            #decoder_layer.call(tmp)
+            decoder_module_layers.append(decoder_layer)
+
+        for j in reversed(range(len(module_layers_idx))):
+            trainable_layer = classification_layers[module_layers_idx[j]]
             if not isinstance(trainable_layer, Convolution2D):
-                raise Exception("Non implemented for non convlayers")
+                continue
 
             conv_config = trainable_layer.get_config()
             conv_config['name'] = 'dec_' + conv_config['name']
-            conv_config['nb_filter'] = input_shapes[j][1]
+            input_shape = network.layers[module_layers_idx[j]].input_shape
+            conv_config['nb_filter'] = input_shape[1]
+
             decoder_layer = Convolution2D(**conv_config)
             decoder_layer.trainable = True
-            tmp = decoder_output
-            #decoder_output.inbound_nodes = []
             decoder_output = decoder_layer(decoder_output)
-            decoder_layer.call(tmp)
             decoder_module_layers.append(decoder_layer)
 
             # TODO LeakyReLu
-            if not (i == 0 and j + 1 == len(encoder_module_layers)):
+            if not (i == 0 and j + 1 == len(module_layers_idx)):
                 decoder_layer = Activation('relu')
                 decoder_output = decoder_layer(decoder_output)
                 decoder_module_layers.append(decoder_layer)
@@ -684,13 +746,16 @@ def swwae_augment(network, X, Y, mode='layerwise', nb_modules=-1, batch_size=32,
             cloned_decoder_layers.append(decoder_layer)
 
         decoder_layers = decoder_module_layers + cloned_decoder_layers
+        decoder_layers[-1].name = 'unsupervised'
         
-        model = Model(encoder_input, decoder_output)
-        model.compile(loss=loss, optimizer=optimizer)
-        print("AUTOENCODER architecture")
+        model = Model(input=encoder_input, output=[supervised_output, decoder_output])
+        model.compile(loss={'supervised':'categorical_crossentropy', 'unsupervised':unsupervised_loss}, optimizer=optimizer)
+        #model.compile(loss='mse', optimizer=optimizer)
         model.summary()
-       
-        model.fit(X, X, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
+           
+        model.fit(X_train, {'unsupervised':X_train, 'supervised':Y_train}, batch_size=batch_size, nb_epoch=layerwise_epochs, verbose=1)
+        #model.fit(X, X, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
+
         print_trainable_state(model.layers)
 
         # Re-init module input shapes
@@ -698,6 +763,8 @@ def swwae_augment(network, X, Y, mode='layerwise', nb_modules=-1, batch_size=32,
         input_shapes = [] 
         input_shapes.append(tmp)
 
+
+    optimizer = SGD(lr=0.03, nesterov=True, momentum=0.9)
     # For all/first modes
     print("Finetune with mode {}".format(mode))
     helper_model = None
@@ -707,51 +774,55 @@ def swwae_augment(network, X, Y, mode='layerwise', nb_modules=-1, batch_size=32,
         if isinstance(layer, Dense) or isinstance(layer, Convolution2D):
             layer.trainable = True
 
-    if loss == l2_loss:
-        model.compile(loss=average_loss, optimizer=optimizer)
+    encoder_layers = np.array(model.layers)[encoder_layers_idx]
+    if unsupervised_loss == l22_loss:
+        #model.compile(loss=average_loss, optimizer=optimizer)
         print_trainable_state(model.layers)
-        helper_model, dummy_output = create_and_fit(model, X, Y, supervised_output, encoder_input, optimizer, batch_size, nb_epoch, mode=mode)
-        print_trainable_state(model.layers)
+        helper_model, intermediary_output = create_and_fit(encoder_layers, decoder_layers, X_train, Y_train, supervised_output, encoder_input, optimizer, batch_size, nb_epoch, mode=mode, loss=unsupervised_loss, multipliers=multipliers)
+        print_trainable_state(helper_model.layers)
         #model.fit(X, X, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
     else:
-        model.compile(loss=loss, optimizer=optimizer)
+        model.compile(loss={'supervised':'categorical_crossentropy', 'unsupervised':unsupervised_loss}, optimizer=optimizer)
         print_trainable_state(model.layers)
-        model.fit(X, X, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
+        model.fit(X_train, {'unsupervised':X_train, 'supervised':Y_train}, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
         print_trainable_state(model.layers)
 
     # Finetune encoder/decoder with reduced learning rate
     print("Finetune encoder/decoder")
-    optimizer.lr /= 10
+    optimizer.lr = 0.001
     for layer in model.layers:
         if isinstance(layer, Dense) or isinstance(layer, Convolution2D):
             layer.trainable = True
-    print_trainable_state(model.layers)
+
     if helper_model != None:
         print("Helper model")
-        helper_model.compile(loss=loss, optimizer=optimizer)
-        helper_model.fit({'input':X}, {'lambda':dummy_output}, batch_size=batch_size, nb_epoch=nb_epoch)
+        fit_intermediary(helper_model, X_train, Y_train, X_test, Y_test, intermediary_output, supervised_output, encoder_input, optimizer, batch_size, 2*nb_epoch, mode=mode)
+         
+        ae = Model(encoder_input, decoder_output)
+        ae.compile(loss='mse', optimizer=optimizer)
+        X_test_rec = ae.predict(X_test)
+        print("X test rec {} {}".format(len(X_test_rec), X_test_rec[0].shape))
+        for i in range(100):
+            util.imwrite("roi_{}.jpg".format(i), X_test[i][0])
+            util.imwrite("roi_{}_rec.jpg".format(i), X_test_rec[i][0])
+            
+        print_trainable_state(helper_model.layers)
     else:
         print("Normal model")
-        model.compile(loss=loss, optimizer=optimizer)
-        model.fit(X, X, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
-    print_trainable_state(model.layers)
+        model.compile(loss={'supervised':'categorical_crossentropy', 'unsupervised':'mse'}, optimizer=optimizer)
+        model.fit(X_train, {'unsupervised':X_train, 'supervised':Y_train}, batch_size=batch_size, nb_epoch=2*nb_epoch, verbose=1)
 
     # Copy weigths
     idx = 0
     print("Copy weights")
-    for i in range(nb_modules):
-        layers = get_trainable_layers(modules[i])
-        for layer in layers:
-            print("For layer {}".format(layer.name))
-            print_trainable_state([layer])
-            layer.set_weights(encoder_trainable_layers[idx].get_weights())
-            print_trainable_state([layer])
-        idx += 1
+    assert len(network.layers) == len(classification_layers)
+    print_trainable_state(network.layers)
+    for i in range(len(network.layers)):
+        if network.layers[i].trainable:
+            network.layers[i].set_weights(classification_layers[i].get_weights())
+    print_trainable_state(network.layers)
 
-    if idx != len(encoder_trainable_layers):
-        raise Exception("# of trained layers is different than the desired")
-
-    return model
+    return model, helper_model
 
 def pretrain_layerwise(network, X, nb_modules=-1, batch_size=32, nb_epoch=12, nb_classes=2, bias=True):
     nb_layers = len(network.layers)
@@ -945,7 +1016,7 @@ def swwae_mnist(img_rows, img_cols, nb_classes, bias=True):
     nb_pool = 2
     nb_classes = 10
     activation = "relu"#scaled_tanh
-    inp = Input(shape=(1, img_rows, img_cols), dtype='float32', name='input')   
+    inp = Input(shape=(1, img_rows, img_cols), dtype='float32')   
     out = Convolution2D(64, 5, 5, border_mode='same', bias=bias)(inp)
     out = Activation(activation)(out)
     out = MaxPooling2D(pool_size=(nb_pool, nb_pool))(out)
@@ -1127,7 +1198,7 @@ def test_compare_unsups():
         acc = test_unsupervised_pretraining(mode=mode, unsup_epochs=unsup, sup_epochs=sup, small_set_len=sup_len)
         print('detailed comparison,{},{},{},{},{}'.format(mode, sup_len, unsup, sup, acc))
 
-def test_augment_unsup(mode='layerwise', unsup_epochs=1, sup_epochs=10, small_set_len=1000, loss=l2_loss):
+def test_augment_unsup(mode='layerwise', unsup_epochs=1, sup_epochs=10, small_set_len=1000, unsupervised_loss=l22_loss):
     bias = True
     batch_size = 100
     nb_classes = 10
@@ -1154,7 +1225,9 @@ def test_augment_unsup(mode='layerwise', unsup_epochs=1, sup_epochs=10, small_se
     # SWWAE augment
     if mode in {'layerwise', 'all', 'first'}:
         print(">> SWWAE-augment")
-        swwae_augment(model, X_train, Y_train, mode=mode, nb_epoch=unsup_epochs, loss=loss)
+        #swwae_augment(model, X_train, Y_train, mode=mode, nb_epoch=unsup_epochs, loss=loss)
+        #score = model.evaluate(X_test, Y_test, verbose=0)
+        swwae_augment(model, X_train_small, Y_train_small, mode=mode, nb_epoch=unsup_epochs, unsupervised_loss=unsupervised_loss)
         score = model.evaluate(X_test, Y_test, verbose=0)
         print('>> Test score:', score[0])
         print('>> Test accuracy:', score[1])
@@ -1173,14 +1246,14 @@ def test_augment_unsup(mode='layerwise', unsup_epochs=1, sup_epochs=10, small_se
 
 if __name__ == "__main__":
     #test_compare_unsups()
-    unsup_epochs = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-    sup_epochs=1
+    unsup_epochs = [8] * 5
+    sup_epochs=20
 
     accs = []
     for i in range(len(unsup_epochs)):
         #np.random.seed(1337)
-        print(">> unsup {} sup {}".format(unsup_epochs[i], sup_epochs))
-        acc = test_augment_unsup(mode='all', unsup_epochs=unsup_epochs[i], sup_epochs=sup_epochs, small_set_len=1000)
+        print(">> Unsup {} sup {}".format(unsup_epochs[i], sup_epochs))
+        acc = test_augment_unsup(mode='all', unsup_epochs=unsup_epochs[i], sup_epochs=sup_epochs, small_set_len=60000, unsupervised_loss=l22_loss)
         accs.append(acc)
         #acc = test_augment_unsup(mode='none', unsup_epochs=2, sup_epochs=20, small_set_len=1000)
         #acc = test_unsupervised_pretraining(mode='swwae', unsup_epochs=2, sup_epochs=1, small_set_len=1000)
