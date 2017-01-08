@@ -147,10 +147,11 @@ class BaselineModel(object):
         result = []
         has_op = False
         for i in range(len(roi_set)):
+            if i % 10 == 0: 
+                print 'preprocess rois {} '.format(i)
             rois = roi_set[i]
             result.append([])
             for j in range(len(rois)): 
-                print 'pre rois {} {}'.format(i, j)
                 result[-1].append([])
                 for k in range(len(rois[j])):
                     if 'norm' in self.preprocess_roi:
@@ -184,8 +185,9 @@ class BaselineModel(object):
         return np.array(result)  
 
     def create_rois(self, data, blob_set, mode=None, pad=True):
+        pad_size = 1.15
         if pad:
-            dsize = (int(self.roi_size * 1.15), int(self.roi_size * 1.15))
+            dsize = (int(self.roi_size * pad_size), int(self.roi_size * pad_size))
         else:
             dsize = (self.roi_size, self.roi_size)
         print 'dsize: {} rsize: {}'.format(dsize, self.roi_size)
@@ -209,21 +211,15 @@ class BaselineModel(object):
 
         img_set = []
         for i in range(len(data)):
-            print 'Create rois. Preprocess image {}.'.format(i)
-            '''
-            img, lung_mask = data.get(i, downsample=True)
-            sampled, lce, norm = preprocess(img, lung_mask, downsample=True)
-            _, ci, _ = wmci_proba(lce, lung_mask, 0.5)
-            if not self.downsample:
-                img, lung_mask = data.get(i, downsample=self.downsample)
-                sampled, lce, norm = preprocess(img, lung_mask, downsample=self.downsample)
-                ci = cv2.resize(ci, img.shape, interpolation=cv2.INTER_CUBIC)
-            '''
+            if i % 10 == 0:
+                print 'Create rois. Preprocess image {}.'.format(i)
             img, lung_mask = data.get(i, downsample=self.downsample) # img 2048 side, lung mask downsampled
             img = antialiasing_dowsample(img, self.downsample) # img downsampled
 
             results = []
             lce_ = None
+
+            # Single-channel preprocessing
             if 'original' in self.preprocess_lung:
                 results.append(img) 
             if 'norm' in self.preprocess_lung:
@@ -256,25 +252,19 @@ class BaselineModel(object):
                 results = retinex_adjust(results, min_value, max_value)
             img_set.append(results)
 
-            '''
-            if self.use_transformations or self.streams != 'none':
-                img_set.append(np.array([lce, norm, ci]))
-                #img_set.append(np.array([lce, ci]))
-                #img_set.append(np.array([lce, norm]))
-            else:
-                img_set.append(np.array([lce]))
-            '''
-
-        print 'preprocess rois {}'.format(self.preprocess_roi)
         # Create roi set
         roi_set = []
+        '''
+        # NOT WORKING
         if self.streams == 'trf':
             roi_set = [[], [], []]
         elif self.streams == 'seg':
             roi_set = [[], []]
         elif self.streams == 'fovea':
             roi_set = [[], []]
+        '''
 
+        print 'preprocess rois {}'.format(self.preprocess_roi)
         channels = len(img_set[0])
         range_values = np.zeros(shape=(channels, 2), dtype=np.float)
         for i in range(channels):
@@ -283,12 +273,12 @@ class BaselineModel(object):
 
         for i in range(len(img_set)):
             img = img_set[i]
-            print 'img shape {}'.format(img.shape)
-            print 'img[0] shape {}'.format(img[0].shape)
+            if i % 10 == 0:
+                print 'img shape {}'.format(img.shape)
+                print 'img[0] shape {}'.format(img[0].shape)
             rois = []
             masks = []
 
-            #if mode == 'mask' or self.streams == 'seg' :
             if self.streams == 'seg' :
                 _, masks = adaptive_distance_thold(img[LCE_POS], blob_set[i])
             
@@ -297,14 +287,18 @@ class BaselineModel(object):
                 if not self.downsample:
                     sample_factor = 4
 
-                x, y, r = blob_set[i][j]
+                x, y, _ = blob_set[i][j]
+
+                r = self.blob_rad
+
                 x *= sample_factor
                 y *= sample_factor
                 r *= sample_factor
 
-                r = int(r * 1.15)
+                r = int(r * pad_size)
+
                 shift = 0 
-                side = 2 * shift + 2 * r + 1
+                #side = 2 * shift + 2 * r + 1
 
                 tl = (x - shift - r, y - shift - r)
                 ntl = (max(0, tl[0]), max(0, tl[1]))
@@ -496,7 +490,8 @@ class BaselineModel(object):
         X_train, Y_train, X_test, Y_test = neural.create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr, 
                                                 feats_test, pred_blobs_test, real_blobs_test, streams=self.streams )
 
-        self.network = neural.create_network(model, X_train.shape, fold, self.streams) 
+        print "X_train shape {}".format(X_train.shape)
+        self.network = neural.create_network(model, (X_train.shape[1], self.roi_size, self.roi_size), fold, self.streams) 
         if network_init is not None:
             if mode != None: 
                 self.load_cnn_weights('data/{}_fold_{}'.format(network_init, fold))
@@ -678,14 +673,15 @@ class BaselineModel(object):
         return np.array(data_blobs), np.array(data_probs)
 
     def pretrain(self, model, X, fold=None, streams=False, nb_epoch=1):
-        self.network = neural.create_network(model, X.shape, fold, streams)
+        self.network = neural.create_network(model, X.shape[1:], fold, streams)
         ae.pretrain_layerwise(self.network.network, X, nb_epoch=nb_epoch)
         #return history
 
     def unsupervised_augment(self, model, X_train, Y_train, X_test, Y_test, fold=None, streams=False, nb_epoch=1, pos_neg_ratio=1.0, mode=None):
-        self.network = neural.create_network(model, X_train.shape, fold, streams)
-        self.load_cnn_weights('data/{}_fold_{}'.format(model, fold))
         cropped_shape = (self.roi_size, self.roi_size)
+        self.network = neural.create_network(model, (X_train.shape[1],) + cropped_shape, fold, streams)
+        self.load_cnn_weights('data/{}_fold_{}'.format(model, fold))
+
         if mode in {'add-random'}:
             self.network.generator.ratio = pos_neg_ratio
             self.network.generator.mode = 'balance_dataset'

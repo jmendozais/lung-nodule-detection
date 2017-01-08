@@ -7,8 +7,8 @@ import numpy as np
 PATH = '../dbs/jsrt-npy'
 NNINFO = '../dbs/jsrt-info/CNNDAT_EN.TXT'
 LNINFO = '../dbs/jsrt-info/CLNDAT_EN.txt'
-LMPATH = '../dbs/scr/masks/left_masks.txt'
-RMPATH = '../dbs/scr/masks/right_masks.txt'
+LMPATH = '../dbs/jsrt-masks/left_masks.txt'
+RMPATH = '../dbs/jsrt-masks/right_masks.txt'
 
 DATASET_LEN = 257
 NUM_POSITIVES = 154

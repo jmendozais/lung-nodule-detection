@@ -382,22 +382,6 @@ def froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs,
                 blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois_te, pred_blobs[idx])
                 froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred, rois_te, data_te, idx)
                 frocs_for_ci[-1].append(froc)
-    
-    frocs_for_ci = np.array(frocs_for_ci)
-    frocs_for_ci = np.swap_axes(frocs_for_ci, 0, 1)
-
-    assert len(frocs_for_ci) == n_bootstraps
-    
-    bootstrapped_aucs = []
-    for i in range(n_bootstraps):
-        av_froc = eval.average_froc(frocs_for_ci[i], np.linspace(0.0, 10.0, 101))
-        auc_ = auc(np.array(av_froc), range=(0.0, 10.0))
-        bootstrapped_aucs.append(auc_)
-    
-    sorted_scores = np.array(bootstrapped_aucs)
-    sorted_scores.sort()
-    confidence_lower = sorted_scores[int(0.05 * len(sorted_scores))]
-    confidence_upper = sorted_scores[int(0.95 * len(sorted_scores))]
 
     av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
     av_froc_subs = []
@@ -419,6 +403,22 @@ def froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs,
         av_froc_kinds.append(eval.average_froc(frocs_kinds[i], np.linspace(0.0, 10.0, 101)))
 
     if ci:
+        frocs_for_ci = np.array(frocs_for_ci)
+        frocs_for_ci = np.swap_axes(frocs_for_ci, 0, 1)
+
+        assert len(frocs_for_ci) == n_bootstraps
+
+        bootstrapped_aucs = []
+        for i in range(n_bootstraps):
+            av_froc = eval.average_froc(frocs_for_ci[i], np.linspace(0.0, 10.0, 101))
+            auc_ = auc(np.array(av_froc), range=(0.0, 10.0))
+            bootstrapped_aucs.append(auc_)
+            
+        sorted_scores = np.array(bootstrapped_aucs)
+        sorted_scores.sort()
+        confidence_lower = sorted_scores[int(0.05 * len(sorted_scores))]
+        confidence_upper = sorted_scores[int(0.95 * len(sorted_scores))]
+
         auc_ = auc(np.array(av_froc), range=(0.0, 10.0))
         return av_froc , np.array(av_froc_subs), np.array(av_froc_sizes), np.array(av_froc_kinds), (auc_, confidence_lower, confidence_upper)
     else:
@@ -549,7 +549,7 @@ def pretrain_cnn(_model, fname, network_model, init_name=None, nb_epoch=1):
         _model.save('data/{}_fold_{}'.format(init_name, fold))
         fold += 1
 
-def unsupervised_augment(_model, fname, network_model, init_name=None, nb_epoch=1, mode=None):
+def unsupervised_augment(_model, fname, network_model, init_name=None, nb_epoch=1, mode=None, rois_per_image=1000, pos_neg_ratio=0.1):
     paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
@@ -566,9 +566,9 @@ def unsupervised_augment(_model, fname, network_model, init_name=None, nb_epoch=
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
 
     if mode == 'add-random':
-        pred_blobs = util.add_random_blobs(data, blobs, blobs_by_image=1000, pred_blobs=pred_blobs)
+        pred_blobs = util.add_random_blobs(data, blobs, blobs_by_image=rois_per_image, pred_blobs=pred_blobs, blob_rad=_model.blob_rad)
 
-    rois = _model.create_rois(data, pred_blobs, pad=False)
+    rois = _model.create_rois(data, pred_blobs)
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
     folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
@@ -586,6 +586,7 @@ def unsupervised_augment(_model, fname, network_model, init_name=None, nb_epoch=
             blobs_te.append([bl])
         blobs_te = np.array(blobs_te)
         #blobs_te = blobs[te_idx].reshape((1,) + blobs.shape).swapaxes(0, 1)
+        print pred_blobs[tr_idx][:100][0]
 
         rois_tr = []
         rois_te = []
@@ -597,10 +598,11 @@ def unsupervised_augment(_model, fname, network_model, init_name=None, nb_epoch=
             rois_tr = rois[tr_idx]
             rois_te = rois[te_idx]
 
+
         X_train, Y_train, X_test, Y_test = neural.create_train_test_sets(rois_tr, pred_blobs[tr_idx], blobs[tr_idx], 
                                                 rois_te, pred_blobs[te_idx], blobs[te_idx], streams=_model.streams)
 
-        _model.unsupervised_augment(network_model, X_train, Y_train, X_test, Y_test, fold, _model.streams, nb_epoch=nb_epoch, pos_neg_ratio=0.1, mode=mode)
+        _model.unsupervised_augment(network_model, X_train, Y_train, X_test, Y_test, fold, _model.streams, nb_epoch=nb_epoch, pos_neg_ratio=pos_neg_ratio, mode=mode)
 
         print 'Save ...'
         if init_name == 'none':
@@ -648,13 +650,17 @@ def classify_cnn(_model, fname, network_model):
     Y = (140 > np.array(range(size))).astype(np.uint8)
     folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
-    ops, ops_sub, ops_siz, ops_kind, ci_out = froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, subs, sizes, kinds, ci=True)
+    #ops, ops_sub, ops_siz, ops_kind, ci_out = froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, subs, sizes, kinds, ci=True)
+    ops, ops_sub, ops_siz, ops_kind = froc_classify_cnn(_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, subs, sizes, kinds, ci=False)
 
     legend = []
     legend.append('Hardie et al.')
-    legend.append('{}, AUC = {} with 95% CI = {} - {}'.format(network_model, ci_out[0], ci_out[1], ci_out[2]))
 
-    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=True, with_auc=False)
+    #legend.append('{}, AUC = {} with 95% CI = {} - {}'.format(network_model, ci_out[0], ci_out[1], ci_out[2]))
+    legend.append(network_model)
+
+    #util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=True, with_auc=False)
+    util.save_froc([baseline.hardie, ops], 'data/{}-FROC'.format(network_model), legend, with_std=False, with_auc=True)
     util.save_froc(ops_sub, 'data/{}-sublety'.format(network_model), jsrt.sublety_labels, with_std=False)
     util.save_froc(ops_siz, 'data/{}-size'.format(network_model), jsrt.size_labels, with_std=False)
     util.save_froc(ops_kind, 'data/{}-severity'.format(network_model), jsrt.severity_labels, with_std=False)
@@ -1596,22 +1602,17 @@ def compare_cnn_hybrid(detections_source, fname, network):
     return ops
 
 def compare_cnn_sota(detections_source, fname, nw_names, nw_labels, exp_name):
-    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
 
-    '''
-    paths, locs, rads, subs = jsrt.jsrt(set=None)
-    left_masks = jsrt.left_lung(set=None)
-    right_masks = jsrt.right_lung(set=None)
-    '''
-    
     size = len(paths)
 
     blobs = []
     for i in range(size):
         blobs.append([locs[i][0], locs[i][1], rads[i]])
     blobs = np.array(blobs)
+
 
     print "Loading dataset ..."
     data = DataProvider(paths, left_masks, right_masks)
@@ -1624,13 +1625,14 @@ def compare_cnn_sota(detections_source, fname, nw_names, nw_labels, exp_name):
     print "Average blobs per image {} ...".format(av_cpi * 1.0 / len(pred_blobs))
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    skf = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
 
     op_set = []
     legend = []
 
     for i in range(len(nw_names)):
-        ops = froc_classify_cnn(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, nw_names[i])
+        ops, ops_sub, ops_siz, ops_kind = froc_classify_cnn(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, nw_names[i], subs, sizes, kinds, ci=False)
+        #ops = froc_classify_cnn(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, skf, nw_names[i])
         op_set.append(ops)
         legend.append(nw_labels[i])
 
@@ -1705,7 +1707,7 @@ if __name__=="__main__":
     # TRADITIONAL PIPELINES
     parser = argparse.ArgumentParser(prog='lnd.py')
     parser.add_argument('--preprocess-lung', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='norm')
-    parser.add_argument('--preprocess-roi', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='none')
+    parser.add_argument('--preprocess-roi', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='norm')
     parser.add_argument('-b', '--blob_detector', help='Options: wmci(default), TODO hog, log.', default='wmci')
     parser.add_argument('--eval-wmci', help='Measure sensitivity and fppi without classification', action='store_true')
     parser.add_argument('-d', '--descriptor', help='Options: baseline.hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='baseline.hardie')
@@ -1730,6 +1732,7 @@ if __name__=="__main__":
     parser.add_argument('--cnn', help='Evaluate convnet. Options: shallow_1, shallow_2.', default='none')
     parser.add_argument('-l', '--layer', help='Layer index used to extract feature from cnn model.', default=-1, type=int)
     parser.add_argument('--hybrid', help='Evaluate hybrid approach: convnet + descriptor.', action='store_true')
+    parser.add_argument('--sota', help='Performs classification.', action='store_true')
 
     # Fussion
     parser.add_argument('--trf-channels', help='', action='store_true') # Early fussion channels
@@ -1749,7 +1752,9 @@ if __name__=="__main__":
     # Unsupervised learning
     parser.add_argument('--pre-tr', help='Enable pretraining', action='store_true')
     parser.add_argument('--uns-aug', help='Enable pretraining', action='store_true')
+    parser.add_argument('--rpi', help='Number of random regions of interest per image you want to augment', default=1000, type=int)
     parser.add_argument('--init', help='Enable initialization from a existing network', default='none')
+    parser.add_argument('--pos-neg-ratio', help='Set the positive/negative ratio for unsupervised aug experiments', default=0.1, type=float)
 
     # Transfer learning
     parser.add_argument('--init-transfer', help='Enable initialization from a existing network', default='none')
@@ -1759,7 +1764,8 @@ if __name__=="__main__":
 
     # Options
     parser.add_argument('-a', '--augment', help='Augmentation configurations: bt, zcabt, xbt.', default='bt')
-    parser.add_argument('--roi-size', help='Layer index used to extract feature from cnn model.', default=64, type=int)
+    parser.add_argument('--roi-size', help='Size of ROIs after scaling', default=64, type=int)
+    parser.add_argument('--blob-rad', help='Radius used to extract blobs', default=32, type=int)
     parser.add_argument('--epochs', help='Number of epochs for pretraining.', default=1, type=int)
 
     # Evals
@@ -1774,6 +1780,7 @@ if __name__=="__main__":
     _model.preprocess_lung = args.preprocess_lung
     _model.preprocess_roi = args.preprocess_roi
     _model.roi_size = args.roi_size
+    _model.blob_rad = args.blob_rad
     _model.use_transformations = args.trf_channels
     _model.streams = args.streams 
     _model.label = args.label
@@ -1904,7 +1911,7 @@ if __name__=="__main__":
 
     elif args.cnn != 'none':
         if args.uns_aug:
-            unsupervised_augment(_model, extractor_key, args.cnn, args.init, args.epochs, mode='add-random')
+            unsupervised_augment(_model, extractor_key, args.cnn, args.init, args.epochs, mode='add-random', rois_per_image=args.rpi, pos_neg_ratio=args.pos_neg_ratio)
         elif args.pre_tr:
             pretrain_cnn(_model, extractor_key, args.cnn, args.init, nb_epoch=args.epochs)
         # extract features fron a specific layer. 
@@ -1913,6 +1920,10 @@ if __name__=="__main__":
         # perform classification stage convnet only.
         elif args.clf:
             classify_cnn(_model, extractor_key, args.cnn)
+
+        elif args.sota:
+            compare_cnn_sota(_model, extractor_key, [args.cnn], [args.cnn], args.cnn)
+ 
         # perform detection pipeline with convnet model only
         else:
             if args.init != 'none':

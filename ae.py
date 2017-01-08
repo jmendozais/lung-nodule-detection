@@ -570,6 +570,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
     assert isinstance(network.layers[0], InputLayer)
     assert isinstance(network.layers[1], Convolution2D) or isinstance(network.layers[1], Dense)
 
+    print("SWWAE-{} augmentation".format(mode))
 
     optimizer = SGD(lr=0.00003, nesterov=True, momentum=0.9)
     layerwise_epochs = 6
@@ -593,8 +594,8 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
     3 layer: 8 * 8 * 128: 0.32 * 1e-5   0.0000032
     '''
 
-    #multipliers = [3e-4, 1e-5, 1e-5]
-    multipliers = [1e-3, 1e-5, 1e-5]
+    multipliers = [3e-4, 1e-5, 1e-5]
+    #multipliers = [1e-3, 1e-5, 1e-5]
     supervised_output = network.layers[-1].get_output_at(0)
     #network.layers[-1].name = 'supervised'
 
@@ -612,7 +613,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
         while i < nb_layers:
             layers_idx.append(i)
             next_is_dense = i + 1 < nb_layers and isinstance(network.layers[i + 1], Dense)
-            if not isinstance(network.layers[i], Flatten) and (isinstance(network.layers[i], MaxPooling2D) or next_is_dense):
+            if  (i + 1 < nb_layers and network.layers[i+1].__class__ in {Flatten, Convolution2D}) or (not isinstance(network.layers[i], Flatten) and next_is_dense):
                 i += 1
                 break
             i += 1 
@@ -620,6 +621,10 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
         if not i < nb_layers:
             break
 
+    print('modules {}'.format(layers_idx_by_module))
+    for i in range(len(network.layers)):
+        print('{} -> {}'.format(i, network.layers[i].name))
+        
     # Clone supervised pathway
     nb_dense = 0
     out = input_layer.inbound_nodes[0].output_tensors[0]
@@ -749,11 +754,15 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
         decoder_layers[-1].name = 'unsupervised'
         
         model = Model(input=encoder_input, output=[supervised_output, decoder_output])
+        #model = Model(input=encoder_input,output=classification_layers[-1].get_output_at(0))
+        #model = network
         model.compile(loss={'supervised':'categorical_crossentropy', 'unsupervised':unsupervised_loss}, optimizer=optimizer)
+        #model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
         #model.compile(loss='mse', optimizer=optimizer)
         model.summary()
            
         model.fit(X_train, {'unsupervised':X_train, 'supervised':Y_train}, batch_size=batch_size, nb_epoch=layerwise_epochs, verbose=1)
+        #model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=layerwise_epochs, validation_data=(X_test, Y_test), verbose=1)
         #model.fit(X, X, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
 
         print_trainable_state(model.layers)

@@ -12,6 +12,7 @@ class DataProvider:
 
     def get(self, i, downsample=True, dsize=(512, 512)):
         img = np.load(self.img_paths[i]).astype(np.float)
+
         ll_mask = cv2.imread(self.ll_paths[i])
         lr_mask = cv2.imread(self.lr_paths[i])
         lung_mask = ll_mask + lr_mask

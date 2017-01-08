@@ -275,7 +275,8 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     plt.xlabel('Average FPs per Image')
     plt.legend(legend, loc=4, fontsize='small', numpoints=1)
 
-    plt.savefig('{}_cmp.pdf'.format(name))
+    print("Saving at {}_sota.pdf".format(name))
+    plt.savefig('{}_sota.pdf'.format(name))
     plt.clf()
 
 def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True, fppi_max=10.0, with_auc=True):
@@ -450,7 +451,7 @@ def save_loss_acc(history, name):
     save_loss(history, name + '_loss')
     save_acc(history, name + '_acc')
 
-def add_random_blobs(data, blobs, blobs_by_image=100, rng=np.random, pred_blobs=None):
+def add_random_blobs(data, blobs, blobs_by_image=100, rng=np.random, pred_blobs=None, blob_rad=24):
     assert len(data) == len(blobs)
     augmented_blobs = []
     for i in range(len(data)):
@@ -461,10 +462,17 @@ def add_random_blobs(data, blobs, blobs_by_image=100, rng=np.random, pred_blobs=
         augmented_blobs.append([])
         #rx, ry, _ = blobs[i][0]
         rx, ry, _ = blobs[i]
+        #TODO :assert blobs[i][2] == 25, "roi rad check failed {}".format(blobs[i])
+
+        print "Augment random blobs {}".format(i)
+        '''
+        print "Augment random blobs: cur blob {}".format(blobs[i])
         if rx >= 0 or ry >= 0:
             assert lung_mask[rx, ry] > 0
             #augmented_blobs[i].append(blobs[i][0])
+            blobs[i][2] = 25
             augmented_blobs[i].append(blobs[i])
+        '''
 
         if pred_blobs != None:
             augmented_blobs[i] += list(pred_blobs[i])
@@ -474,7 +482,7 @@ def add_random_blobs(data, blobs, blobs_by_image=100, rng=np.random, pred_blobs=
             rx = int(rng.uniform(0, side))
             ry = int(rng.uniform(0, side))
             if lung_mask[rx, ry] > 0:
-                augmented_blobs[i].append([rx, ry, 25])
+                augmented_blobs[i].append([rx, ry, blob_rad])
                 cnt += 1
         augmented_blobs[i] = np.array(augmented_blobs[i])
 
