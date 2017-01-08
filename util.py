@@ -464,7 +464,6 @@ def add_random_blobs(data, blobs, blobs_by_image=100, rng=np.random, pred_blobs=
         rx, ry, _ = blobs[i]
         #TODO :assert blobs[i][2] == 25, "roi rad check failed {}".format(blobs[i])
 
-        print "Augment random blobs {}".format(i)
         '''
         print "Augment random blobs: cur blob {}".format(blobs[i])
         if rx >= 0 or ry >= 0:

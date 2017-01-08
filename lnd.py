@@ -586,7 +586,6 @@ def unsupervised_augment(_model, fname, network_model, init_name=None, nb_epoch=
             blobs_te.append([bl])
         blobs_te = np.array(blobs_te)
         #blobs_te = blobs[te_idx].reshape((1,) + blobs.shape).swapaxes(0, 1)
-        print pred_blobs[tr_idx][:100][0]
 
         rois_tr = []
         rois_te = []
