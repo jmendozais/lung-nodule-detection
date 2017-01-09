@@ -8,7 +8,6 @@ np.random.seed(1000000007) # for reproducibility
 import theano
 import keras
 import gc
-from guppy import hpy; h=hpy()
 
 from keras.layers import Input, merge, Dropout
 from keras.layers import Convolution2D, MaxPooling2D, AveragePooling2D
