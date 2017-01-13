@@ -287,7 +287,7 @@ class ImageDataGenerator:
 
         return np.array(new_X)
 
-    def augment(self, X, y, cropped_shape):
+    def augment(self, X, y, cropped_shape, disable_perturb=False):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
         if self.intensity_shift_std:
             std = np.std(X)
@@ -343,26 +343,27 @@ class ImageDataGenerator:
             np.random.seed(seed)
             np.random.shuffle(ay)
 
-        # transform
-        new_X = []
-        for i in range(aX.shape[0]):
-            '''
-            if i < 96:
-                for k in range(len(aX[i])):
-                    util.imwrite('img_{}_{}.jpg'.format(i, k), aX[i][k])
-            '''
-            x = self.perturb(aX[i])
-            '''
-            if i < 96:
-                for k in range(len(aX[i])):
-                    util.imwrite('img_{}_{}_aug.jpg'.format(i, k), x[k])
-            '''
-            new_X.append(x)
-
-        aX = None
-        gc.collect()
-        return np.array(new_X), ay    
-        
+        if disable_perturb:
+            return aX, ay
+        else:
+            # transform
+            new_X = []
+            for i in range(aX.shape[0]):
+                '''
+                if i < 96:
+                    for k in range(len(aX[i])):
+                        util.imwrite('img_{}_{}.jpg'.format(i, k), aX[i][k])
+                '''
+                x = self.perturb(aX[i])
+                '''
+                if i < 96:
+                    for k in range(len(aX[i])):
+                        util.imwrite('img_{}_{}_aug.jpg'.format(i, k), x[k])
+                '''
+                new_X.append(x)
+            aX = None
+            gc.collect()
+            return np.array(new_X), ay    
     '''
     def augment2(self, X, y, output_shape):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)

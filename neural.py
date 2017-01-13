@@ -315,7 +315,7 @@ class NetModel:
         joblib.dump(self.preprocessor, '{}_pre.pkl'.format(name))
         joblib.dump(self.generator, '{}_gen.pkl'.format(name))
 
-    def preprocess_augment(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None):
+    def preprocess_augment(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, disable_perturb=False):
         gc.collect()
         if streams:
             num_streams = len(X_train)
@@ -328,7 +328,7 @@ class NetModel:
             rng_state = self.generator.rng.get_state()
             for k in range(num_streams):
                 self.generator.rng.set_state(rng_state)
-                X_train[k], Y_train = self.generator.augment(X_train[k], tmp, cropped_shape)
+                X_train[k], Y_train = self.generator.augment(X_train[k], tmp, cropped_shape, disable_perturb=disable_perturb)
             gc.collect()
 
             print 'Preprocess ...'
@@ -358,7 +358,7 @@ class NetModel:
             print "Augment & Preprocess train set ..."
             print 'Augment ...'
             print self.generator.__dict__
-            X_train, Y_train = self.generator.augment(X_train, Y_train, cropped_shape)
+            X_train, Y_train = self.generator.augment(X_train, Y_train, cropped_shape, disable_perturb=disable_perturb)
             gc.collect()
 
             print 'Preprocess ...'
@@ -379,6 +379,137 @@ class NetModel:
         return X_train, Y_train, X_test, Y_test
 
 
+    def perturb_dataset(self, X, new_X):
+        print "Begin perturb ..."
+        for i in range(len(X)):
+            new_X.append(self.generator.perturb(X[i]))
+        print "End perturb ..."
+
+    def fit_online_data_aug(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, checkpoint_prefix=None, checkpoint_interval=5, loss='categorical_crossentropy'):
+        X_train, Y_train, X_test, Y_test = self.preprocess_augment(X_train, Y_train, X_test, Y_test, streams, cropped_shape, disable_perturb=True)
+        print 'Fit network ...'
+        opt = get_optimizer(self.training_params)
+        self.network.compile(loss=loss, optimizer=opt, metrics=['accuracy'])
+        data_size = len(X_train)
+        batch_size = self.training_params['batch_size']
+
+        #nb_iterations = self.training_params['nb_iterations']
+        nb_epoch = self.training_params['nb_epoch']
+        #nb_epoch = nb_iterations * batch_size / data_size
+        nb_iterations = (data_size/batch_size) * nb_epoch
+
+        loss_bw_history = LossHistory()
+        callbacks = [loss_bw_history]
+
+        if checkpoint_prefix != None:
+            checkpoint_cb = ModelCheckpoint(verbose=True, filepath=checkpoint_prefix, epoch_interval=checkpoint_interval)
+            callbacks.append(checkpoint_cb)
+
+        if 'schedule' in self.training_params:
+            lr_scheduler = StageScheduler(self.training_params['schedule'])
+            callbacks.append(lr_scheduler)
+
+        schedule = self.training_params['schedule']
+        schedule_idx = 0
+        schedule_decay = 0.1
+        history = None
+        if X_test is None:
+            history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=callbacks, shuffle=False, validation_split=0.1, show_accuracy=True)
+        else:
+            #history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=callbacks, shuffle=False, validation_data=(X_test, Y_test))
+
+            import threading
+            tmp = []
+            t = threading.Thread(target=self.perturb_dataset, args=(X_train, tmp))
+            t.start()
+
+            t.join()
+            X_train_perturbed = np.array(tmp)
+            tmp = []
+            t = threading.Thread(target=self.perturb_dataset, args=(X_train, tmp,))
+            t.start()
+
+
+            start = 0
+            end = batch_size
+            
+            iter_per_epoch = int(data_size / batch_size)
+            epoch = 1
+            batch_losses = []
+            batch_metrics = []
+            loss_on_epochs = []
+            metrics_on_epochs = []
+            val_loss_on_epochs = []
+            val_metrics_on_epochs = []
+            loss_on_iterations = None
+            for i in range(nb_iterations):
+                X_batch = X_train_perturbed[start:end]
+                Y_batch = Y_train[start:end]
+                loss, metrics = self.network.train_on_batch(X_batch, Y_batch)
+
+                batch_losses.append(loss)
+                batch_metrics.append(metrics)
+
+                # End of epoch
+                if end >= data_size:
+                    print "Epoch {}".format(epoch)
+                    if loss_on_iterations == None:
+                       loss_on_iterations = batch_losses 
+                    else :
+                       loss_on_iterations += batch_losses 
+
+                    if epoch % checkpoint_interval == 0 and epoch > 0:
+                        self.network.save_weights((checkpoint_prefix + ".epoch_{}_weights.h5").format(epoch), overwrite=True)
+
+                    loss_on_epochs.append(np.mean(np.array(batch_losses)))
+                    metrics_on_epochs.append(np.mean(np.array(batch_metrics)))
+                    batch_losses = []
+                    batch_metrics = []
+
+                    print "Train {}".format((loss_on_epochs[-1], metrics_on_epochs[-1]))
+                    val_loss, val_metrics = self.network.evaluate(X_test, Y_test, batch_size=batch_size)
+                    val_loss_on_epochs.append(val_loss)
+                    val_metrics_on_epochs.append(val_metrics)
+                    print "Val {}".format((val_loss_on_epochs[-1], val_metrics_on_epochs[-1]))
+
+                    # Update learning rate
+                    print 'lr {}'.format(self.network.optimizer.lr.get_value())
+                    if schedule_idx < len(schedule):
+                        if epoch >= schedule[schedule_idx]:
+                            lr = self.network.optimizer.lr.get_value()
+                            self.network.optimizer.lr.set_value(float(lr * schedule_decay))
+                            schedule_idx += 1
+
+                    t.join()
+                    X_train_perturbed = np.array(tmp)
+                    tmp = []
+                    t = threading.Thread(target=self.perturb_dataset, args=(X_train, tmp,))
+                    t.start()
+
+                    start = 0
+                    end = batch_size
+                    epoch += 1
+                else:
+                    start += batch_size
+                    end += batch_size
+
+
+
+        gc.collect()
+        print_trainable_state(self.network.layers)
+
+        history = {}
+        history['loss'] = loss_on_epochs
+        history['val_loss'] = val_loss_on_epochs
+        history['loss_detail'] = loss_on_iterations
+        history['acc'] = metrics_on_epochs
+        history['val_acc'] = val_metrics_on_epochs
+
+        return history
+
+    '''
+    Fit with fixed data aug
+    '''
     def fit(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, checkpoint_prefix=None, checkpoint_interval=5, loss='categorical_crossentropy'):
         X_train, Y_train, X_test, Y_test = self.preprocess_augment(X_train, Y_train, X_test, Y_test, streams, cropped_shape)
 
