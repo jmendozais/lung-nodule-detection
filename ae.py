@@ -564,7 +564,7 @@ def fit_intermediary(model, X_train, Y_train, X_test, Y_test, intermediary_holde
     model.fit({'input_1':X_train},{'intermediary_proxy':intermediary_holder, 'supervised': Y_train}, batch_size=batch_size, nb_epoch=nb_epoch, 
         validation_data=({'input_1':X_test}, {'intermediary_proxy':tmp, 'supervised':Y_test}))
 
-def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modules=-1, batch_size=32, nb_epoch=12, nb_classes=2, bias=True, fixed_encoder=True, unsupervised_loss=l22_loss):
+def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modules=-1, batch_size=32, nb_epoch=12, nb_classes=2, bias=True, fixed_encoder=True, unsupervised_loss=l22_loss, multipliers=[3e-4, 1e-5, 1e-5]):
     nb_layers = len(network.layers)
     assert nb_layers > 2
     assert isinstance(network.layers[0], InputLayer)
@@ -576,7 +576,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
     layerwise_epochs = 6
     ''' Worst case loss contrib by the number of units VGG16
     1 input layer: 150k: 0.09 * 1e-4 : 1e-5
-    2 layer : 800k: 0.5 : 1e-12 WTF! Maybe these terms are only to controll that difference between layers is not absurd
+    2 layer : 800k: 0.5 : 1e-12 WTF! Maybe these terms are only to control that difference between layers is not absurd
     3 layer : 400k: 0.25 : 1e-12
     4 layer : 200k: 0.12 : 1e-13
     5 layer : 100k: 0.06 : 1e-11
@@ -594,8 +594,9 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
     3 layer: 8 * 8 * 128: 0.32 * 1e-5   0.0000032
     '''
 
-    multipliers = [3e-4, 1e-5, 1e-5]
+    #multipliers = [3e-4, 1e-5, 1e-5] last used
     #multipliers = [1e-3, 1e-5, 1e-5]
+
     supervised_output = network.layers[-1].get_output_at(0)
     #network.layers[-1].name = 'supervised'
 
@@ -745,6 +746,8 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
         cloned_decoder_layers = []
         for layer in decoder_layers:
             decoder_layer = clone_layer(layer)    
+            print('Trainable {}'.format(decoder_layer.trainable))
+            decoder_layer.trainable = True
             decoder_output = decoder_layer(decoder_output)
             decoder_layer.set_weights(layer.get_weights())
             decoder_layer.trainable = False

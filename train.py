@@ -50,5 +50,5 @@ if __name__ == "__main__":
 	Y = data[1]
 	clf = LDA()
 	scaler = preprocessing.StandardScaler()
-	train(X, Y, clf, scaler):
+	train(X, Y, clf, scaler)
 

@@ -1754,6 +1754,8 @@ if __name__=="__main__":
     parser.add_argument('--rpi', help='Number of random regions of interest per image you want to augment', default=1000, type=int)
     parser.add_argument('--init', help='Enable initialization from a existing network', default='none')
     parser.add_argument('--pos-neg-ratio', help='Set the positive/negative ratio for unsupervised aug experiments', default=0.1, type=float)
+    parser.add_argument('--multipliers', nargs='+', type=float, default=[3e-4, 1e-5, 1e-5])
+
 
     # Transfer learning
     parser.add_argument('--init-transfer', help='Enable initialization from a existing network', default='none')
@@ -1783,6 +1785,7 @@ if __name__=="__main__":
     _model.use_transformations = args.trf_channels
     _model.streams = args.streams 
     _model.label = args.label
+    _model.multipliers = args.multipliers
     # TODO 
     _model.augment = args.augment
     _model.downsample = True
