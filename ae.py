@@ -523,7 +523,7 @@ class IntermediaryLoss:
             self.multipliers = np.fill(shape=(size,), fill_value=1, dtype=np.float)
         else:
             assert len(self.multipliers) == size
-        total_loss = self.multipliers[0] *self.loss(tensors[0], tensors[size])
+        total_loss = self.multipliers[0] * self.loss(tensors[0], tensors[size])
         for i in range(1, size):
             total_loss += self.multipliers[i] * self.loss(tensors[i], tensors[i + size])
         print("total_loss {}".format(total_loss))
@@ -564,7 +564,7 @@ def fit_intermediary(model, X_train, Y_train, X_test, Y_test, intermediary_holde
     model.fit({'input_1':X_train},{'intermediary_proxy':intermediary_holder, 'supervised': Y_train}, batch_size=batch_size, nb_epoch=nb_epoch, 
         validation_data=({'input_1':X_test}, {'intermediary_proxy':tmp, 'supervised':Y_test}))
 
-def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modules=-1, batch_size=32, nb_epoch=12, nb_classes=2, bias=True, fixed_encoder=True, unsupervised_loss=l22_loss, multipliers=[3e-4, 1e-5, 1e-5]):
+def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modules=-1, batch_size=32, layerwise_epochs=6, decoder_epochs=12, finetune_epochs=24, nb_classes=2, bias=True, fixed_encoder=True, unsupervised_loss=l22_loss, multipliers=[3e-4, 1e-5, 1e-5], lr=0.01, model_name='swwae'):
     nb_layers = len(network.layers)
     assert nb_layers > 2
     assert isinstance(network.layers[0], InputLayer)
@@ -572,8 +572,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
 
     print("SWWAE-{} augmentation".format(mode))
 
-    optimizer = SGD(lr=0.00003, nesterov=True, momentum=0.9)
-    layerwise_epochs = 6
+    optimizer = SGD(lr=lr*1e-3, nesterov=True, momentum=0.9)
     ''' Worst case loss contrib by the number of units VGG16
     1 input layer: 150k: 0.09 * 1e-4 : 1e-5
     2 layer : 800k: 0.5 : 1e-12 WTF! Maybe these terms are only to control that difference between layers is not absurd
@@ -582,7 +581,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
     5 layer : 100k: 0.06 : 1e-11
     '''
 
-    ''' Worst case loss contrib by the number of units
+    ''' Worst case loss contrib by the number of units in 3P
     Option 1
     1 input: 32 * 32: 0.04 * 3e-4       0.0000120
     2 layer: 16 * 16 * 64: 0.64 * 1e-5  0.0000064
@@ -766,7 +765,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
            
         model.fit(X_train, {'unsupervised':X_train, 'supervised':Y_train}, batch_size=batch_size, nb_epoch=layerwise_epochs, verbose=1)
         #model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=layerwise_epochs, validation_data=(X_test, Y_test), verbose=1)
-        #model.fit(X, X, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
+        #model.fit(X, X, batch_size=batch_size, nb_epoch=layerwise_epochs, verbose=1)
 
         print_trainable_state(model.layers)
 
@@ -776,9 +775,9 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
         input_shapes.append(tmp)
 
 
-    optimizer = SGD(lr=0.03, nesterov=True, momentum=0.9)
+    optimizer = SGD(lr=lr, nesterov=True, momentum=0.9)
     # For all/first modes
-    print("Finetune with mode {}".format(mode))
+    print("Finetune decoder with mode {}".format(mode))
     helper_model = None
     dummy_output = None
 
@@ -790,39 +789,39 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
     if unsupervised_loss == l22_loss:
         #model.compile(loss=average_loss, optimizer=optimizer)
         print_trainable_state(model.layers)
-        helper_model, intermediary_output = create_and_fit(encoder_layers, decoder_layers, X_train, Y_train, supervised_output, encoder_input, optimizer, batch_size, nb_epoch, mode=mode, loss=unsupervised_loss, multipliers=multipliers)
+        helper_model, intermediary_output = create_and_fit(encoder_layers, decoder_layers, X_train, Y_train, supervised_output, encoder_input, optimizer, batch_size, decoder_epochs, mode=mode, loss=unsupervised_loss, multipliers=multipliers)
         print_trainable_state(helper_model.layers)
-        #model.fit(X, X, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
+        #model.fit(X, X, batch_size=batch_size, nb_epoch=decoder_epochs, verbose=1)
     else:
         model.compile(loss={'supervised':'categorical_crossentropy', 'unsupervised':unsupervised_loss}, optimizer=optimizer)
         print_trainable_state(model.layers)
-        model.fit(X_train, {'unsupervised':X_train, 'supervised':Y_train}, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
+        model.fit(X_train, {'unsupervised':X_train, 'supervised':Y_train}, batch_size=batch_size, nb_epoch=decoder_epochs, verbose=1)
         print_trainable_state(model.layers)
 
     # Finetune encoder/decoder with reduced learning rate
     print("Finetune encoder/decoder")
-    optimizer.lr = 0.001
+    optimizer.lr = lr/10.0
     for layer in model.layers:
         if isinstance(layer, Dense) or isinstance(layer, Convolution2D):
             layer.trainable = True
 
     if helper_model != None:
         print("Helper model")
-        fit_intermediary(helper_model, X_train, Y_train, X_test, Y_test, intermediary_output, supervised_output, encoder_input, optimizer, batch_size, 2*nb_epoch, mode=mode)
+        fit_intermediary(helper_model, X_train, Y_train, X_test, Y_test, intermediary_output, supervised_output, encoder_input, optimizer, batch_size, finetune_epochs, mode=mode)
          
         ae = Model(encoder_input, decoder_output)
         ae.compile(loss='mse', optimizer=optimizer)
         X_test_rec = ae.predict(X_test)
         print("X test rec {} {}".format(len(X_test_rec), X_test_rec[0].shape))
-        for i in range(100):
-            util.imwrite("roi_{}.jpg".format(i), X_test[i][0])
-            util.imwrite("roi_{}_rec.jpg".format(i), X_test_rec[i][0])
+        for i in range(10):
+            util.imwrite("data/{}_{}.jpg".format(model_name, i), X_test[i][0])
+            util.imwrite("data/{}_{}_rec.jpg".format(model_name, i), X_test_rec[i][0])
             
         print_trainable_state(helper_model.layers)
     else:
         print("Normal model")
         model.compile(loss={'supervised':'categorical_crossentropy', 'unsupervised':'mse'}, optimizer=optimizer)
-        model.fit(X_train, {'unsupervised':X_train, 'supervised':Y_train}, batch_size=batch_size, nb_epoch=2*nb_epoch, verbose=1)
+        model.fit(X_train, {'unsupervised':X_train, 'supervised':Y_train}, batch_size=batch_size, nb_epoch=finetune_epochs, verbose=1)
 
     # Copy weigths
     idx = 0

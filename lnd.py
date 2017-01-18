@@ -1755,6 +1755,9 @@ if __name__=="__main__":
     parser.add_argument('--init', help='Enable initialization from a existing network', default='none')
     parser.add_argument('--pos-neg-ratio', help='Set the positive/negative ratio for unsupervised aug experiments', default=0.1, type=float)
     parser.add_argument('--multipliers', nargs='+', type=float, default=[3e-4, 1e-5, 1e-5])
+    parser.add_argument('--lw-epochs', help='number of epochs used on layerwise initialization', default=6, type=int)
+    parser.add_argument('--dec-epochs', help='number of epochs used on decoder training', default=6, type=int)
+    parser.add_argument('--lr', help='Learning rate', default=0.01, type=float)
 
 
     # Transfer learning
@@ -1789,6 +1792,10 @@ if __name__=="__main__":
     # TODO 
     _model.augment = args.augment
     _model.downsample = True
+    _model.lw_epochs = args.lw_epochs
+    _model.dec_epochs = args.dec_epochs
+    _model.all_epochs = args.epochs
+    _model.lr = args.lr
 
     # default: clf -d baseline.hardie
          
