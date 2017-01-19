@@ -1796,6 +1796,7 @@ if __name__=="__main__":
     _model.dec_epochs = args.dec_epochs
     _model.all_epochs = args.epochs
     _model.lr = args.lr
+    _model.init = args.init
 
     # default: clf -d baseline.hardie
          

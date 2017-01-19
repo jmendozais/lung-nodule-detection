@@ -687,7 +687,7 @@ class BaselineModel(object):
             self.network.generator.mode = 'balance_dataset'
 
         X_train, Y_train, X_test, Y_test = self.network.preprocess_augment(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=cropped_shape)
-        _, self.helper_model = ae.swwae_augment(self.network.network, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr)
+        _, self.helper_model = ae.swwae_augment(self.network.network, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
         #return history
 
     def fit_transform_bovw(self, rois_tr, pred_blobs_tr, blobs_tr, rois_te, pred_blobs_te, blobs_te,  model):
