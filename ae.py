@@ -572,7 +572,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
 
     print("SWWAE-{} augmentation".format(mode))
 
-    optimizer = SGD(lr=lr*1e-3, nesterov=True, momentum=0.9)
+    optimizer = SGD(lr=lr*multipliers[0], nesterov=True, momentum=0.9)
     ''' Worst case loss contrib by the number of units VGG16
     1 input layer: 150k: 0.09 * 1e-4 : 1e-5
     2 layer : 800k: 0.5 : 1e-12 WTF! Maybe these terms are only to control that difference between layers is not absurd
