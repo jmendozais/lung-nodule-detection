@@ -449,6 +449,14 @@ def get_conv_input(layers, layer_idx):
     assert layer_idx < len_layers
     return layers[layer_idx].get_input_at(0)
 
+def get_conv_input_without_dropout(layers, layer_idx):  
+    len_layers = len(layers)
+    assert layer_idx < len_layers
+    if layer_idx > 0 and isinstance(layers[layer_idx-1], Dropout):
+        print('happens')
+        return layers[layer_idx-1].get_input_at(0)
+    return layers[layer_idx].get_input_at(0)
+
 def get_conv_output(layers, layer_idx):
     len_layers = len(layers)
     assert layer_idx < len_layers
@@ -470,6 +478,7 @@ def get_encoder_acts(layers):
     encoder_len = len(weighted_layer_idx)
     acts = []
     for i in range(encoder_len):
+        #Clean input: acts.append(get_conv_input_without_dropout(layers, weighted_layer_idx[i]))
         acts.append(get_conv_input(layers, weighted_layer_idx[i]))
     return acts
 
@@ -572,6 +581,8 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
 
     print("SWWAE-{} augmentation".format(mode))
 
+    # Fix layerwise pretraining
+    # optimizer = SGD(lr=lr, nesterov=True, momentum=0.9)
     optimizer = SGD(lr=lr*multipliers[0], nesterov=True, momentum=0.9)
     ''' Worst case loss contrib by the number of units VGG16
     1 input layer: 150k: 0.09 * 1e-4 : 1e-5
@@ -655,6 +666,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
         nb_modules = len(layers_idx_by_module) - nb_dense
     print("modules {}, ae modules {}".format(len(layers_idx_by_module), nb_modules))
 
+
     # Build reconstruction pathways
     encoder_input = input_layer.inbound_nodes[0].output_tensors[0]
     encoder_output = encoder_input
@@ -667,6 +679,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
     input_shapes.append((None,) + X_train[0].shape)
     encoder_outputs = []
 
+    encoder_inputs = get_encoder_acts(classification_layers)
     for i in range(nb_modules):
         print('Pretraining module {} ...'.format(i))
         has_flatten = False
@@ -707,17 +720,13 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
 
         if has_flatten:
             decoder_layer = Reshape((convlike_input_shape[1], convlike_input_shape[2], convlike_input_shape[3]))
-            #tmp = decoder_output
             decoder_output = decoder_layer(decoder_output)
-            #decoder_layer.call(tmp)
             decoder_module_layers.append(decoder_layer)
 
         if mp_layer_idx != -1:
             pooling_layer = classification_layers[mp_layer_idx]
             decoder_layer = WhatWhereUnPooling2D(pooling_layer, size=pooling_layer.pool_size)
-            #tmp = decoder_output
             decoder_output = decoder_layer(decoder_output)
-            #decoder_layer.call(tmp)
             decoder_module_layers.append(decoder_layer)
 
         for j in reversed(range(len(module_layers_idx))):
@@ -754,19 +763,24 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
 
         decoder_layers = decoder_module_layers + cloned_decoder_layers
         decoder_layers[-1].name = 'unsupervised'
-        
-        model = Model(input=encoder_input, output=[supervised_output, decoder_output])
-        #model = Model(input=encoder_input,output=classification_layers[-1].get_output_at(0))
-        #model = network
-        model.compile(loss={'supervised':'categorical_crossentropy', 'unsupervised':unsupervised_loss}, optimizer=optimizer)
-        #model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['accuracy'])
-        #model.compile(loss='mse', optimizer=optimizer)
+        '''
+        # Fixed layerwise pretraining + Induce denoising on decoder pathway
+        decoder_outputs = get_decoder_acts(decoder_layers)
+        layerwise_loss = IntermediaryLoss(unsupervised_loss, [multipliers[0]]).call
+        print('{} {} '.format(encoder_inputs[i]._keras_shape, decoder_outputs[i]._keras_shape))
+        layerwise_output = Lambda(layerwise_loss, output_shape=loss_output_shape, name='layerwise_proxy')([encoder_inputs[i], decoder_outputs[i]])
+        model = Model(input=[encoder_input], output=[layerwise_output])
+        model.compile(optimizer,{'layerwise_proxy':average_loss})
         model.summary()
-           
+        shape = encoder_inputs[i]._keras_shape
+        shape = (X_train.shape[0],) + shape[1:]
+        layerwise_holder = np.zeros(shape, dtype='float32')
+        model.fit({'input_1':X_train},{'layerwise_proxy':layerwise_holder}, batch_size=batch_size, nb_epoch=layerwise_epochs)
+        '''
+        model = Model(input=encoder_input, output=[supervised_output, decoder_output])
+        model.compile(loss={'supervised':'categorical_crossentropy', 'unsupervised':unsupervised_loss}, optimizer=optimizer)
+        model.summary()
         model.fit(X_train, {'unsupervised':X_train, 'supervised':Y_train}, batch_size=batch_size, nb_epoch=layerwise_epochs, verbose=1)
-        #model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=layerwise_epochs, validation_data=(X_test, Y_test), verbose=1)
-        #model.fit(X, X, batch_size=batch_size, nb_epoch=layerwise_epochs, verbose=1)
-
         print_trainable_state(model.layers)
 
         # Re-init module input shapes
@@ -786,6 +800,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
             layer.trainable = True
 
     encoder_layers = np.array(model.layers)[encoder_layers_idx]
+
     if unsupervised_loss == l22_loss:
         #model.compile(loss=average_loss, optimizer=optimizer)
         print_trainable_state(model.layers)
