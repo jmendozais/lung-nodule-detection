@@ -10,6 +10,7 @@ from keras.engine import Layer
 from keras.layers.core import Lambda
 from keras.layers.core import Reshape 
 from keras.layers import Dense, Dropout, Activation, Flatten, Input, InputLayer
+from keras.layers.advanced_activations import LeakyReLU
 from keras.layers import Convolution2D, UpSampling2D
 from keras.layers import MaxPooling2D
 from keras.layers import merge
@@ -25,6 +26,7 @@ from itertools import product
 import neural
 import util
 
+activation_classes = (Activation, LeakyReLU)
 def get_conv_outsize(size, k, s, p, cover_all=False):
     if cover_all:
         return (size + p * 2 - k + s - 1) // s + 1
@@ -312,10 +314,7 @@ def pretrain_swwae(network, X, nb_modules=-1, batch_size=32, nb_epoch=12, nb_cla
             print(modules[i][j].__class__)
 
             # Use same activations objects because there is not a straightforward way to build custom activation from config
-            if isinstance(modules[i][j], Activation):
-                new_layer = modules[i][j]
-            else:
-                new_layer = layer_utils.layer_from_config({'class_name':modules[i][j].__class__, 'config':modules[i][j].get_config()})
+            new_layer = clone_layer(modules[i][j])
 
             if isinstance(new_layer, Dropout):
                 new_layer.p = 0.0
@@ -401,11 +400,20 @@ def pretrain_swwae(network, X, nb_modules=-1, batch_size=32, nb_epoch=12, nb_cla
 
     return model
 
+def clone_activation(layer):
+    assert isinstance(layer, activation_classes)
+    if isinstance(layer, Activation):
+        return layer_utils.layer_from_config({'class_name':layer.__class__, 'config':layer.get_config()})
+    elif isinstance(layer, LeakyReLU):
+        return LeakyReLU(alpha=layer.alpha)
+    else:
+        raise Exception("No clone func proxied for {}".format(layer.__class__))
+
 def clone_layer(layer):
     if isinstance(layer, WhatWhereUnPooling2D):
         new_layer = WhatWhereUnPooling2D(layer.pooling_layer, size=layer.size)
-    elif isinstance(layer, Activation):
-        new_layer = layer_utils.layer_from_config({'class_name':layer.__class__, 'config':layer.get_config()})
+    elif isinstance(layer, activation_classes):
+        new_layer = clone_activation(layer)
     else:
         new_layer = layer_utils.layer_from_config({'class_name':layer.__class__, 'config':layer.get_config()})
     return new_layer
@@ -465,7 +473,7 @@ def get_conv_output(layers, layer_idx):
         if layer_idx == len_layers:
             return layers[layer_idx-1].get_output_at(0)
         else:
-            if isinstance(layers[layer_idx], Activation):
+            if isinstance(layers[layer_idx], activation_classes):
                 return layers[layer_idx].get_output_at(0)
  
 def get_encoder_acts(layers):
@@ -691,6 +699,7 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
         encoder_layers_idx += module_layers_idx
         print("Module layers idx {}".format(module_layers_idx))
         # Layerwise initialization
+        activation_idx = -1
         for j in range(len(module_layers_idx)):
             layer_idx = layers_idx_by_module[i][j]
             layer = classification_layers[layer_idx]
@@ -710,6 +719,9 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
             if isinstance(layer, WhatWhereMaxPooling2D):
                 convlike_input_shape = layer.output_shape
                 mp_layer_idx = module_layers_idx[j]
+
+            if isinstance(layer, activation_classes):
+                activation_idx = layer_idx
 
         # Augment decoder
         print('Decoder input shape (no mp): {} ...'.format(input_shapes[-1]))
@@ -744,9 +756,9 @@ def swwae_augment(network, X_train, Y_train, X_test, Y_test, mode='all', nb_modu
             decoder_output = decoder_layer(decoder_output)
             decoder_module_layers.append(decoder_layer)
 
-            # TODO LeakyReLu
             if not (i == 0 and j + 1 == len(module_layers_idx)):
-                decoder_layer = Activation('relu')
+                assert activation_idx != -1
+                decoder_layer = clone_activation(classification_layers[activation_idx])
                 decoder_output = decoder_layer(decoder_output)
                 decoder_module_layers.append(decoder_layer)
 
@@ -904,14 +916,8 @@ def pretrain_layerwise(network, X, nb_modules=-1, batch_size=32, nb_epoch=12, nb
         for j in range(len(modules[i])):
             print('Layer {},{} ...'.format(i, j))
             print(modules[i][j].__class__)
-            print(modules[i][j].get_config())
 
-            # Use same activations objects because there is not a straightforward way to build custom activation from config
-            if isinstance(modules[i][j], Activation):
-                new_layer = modules[i][j]
-            else:
-                new_layer = layer_utils.layer_from_config({'class_name':modules[i][j].__class__, 'config':modules[i][j].get_config()})
-
+            new_layer = clone_layer(modules[i][j])
             if isinstance(new_layer, Dropout):
                 new_layer.p = 0.0
 
