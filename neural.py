@@ -1493,7 +1493,7 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
 
     elif model == '6P-br32':   
         network = lnd_a_6p((1,128, 128))
-        schedule=[60, 60, 60]
+        schedule=[35, 60, 60]
         train_params = {'opt':'sgd', 'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         augment_params = default_augment_params
         augment_params['output_shape'] = (128, 128)
