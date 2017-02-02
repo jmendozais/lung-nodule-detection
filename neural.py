@@ -790,6 +790,27 @@ def _3pnd(input_shape, activation='relu', init='orthogonal'):
 
     return Model(input=inp, output=out)
 
+# https://arxiv.org/pdf/1611.06651.pdf
+def ct_a(input_shape, init='orthogonal'):
+    kernels = [20, 50, 500, 2]
+    nb_pool = 2
+    dense_units = 512
+    nb_classes = 2
+    activation = 'relu'
+
+    inp = Input(shape=input_shape, dtype='float32', name='input')   
+    out = Convolution2D(kernels[0], 7, 7, border_mode='valid', init=init)(inp)
+    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+    out = Convolution2D(kernels[1], 7, 7, border_mode='valid', init=init)(out)
+    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+    out = Convolution2D(kernels[2], 7, 7, border_mode='valid', init=init)(out)
+    out = Activation(activation)(out)
+    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+    out = Convolution2D(kernels[3], 1, 1, border_mode='valid', init=init)(out)
+    out = Flatten()(out)
+    out = Activation('softmax')(out)
+
+    return Model(input=inp, output=out)
 
 def vgg16(mode='fc'):
     model = Sequential()
@@ -863,7 +884,7 @@ def to_two_class_probs(y):
 
 def create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr,
                             feats_test=None, pred_blobs_test=None, real_blobs_test=None,
-                            streams='none', detector=False):
+                            streams='none', detector=False, dataset_type='numpy'):
     nb_classes = 2
     X_train, tmp, y_train = [], [], []
     
@@ -873,14 +894,14 @@ def create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr,
             if detector:
                 tmp, y_train = classify.create_training_set_for_detector(feats_tr[i], pred_blobs_tr, real_blobs_tr)
             else:
-                tmp, y_train = classify.create_training_set_from_feature_set(feats_tr[i], pred_blobs_tr, real_blobs_tr)
+                tmp, y_train = classify.create_training_set_from_feature_set(feats_tr[i], pred_blobs_tr, real_blobs_tr, dataset_type)
             X_train.append(tmp.astype('float32'))
     else:
         if detector: 
             X_train, y_train = classify.create_training_set_for_detector(feats_tr, pred_blobs_tr, real_blobs_tr)
         else:
-            X_train, y_train = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr)
-        X_train = X_train.astype('float32')
+            X_train, y_train = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr, dataset_type)
+        #X_train = X_train.astype('float32')
 
     X_test, Y_test = None, None
     if feats_test != None:
@@ -891,14 +912,14 @@ def create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr,
                 if detector:
                     tmp, y_test = classify.create_training_set_for_detector(feats_test[i], pred_blobs_test, real_blobs_test)
                 else:
-                    tmp, y_test = classify.create_training_set_from_feature_set(feats_test[i], pred_blobs_test, real_blobs_test)
+                    tmp, y_test = classify.create_training_set_from_feature_set(feats_test[i], pred_blobs_test, real_blobs_test, dataset_type)
                 X_test.append(tmp.astype('float32'))
         else:
             if detector:
                 X_test, y_test = classify.create_training_set_for_detector(feats_test, pred_blobs_test, real_blobs_test)
             else:
-                X_test, y_test = classify.create_training_set_from_feature_set(feats_test, pred_blobs_test, real_blobs_test)
-            X_test = X_test.astype('float32')
+                X_test, y_test = classify.create_training_set_from_feature_set(feats_test, pred_blobs_test, real_blobs_test, dataset_type)
+            #X_test = X_test.astype('float32')
 
     if detector:
         Y_train = to_two_class_probs(y_train)
@@ -1619,6 +1640,13 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
         augment_params = default_augment_params
         augment_params['output_shape'] = (224, 224)
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+
+    elif model in {'ct_a'}:
+        network = ct_a(input_shape)
+        schedule=[50, 70, 70]
+        train_params = {'schedule':schedule, 'nb_epoch':50, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
     else:
         raise Exception("Model config not found.")

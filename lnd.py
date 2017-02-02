@@ -113,10 +113,6 @@ def get_froc_on_folds_keras(_model, paths, left_masks, right_masks, blobs, pred_
             network_init=network_init, mode=mode
             )
 
-        if fold == 1:
-            _model.network.network.summary()
-            #visualize_util.plot(_model.network.network, to_file='data/{}.png'.format(network_model))
-
         blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois_te, pred_blobs[te_idx])
         froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
         frocs.append(froc)
@@ -549,6 +545,84 @@ def pretrain_cnn(_model, fname, network_model, init_name=None, nb_epoch=1):
         _model.save('data/{}_fold_{}'.format(init_name, fold))
         fold += 1
 
+def joint_training(_model, fname, network_model, init_name):
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
+    left_masks = jsrt.left_lung(set='jsrt140')
+    right_masks = jsrt.right_lung(set='jsrt140')
+
+    size = len(paths)
+
+    blobs = []
+    for i in range(size):
+        blobs.append([locs[i][0], locs[i][1], rads[i]])
+    blobs = np.array(blobs)
+
+    print "Loading blobs ..."
+    data = DataProvider(paths, left_masks, right_masks)
+    pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+
+    rois = _model.create_rois(data, pred_blobs)
+
+    Y = (140 > np.array(range(size))).astype(np.uint8)
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+
+    fold = 1
+    frocs = []
+    frocs_ = []
+    for tr_idx, te_idx in folds:
+        print "Fold {}".format(fold)
+        data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+        paths_te = paths[te_idx]
+
+        blobs_te = []
+        for bl in blobs[te_idx]:
+            blobs_te.append([bl])
+        blobs_te = np.array(blobs_te)
+        #blobs_te = blobs[te_idx].reshape((1,) + blobs.shape).swapaxes(0, 1)
+
+        rois_tr = []
+        rois_te = []
+        if _model.streams != 'none':
+            for i in range(len(rois)):
+                rois_tr.append(rois[i][tr_idx])
+                rois_te.append(rois[i][te_idx])
+        else:
+            rois_tr = rois[tr_idx]
+            rois_te = rois[te_idx]
+
+
+        X_train, Y_train, X_test, Y_test = neural.create_train_test_sets(rois_tr, pred_blobs[tr_idx], blobs[tr_idx], 
+                                                rois_te, pred_blobs[te_idx], blobs[te_idx], streams=_model.streams, dataset_type=_model.dataset_type)
+
+        _model.joint_training(network_model, X_train, Y_train, X_test, Y_test, fold)
+
+        print 'Save ...'
+        if init_name == 'none':
+            init_name = network_model + '_us'
+
+        _model.save('data/{}_fold_{}'.format(init_name, fold))
+
+        blobs_te_pred, probs_te_pred = _model.predict_proba_from_feature_set_keras(rois_te, pred_blobs[te_idx])
+        froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
+        frocs.append(froc)
+
+        legend_ = ['Fold {}'.format(i + 1) for i in range(len(frocs))]
+        frocs_.append(eval.average_froc([froc], np.linspace(0.0, 10.0, 101)))
+        util.save_froc(frocs_, 'data/{}_froc_kfold'.format(init_name), legend_)
+        fold += 1
+
+    av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
+
+    legend = []
+    legend.append('Hardie et al.')
+    legend.append(init_name)
+
+    util.save_froc([baseline.hardie, av_froc], 'data/{}-FROC'.format(init_name), legend, with_std=True)
+ 
+    return av_froc
+
+
+
 def unsupervised_augment(_model, fname, network_model, init_name=None, nb_epoch=1, mode=None, rois_per_image=1000, pos_neg_ratio=0.1):
     paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
@@ -599,7 +673,7 @@ def unsupervised_augment(_model, fname, network_model, init_name=None, nb_epoch=
 
 
         X_train, Y_train, X_test, Y_test = neural.create_train_test_sets(rois_tr, pred_blobs[tr_idx], blobs[tr_idx], 
-                                                rois_te, pred_blobs[te_idx], blobs[te_idx], streams=_model.streams)
+                                                rois_te, pred_blobs[te_idx], blobs[te_idx], streams=_model.streams, dataset_type=_model.dataset_type)
 
         _model.unsupervised_augment(network_model, X_train, Y_train, X_test, Y_test, fold, _model.streams, nb_epoch=nb_epoch, pos_neg_ratio=pos_neg_ratio, mode=mode)
 
@@ -1750,6 +1824,7 @@ if __name__=="__main__":
 
     # Unsupervised learning
     parser.add_argument('--pre-tr', help='Enable pretraining', action='store_true')
+    parser.add_argument('--joint-tr', help='Joint supervised-unsupervised traininig', action='store_true')
     parser.add_argument('--uns-aug', help='Enable pretraining', action='store_true')
     parser.add_argument('--rpi', help='Number of random regions of interest per image you want to augment', default=1000, type=int)
     parser.add_argument('--init', help='Enable initialization from a existing network', default='none')
@@ -1771,6 +1846,7 @@ if __name__=="__main__":
     parser.add_argument('--roi-size', help='Size of ROIs after scaling', default=64, type=int)
     parser.add_argument('--blob-rad', help='Radius used to extract blobs', default=32, type=int)
     parser.add_argument('--epochs', help='Number of epochs for pretraining.', default=1, type=int)
+    parser.add_argument('--dataset-type', default='numpy')
 
     # Evals
     parser.add_argument('--frocs-by-epoch', help='Generate a figure with froc curves every 5 epochs', action='store_true')
@@ -1789,6 +1865,7 @@ if __name__=="__main__":
     _model.streams = args.streams 
     _model.label = args.label
     _model.multipliers = args.multipliers
+    _model.dataset_type = args.dataset_type
     # TODO 
     _model.augment = args.augment
     _model.downsample = True
@@ -1920,7 +1997,9 @@ if __name__=="__main__":
         hybrid(_model, '{}'.format(extractor_key), args.cnn, args.layer)
 
     elif args.cnn != 'none':
-        if args.uns_aug:
+        if args.joint_tr:
+            joint_training(_model, extractor_key, args.cnn, args.init)
+        elif args.uns_aug:
             unsupervised_augment(_model, extractor_key, args.cnn, args.init, args.epochs, mode='add-random', rois_per_image=args.rpi, pos_neg_ratio=args.pos_neg_ratio)
         elif args.pre_tr:
             pretrain_cnn(_model, extractor_key, args.cnn, args.init, nb_epoch=args.epochs)

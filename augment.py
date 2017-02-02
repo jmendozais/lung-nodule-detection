@@ -14,7 +14,9 @@ from scipy import linalg
 from skimage import transform
 
 import cv2
+import h5py
 import util
+import time
 
 def gaussian_noise(x, mean=0, std=0.1):	
     noise = np.random.normal(loc=mean, scale=std, size=x.shape)
@@ -288,6 +290,78 @@ class ImageDataGenerator:
         return np.array(new_X)
 
     def augment(self, X, y, cropped_shape, disable_perturb=False):
+        if isinstance(X, h5py.Dataset):
+            return self._augment_hdf5(X, y, cropped_shape, disable_perturb)
+        else:
+            return self._augment_numpy(X, y, cropped_shape, disable_perturb)
+
+    def _shuffle(source, target, indexes):
+        data_size = source.shape[0]
+        chunk_size = source.chunks[0]
+        nb_chunks = math.ceil(data_size/chunk_size)
+        source_bool_map = np.full(shape=(data_size,), dtype=bool, fill_value=False)
+        target_bool_map = np.full(shape=(data_size,), dtype=bool, fill_value=False)
+        for i in range(nb_chunks):
+            begin = i*chunk_size
+            end = min(begin + chunk_size, data_size)
+            index = indexes[begin:end]
+            for j in range(nb_chunks):
+                begin = j*chunk_size
+                end = min(begin + chunk_size, data_size)
+                mask = np.logical_and(index >= begin, index < end)
+                target_bool_map[:] = False
+                target_bool_map[begin:end] = mask
+                source_bool_map[:] = False
+                source_bool_map[index[mask]] = True
+                target[target_bool_map] = source[source_bool_map]
+
+    def _augment_hdf5(self, X, y, cropped_shape, disable_perturb=False):
+        assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
+        if self.intensity_shift_std:
+            std = np.std(X)
+            self.intensity_shift_range = (-std, std)
+        
+        factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
+        # balance
+        print 'Mode: {} ...'.format(self.mode)
+
+        if self.mode == 'balance_batch':
+            raise Exception("Mode {} not implemented".format(self.mode))
+
+        elif self.mode == 'balance_dataset':
+            current_size = X.shape[0]
+            delta_size = np.sum(y.T[1]) * factor
+            X.resize((current_size + delta_size,) + X.shape[1:])
+            idx = current_size
+            for i in range(y.shape[0]):
+                if y[i][1] > 0:
+                    aXi = np.full((factor,) + X[i].shape, dtype=X[i].dtype, fill_value=X[i])
+                    X[idx:idx+factor] = aXi
+                    ayi = np.full((factor,) + y[i].shape, dtype=y[i].dtype, fill_value=y[i])
+                    y = np.append(y, ayi, axis=0)
+                    idx += factor
+            assert idx == X.shape[0]
+            indexes = list(range(X.shape[0]))
+            seed = self.rng.randint(1, 10e6) 
+            np.random.seed(seed) 
+            np.random.shuffle(indexes) 
+            y_shuffled = y[indexes]
+
+            f = h5py.File("array{}.h5".format(time.time()), "w")
+            begin = time.time()
+            X_shuffled = f.create_dataset("X_shuffled", X.shape, chunks=X.chunks, dtype='float32')
+            X_shuffled[:] = X[indexes]
+            print("Shuffle overhead {} secs".format(time.time() - begin))
+
+        # Perturn
+        if disable_perturb:
+            return X_shuffled, y_shuffled
+        else:
+            for i in range(aX.shape[0]):
+                X_shuffled[i] = self.perturb(X_shuffled[i])
+            return X_shuffled, y_shuffled
+
+    def _augment_numpy(self, X, y, cropped_shape, disable_perturb=False):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
         if self.intensity_shift_std:
             std = np.std(X)

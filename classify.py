@@ -1,5 +1,6 @@
 import sys
 import time
+import h5py
 
 import numpy as np
 from sklearn.lda import LDA
@@ -21,11 +22,6 @@ import theano
 import theano.tensor as T
 
 class Min:
-    """
-    Min kernel (also known as Histogram intersection kernel)
-        K(x, y) = SUM_i min(x_i, y_i)
-    """
-    
     def __init__(self):
         self.h1 = T.dmatrix('h1')
         self.h2 = T.dmatrix('h2')
@@ -170,7 +166,14 @@ def create_training_set(data, y_blobs):
     Y = np.array(Y)
     return X, Y
 '''
-def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs):
+
+def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs, array_class='numpy'):
+    if array_class == 'numpy':
+        return _create_training_set_from_feature_set_numpy(feature_set, pred_blobs, real_blobs)
+    elif array_class == 'hdf5':
+        return _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blobs)
+
+def _create_training_set_from_feature_set_numpy(feature_set, pred_blobs, real_blobs):
     MAX_DIST = 35
 
     size = len(real_blobs)
@@ -217,6 +220,56 @@ def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs):
 
     X = np.array(X)
     Y = np.array(Y)
+    return X, Y
+
+def _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blobs, chunk_size=10000):
+    MAX_DIST = 35
+    size = len(real_blobs)
+    total_rois = 0
+    for i in range(size):
+        total_rois += len(pred_blobs[i])
+    output_shape = (total_rois,) + feature_set[0][0].shape
+     
+    f = h5py.File("array{}.h5".format(time.time()), "w")
+    X = f.create_dataset("X", output_shape, chunks=(min(chunk_size, total_rois),) + feature_set[0][0].shape, maxshape=(None,) + feature_set[0][0].shape, dtype='float32')
+    Y = np.zeros(shape=(total_rois,))
+
+    print "Creating positives ..."
+    idx = 0
+    for i in range(size):
+        if real_blobs[i][2] == -1:
+            continue
+        nb = []
+        tmp = []
+        for j in range(len(pred_blobs[i])):
+            x, y, z = pred_blobs[i][j]#
+            dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
+            if dst < MAX_DIST:
+                nb.append((dst, j))
+                tmp.append(pred_blobs[i][j])
+
+        nb = sorted(nb)
+        if len(nb) == 0:
+            continue
+
+        X[idx] = feature_set[i][nb[0][1]]
+        Y[idx] = 1
+        idx += 1
+    
+    # create negatives
+    print "Creating negatives ..."
+    for i in range(size):
+        neg_idx = []
+        for j in range(len(pred_blobs[i])):
+            x, y, z = pred_blobs[i][j]
+            dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
+            if dst > MAX_DIST:
+                neg_idx.append(j)
+
+        for idx in neg_idx:
+            X[idx] = feature_set[i][idx]
+            idx += 1
+
     return X, Y
 
 def create_training_set_for_detector(feature_set, pred_blobs, real_blobs):

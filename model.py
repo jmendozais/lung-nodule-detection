@@ -498,6 +498,10 @@ class BaselineModel(object):
             else:
                 self.load_cnn_weights(network_init)
 
+        if fold == 1:
+            self.network.network.summary()
+            #visualize_util.plot(_model.network.network, to_file='data/{}.png'.format(network_model))
+
         name =  'data/{}_fold_{}'.format(model, fold)
         history = self.network.fit(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=(self.roi_size, self.roi_size), checkpoint_prefix=name, checkpoint_interval=2)
         return history
@@ -675,7 +679,13 @@ class BaselineModel(object):
     def pretrain(self, model, X, fold=None, streams=False, nb_epoch=1):
         self.network = neural.create_network(model, X.shape[1:], fold, streams)
         ae.pretrain_layerwise(self.network.network, X, nb_epoch=nb_epoch)
-        #return history
+
+    def joint_training(self, model, X_train, Y_train, X_test, Y_test, fold=None):
+        cropped_shape = (self.roi_size, self.roi_size)
+        self.network = neural.create_network(model, (X_train.shape[1],) + cropped_shape, fold, self.streams)
+
+        X_train, Y_train, X_test, Y_test = self.network.preprocess_augment(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=cropped_shape)
+        self.helper_model = ae.swwae_train(self.network.network, X_train, Y_train, X_test, Y_test, finetune_epochs=self.all_epochs, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
 
     def unsupervised_augment(self, model, X_train, Y_train, X_test, Y_test, fold=None, streams=False, nb_epoch=1, pos_neg_ratio=1.0, mode=None):
         cropped_shape = (self.roi_size, self.roi_size)
@@ -687,7 +697,7 @@ class BaselineModel(object):
             self.network.generator.mode = 'balance_dataset'
 
         X_train, Y_train, X_test, Y_test = self.network.preprocess_augment(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=cropped_shape)
-        _, self.helper_model = ae.swwae_augment(self.network.network, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
+        self.helper_model = ae.swwae_augment(self.network.network, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
         #return history
 
     def fit_transform_bovw(self, rois_tr, pred_blobs_tr, blobs_tr, rois_te, pred_blobs_te, blobs_te,  model):
