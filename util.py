@@ -70,6 +70,17 @@ def scale_list(path, factor):
 
     save_list(paths, tls, sizes)
 
+def split_data_pos_neg(X, Y):
+    is_pos = Y.T[1]
+    end_pos = 0
+    for i in range(len(is_pos)):
+        if is_pos[i] < 1:
+            end_pos = i
+            break
+
+    return (X[:end_pos], X[end_pos:]), (Y[:end_pos], Y[end_pos:])
+
+
 def save_dataset(V_tr, pred_blobs_tr, blobs_tr, V_te, pred_blobs_te, blobs_te, name):
     np.save('{}-vtr.npy'.format(name), V_tr)
     np.save('{}-pbtr.npy'.format(name), pred_blobs_tr)
@@ -515,6 +526,10 @@ def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random, flat=Tru
                     cnt += 1
             #roi_set.append(rois)
     return np.array(rois)
+
+'''
+Neural network utils
+''' 
 
 if __name__ == '__main__':
     import jsrt

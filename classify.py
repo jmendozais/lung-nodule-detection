@@ -167,11 +167,13 @@ def create_training_set(data, y_blobs):
     return X, Y
 '''
 
-def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs, array_class='numpy'):
+def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs, array_class='numpy', container=None, suffix=None):
+    print (feature_set.__class__, pred_blobs.__class__, real_blobs.__class__, array_class, container, suffix)
     if array_class == 'numpy':
+        print 'call numpy create'
         return _create_training_set_from_feature_set_numpy(feature_set, pred_blobs, real_blobs)
     elif array_class == 'hdf5':
-        return _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blobs)
+        return _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blobs, container=container, suffix=suffix)
 
 def _create_training_set_from_feature_set_numpy(feature_set, pred_blobs, real_blobs):
     MAX_DIST = 35
@@ -220,33 +222,37 @@ def _create_training_set_from_feature_set_numpy(feature_set, pred_blobs, real_bl
 
     X = np.array(X)
     Y = np.array(Y)
+    print type(X), type(Y)
     return X, Y
 
-def _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blobs, chunk_size=10000):
+def _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blobs, container, chunk_size=10000, suffix=None):
     MAX_DIST = 35
     size = len(real_blobs)
+
     total_rois = 0
     for i in range(size):
         total_rois += len(pred_blobs[i])
     output_shape = (total_rois,) + feature_set[0][0].shape
+    chunk_shape = (min(chunk_size, size),) + feature_set[0][0].shape
+    max_shape = (None,) + feature_set[0][0].shape
      
-    f = h5py.File("array{}.h5".format(time.time()), "w")
-    X = f.create_dataset("X", output_shape, chunks=(min(chunk_size, total_rois),) + feature_set[0][0].shape, maxshape=(None,) + feature_set[0][0].shape, dtype='float32')
-    Y = np.zeros(shape=(total_rois,))
+    print(container)
 
     print "Creating positives ..."
+    print('X_{}'.format(suffix))
+    X = container.create_dataset("X_{}".format(suffix), output_shape, chunks=chunk_shape, maxshape=max_shape, dtype='float32')
+    Y = np.zeros(shape=(total_rois,))
+
     idx = 0
     for i in range(size):
         if real_blobs[i][2] == -1:
             continue
         nb = []
-        tmp = []
         for j in range(len(pred_blobs[i])):
             x, y, z = pred_blobs[i][j]#
             dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
-            if dst < MAX_DIST:
+            if dst <= MAX_DIST:
                 nb.append((dst, j))
-                tmp.append(pred_blobs[i][j])
 
         nb = sorted(nb)
         if len(nb) == 0:
@@ -255,8 +261,7 @@ def _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blo
         X[idx] = feature_set[i][nb[0][1]]
         Y[idx] = 1
         idx += 1
-    
-    # create negatives
+
     print "Creating negatives ..."
     for i in range(size):
         neg_idx = []
@@ -266,10 +271,9 @@ def _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blo
             if dst > MAX_DIST:
                 neg_idx.append(j)
 
-        for idx in neg_idx:
-            X[idx] = feature_set[i][idx]
+        for j in neg_idx:
+            X[idx] = feature_set[i][j]
             idx += 1
-
     return X, Y
 
 def create_training_set_for_detector(feature_set, pred_blobs, real_blobs):
@@ -311,8 +315,6 @@ def create_training_set_for_detector(feature_set, pred_blobs, real_blobs):
     X = np.array(X)
     Y = np.array(Y)
     return X, Y
-
-
 
 def train(X, Y, clf, scaler, selector, weights=False):
     iters = 1

@@ -30,6 +30,7 @@ from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.optimizers import SGD, Adadelta, Adagrad
 from keras.utils import np_utils, generic_utils, layer_utils
 from six.moves import range
+import gc
 
 import classify
 from detect import *
@@ -88,6 +89,12 @@ class BaselineModel(object):
 
         self.name = name
         self.roi_size = 64
+        self.dataset_type = 'numpy'
+        self.file = None # datasets_file
+
+    def __del__(self):
+        if self.file != None:
+            self.file.close()
 
     @property
     def roi_size(self):
@@ -98,6 +105,44 @@ class BaselineModel(object):
         self._roi_size = value
         self.dsize = (int(value * 1.15), int(value * 1.15))
 
+    def create_datasets_file(self, datasets_filename):
+        if self.file != None:
+            self.file.close()
+        self.file = h5py.File('data/' + datasets_filename + '.hdf5', 'w')
+
+    def open_datasets_file(self, datasets_filename):
+        if self.file != None:
+            self.file.close()
+        print('Opening file {}'.format('data/' + datasets_filename + '.hdf5'))
+        self.file = h5py.File('data/' + datasets_filename + '.hdf5', 'r')
+
+    def get_roiset(self, size):
+        rois = []
+        pred_blobs = []
+        for i in range(size):
+            rois.append(self.file['rois_{}'.format(i)])
+            pred_blobs.append(self.file['pred_blobs_{}'.format(i)][:])
+            print("roi len {}, pred_blobs {}".format(len(rois[0]), len(pred_blobs[0])))
+        return np.array(rois), np.array(pred_blobs)
+
+    def get_datasets(self, fold):
+        X_train_pos = self.file['fold_{}'.format(fold)]['X_train_pos']
+        X_train_pos = X_train_pos[:]
+        X_train_neg = self.file['fold_{}'.format(fold)]['X_train_neg']
+        Y_train_pos = np.zeros(shape=(len(X_train_pos),2), dtype=np.int)
+        Y_train_pos.T[1] = 1
+        Y_train_neg = np.zeros(shape=(len(X_train_neg),2), dtype=np.int)
+        Y_train_neg.T[0] = 1
+
+        X_test_pos = self.file['fold_{}'.format(fold)]['X_test_pos']
+        X_test_pos = X_test_pos[:]
+        X_test_neg = self.file['fold_{}'.format(fold)]['X_test_neg']
+        Y_test_pos = np.zeros(shape=(len(X_test_pos),2), dtype=np.int)
+        Y_test_pos.T[1] = 1
+        Y_test_neg = np.zeros(shape=(len(X_test_neg),2), dtype=np.int)
+        Y_test_neg.T[0] = 1
+        return (X_train_pos, X_train_neg), (Y_train_pos, Y_train_neg), (X_test_pos, X_test_neg), (Y_test_pos, Y_test_neg)
+        
     def load(self, name):
         # Model
         if path.isfile('{}_extractor.pkl'.format(name)):
@@ -141,57 +186,48 @@ class BaselineModel(object):
         if self.feature_set != None:
             np.save(self.feature_set, '{}_fs.npy'.format(self.extractor.name))
         '''
-    def preprocess_rois(self, roi_set, range_values):
+    def preprocess_rois(self, rois, range_values):
         assert self.preprocess_roi != 'none'
         range_non_channel = [range_values.T[0].min(), range_values.T[1].max()]
         result = []
-        has_op = False
-        for i in range(len(roi_set)):
-            if i % 10 == 0: 
-                print 'preprocess rois {} '.format(i)
-            rois = roi_set[i]
+        for j in range(len(rois)): 
             result.append([])
-            for j in range(len(rois)): 
-                result[-1].append([])
-                for k in range(len(rois[j])):
-                    if 'norm' in self.preprocess_roi:
-                        result[-1][-1].append(normalize(rois[j][k], np.ones(shape=rois[j][k].shape)))
-                    if 'norm3' in self.preprocess_roi:
-                        norm = normalize(rois[j][k], np.ones(shape=rois[j][k].shape))
-                        result[-1][-1].append(norm)
-                        result[-1][-1].append(norm)
-                        result[-1][-1].append(norm)
-                    if 'heq' in self.preprocess_roi:
-                        result[-1][-1].append(equalize_hist(rois[j][k]))
-                    if 'nlm' in self.preprocess_roi:
-                        result[-1][-1].append(denoise_nl_means(rois[j][k]))
-                    if 'max_white' in self.preprocess_roi:
-                        result[-1][-1].append(max_white(rois[j][k], range_values[k][0], range_values[k][1]))
-                    if 'stretch' in self.preprocess_roi:
-                        result[-1][-1].append(stretch(rois[j][k], range_values[k][0], range_values[k][1]))
+            for k in range(len(rois[j])):
+                if 'norm' in self.preprocess_roi:
+                    result[-1].append(normalize(rois[j][k], np.ones(shape=rois[j][k].shape)))
+                if 'norm3' in self.preprocess_roi:
+                    norm = normalize(rois[j][k], np.ones(shape=rois[j][k].shape))
+                    result[-1].append(norm)
+                    result[-1].append(norm)
+                    result[-1].append(norm)
+                if 'heq' in self.preprocess_roi:
+                    result[-1].append(equalize_hist(rois[j][k]))
+                if 'nlm' in self.preprocess_roi:
+                    result[-1].append(denoise_nl_means(rois[j][k]))
+                if 'max_white' in self.preprocess_roi:
+                    result[-1].append(max_white(rois[j][k], range_values[k][0], range_values[k][1]))
+                if 'stretch' in self.preprocess_roi:
+                    result[-1].append(stretch(rois[j][k], range_values[k][0], range_values[k][1]))
 
-                result[-1][-1] = np.array(result[-1][-1])
-                if 'grey_world' in self.preprocess_roi:
-                    result[-1][-1].append(grey_world(rois[j], range_non_channel[0], range_non_channel[1]))
-                if 'retinex' in self.preprocess_roi:
-                    result[-1][-1].append(retinex(rois[j], range_non_channel[0], range_non_channel[1]))
-                if 'retinex_adjust' in self.preprocess_roi:
-                    result[-1][-1].append(retinex_adjust(rois[j], range_non_channel[0], range_non_channel[1]))
-
-                has_op = len(result[-1][-1]) > 0
             result[-1] = np.array(result[-1])
-        if not has_op:
-            return roi_set
+            if 'grey_world' in self.preprocess_roi:
+                result[-1].append(grey_world(rois[j], range_non_channel[0], range_non_channel[1]))
+            if 'retinex' in self.preprocess_roi:
+                result[-1].append(retinex(rois[j], range_non_channel[0], range_non_channel[1]))
+            if 'retinex_adjust' in self.preprocess_roi:
+                result[-1].append(retinex_adjust(rois[j], range_non_channel[0], range_non_channel[1]))
+
+        result = np.array(result)
         return np.array(result)  
 
-    def create_rois(self, data, blob_set, mode=None, pad=True):
+    def create_rois(self, data, blob_set, mode=None, pad=True, save=False):
         pad_size = 1.15
         if pad:
             dsize = (int(self.roi_size * pad_size), int(self.roi_size * pad_size))
         else:
             dsize = (self.roi_size, self.roi_size)
         print 'dsize: {} rsize: {}'.format(dsize, self.roi_size)
-        #input_shape Create image set
+        # Create image set
         img_set = []
 
         print 'Calc min max value'
@@ -210,7 +246,9 @@ class BaselineModel(object):
         print 'Min {} Max {}'.format(min_value, max_value)
 
         img_set = []
+        num_blobs = 0
         for i in range(len(data)):
+            num_blobs += len(blob_set[i])
             if i % 10 == 0:
                 print 'Create rois. Preprocess image {}.'.format(i)
             img, lung_mask = data.get(i, downsample=self.downsample) # img 2048 side, lung mask downsampled
@@ -274,14 +312,14 @@ class BaselineModel(object):
         for i in range(len(img_set)):
             img = img_set[i]
             if i % 10 == 0:
-                print 'img shape {}'.format(img.shape)
-                print 'img[0] shape {}'.format(img[0].shape)
+                print 'extract rois {} img shape {}'.format(i, img.shape)
             rois = []
             masks = []
 
             if self.streams == 'seg' :
                 _, masks = adaptive_distance_thold(img[LCE_POS], blob_set[i])
             
+            rois = []
             for j in range(len(blob_set[i])):
                 sample_factor = 1
                 if not self.downsample:
@@ -317,9 +355,13 @@ class BaselineModel(object):
                     for k in range(img.shape[0]):
                         roi[k] *= mask.astype(np.float32)
                 '''
-                
-                rois.append(np.array(roi))
+                rois.append(roi)
+
             rois = np.array(rois)
+
+            if save:
+                rois = self.file.create_dataset('tmp_{}'.format(i), data=rois)
+
             roi_set.append(rois)
             
             # Update range values
@@ -333,9 +375,17 @@ class BaselineModel(object):
             for i in range(len(rois)):
                 util.imwrite('after_heq_{}.jpg'.format(i), rois[i])
             '''
+            gc.collect()
 
         if self.preprocess_roi != 'none':
-            self.preprocess_rois(roi_set, range_values)
+            for i in range(len(roi_set)):
+                if i % 10 == 0: 
+                    print 'preprocess rois {} '.format(i)
+                if save:
+                    roi_set[i] = self.file.create_dataset('rois_{}'.format(i), data=self.preprocess_rois(roi_set[i], range_values))
+                    self.file.create_dataset('pred_blobs_{}'.format(i), data=blob_set[i])
+                else:
+                    roi_set[i] = self.preprocess_rois(roi_set[i], range_values)
 
         '''
             # Fix segment
@@ -368,9 +418,8 @@ class BaselineModel(object):
             else:
                 roi_set.append(rois)
         '''
-
         return np.array(roi_set)
-
+    
     def detect_blobs(self, img, lung_mask, threshold=0.5):
         sampled, lce, norm = preprocess(img, lung_mask)
         blobs, ci = wmci(lce, lung_mask, threshold)
@@ -677,7 +726,8 @@ class BaselineModel(object):
         return np.array(data_blobs), np.array(data_probs)
 
     def pretrain(self, model, X, fold=None, streams=False, nb_epoch=1):
-        self.network = neural.create_network(model, X.shape[1:], fold, streams)
+        cropped_shape = (self.roi_size, self.roi_size)
+        self.network = neural.create_network(model, (X.shape[1],) + cropped_shape, fold, streams)
         ae.pretrain_layerwise(self.network.network, X, nb_epoch=nb_epoch)
 
     def joint_training(self, model, X_train, Y_train, X_test, Y_test, fold=None):
@@ -687,18 +737,52 @@ class BaselineModel(object):
         X_train, Y_train, X_test, Y_test = self.network.preprocess_augment(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=cropped_shape)
         self.helper_model = ae.swwae_train(self.network.network, X_train, Y_train, X_test, Y_test, finetune_epochs=self.all_epochs, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
 
+    def _split_data_pos_neg(self, X, Y):
+        is_pos = Y.T[1]
+        end_pos = 0
+        for i in range(len(is_pos)):
+            if is_pos[i] < 1:
+                end_pos = i
+                break
+
+        return (X[:end_pos], X[end_pos:]), (Y[:end_pos], Y[end_pos:])
+            
     def unsupervised_augment(self, model, X_train, Y_train, X_test, Y_test, fold=None, streams=False, nb_epoch=1, pos_neg_ratio=1.0, mode=None):
         cropped_shape = (self.roi_size, self.roi_size)
-        self.network = neural.create_network(model, (X_train.shape[1],) + cropped_shape, fold, streams)
+        channels = X_train.shape[1] if self.args.datasets == None else X_train[0].shape[1]
+        self.network = neural.create_network(model, (channels,) + cropped_shape, fold, streams)
         self.load_cnn_weights('data/{}_fold_{}'.format(model, fold))
 
         if mode in {'add-random'}:
             self.network.generator.ratio = pos_neg_ratio
             self.network.generator.mode = 'balance_dataset'
 
-        X_train, Y_train, X_test, Y_test = self.network.preprocess_augment(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=cropped_shape)
-        self.helper_model = ae.swwae_augment(self.network.network, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
-        #return history
+        if self.args.datasets == None:
+            X_train, Y_train, X_test, Y_test = self.network.preprocess_augment(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=cropped_shape, disable_perturb=False)
+            '''
+            X_train = (np.array(X_train), np.array(X_train))
+            X_test = (np.array(X_test), np.array(X_test))
+            Y_train = (np.array(Y_train), np.array(Y_train))
+            Y_test = (np.array(Y_test), np.array(Y_test))
+            X_train, Y_train, X_test, Y_test = preprocess_dataset(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), config=self.args.preprocess_dataset, mode='hdf5')
+            X_train, Y_train = self._split_data_pos_neg(X_train, Y_train)
+            X_test, Y_test = self._split_data_pos_neg(X_test, Y_test)
+            std = np.std(X_train[0])
+            self.network.generator.intensity_shift_range = (-1*std, std)
+            '''
+            #self.network.preprocessor = get_preprocessor(mode='hdf5')
+            #self.network.preprocessor.fit(X_train[0], Y_train[0])
+            
+            self.helper_model = ae.swwae_augment(self.network.network, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
+            #self.helper_model = ae.swwae_augment_hdf5(self.network.network, self.network.generator, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
+
+        else:
+            std = np.std(X_train[0])
+            factor = 0.2
+            self.network.generator.intensity_shift_range = (-1*std*factor, std*factor)
+            self.network.preprocessor = get_preprocessor()
+            self.network.preprocessor.fit(X_train[0], Y_train[0])
+            self.helper_model = ae.swwae_augment_hdf5(self.network.network, self.network.generator, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
 
     def fit_transform_bovw(self, rois_tr, pred_blobs_tr, blobs_tr, rois_te, pred_blobs_te, blobs_te,  model):
         X_tr, Y_tr = classify.create_training_set_from_feature_set(rois_tr, pred_blobs_tr, blobs_tr)

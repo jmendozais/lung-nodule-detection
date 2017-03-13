@@ -29,7 +29,7 @@ def gaussian_smooth(x, ksize=5, sigma=0.5):
     smt = cv2.GaussianBlur(x, ksize, sigma)
     return smt
 
-class Preprocessor:
+class NumpyPreprocessor:
     def __init__(
         self,
         samplewise_center=False, # set each sample mean to 0
@@ -149,7 +149,109 @@ class Preprocessor:
             X -= self.zmuv_mean
             X /= self.zmuv_std + util.EPS
             
+        print("np zmuv mean {} std {}".format(self.zmuv_mean, self.zmuv_std))
         return X
+
+class Preprocessor:
+    def __init__(self, zmuv=True, **kwargs):
+        self.zmuv = zmuv
+            
+    def fit(self, X, Y):
+        if isinstance(X, np.ndarray):
+            if self.zmuv == True:
+                self.zmuv_mean = np.mean(X) 
+                self.zmuv_std = np.std(X)
+        else:
+            chunksize = X.chunks[0]
+            if self.zmuv == True:
+                i = 0
+                sum_ = .0
+                while True:
+                    start = i * chunksize
+                    end = min((i + 1) * chunksize, X.shape[0])
+                    X_chunk = X[start:end]
+                    sum_ += X_chunk.sum()
+                    i += 1
+                    if end == X.shape[0]:
+                        break
+                self.zmuv_mean = sum_/X.shape[0]
+                self.zmuv_std = .0
+                i = 0
+                sum_ = .0
+                while True:
+                    start = i * chunksize
+                    end = min((i + 1) * chunksize, X.shape[0])
+                    X_chunk = X[start:end]
+                    sum_ += np.sum(np.power(X_chunk - self.zmuv_mean, 2))
+                    
+                    i += 1
+                    if end == X.shape[0]:
+                        break
+
+                size_ = np.product([dim for dim in X.shape])
+                self.zmuv_std = math.sqrt(sum_/(size_-1))
+
+    def transform(self, X):
+        if isinstance(X, np.ndarray):
+            return (X - self.zmuv_mean)/self.zmuv_std
+        else:
+            chunksize = X.chunks[0]
+            if self.zmuv == True:
+                i = 0
+                while True:
+                    start = i * chunksize
+                    end = min((i + 1) * chunksize, X.shape[0])
+                    X[start:end] = (X[start:end] - self.zmuv_mean)/self.zmuv_std
+                    i += 1
+                    if end == X.shape[0]:
+                        break
+                return X
+
+    def fit_transform(self, X, Y):
+        self.fit(X, Y)
+        return self.transform(X)
+
+def get_preprocessor(config='zmuv'):
+    params = None
+    if config == 'zmuv':
+        params = {'zmuv': True}
+
+    return Preprocessor(**params)
+
+def preprocess_dataset(preprocessor, X_train, Y_train, X_test=None, Y_test=None, streams=False):
+    print("Preprocess dataset with preprocessor {}".format(preprocessor))
+    gc.collect()
+    if streams:
+        num_streams = len(X_train)
+        num_channels = len(X_train[0][0])
+
+        print 'Preprocess train set ...'
+        print preprocessor.__dict__
+        X_train[0] = preprocessor.fit_transform(X_train[0], Y_train)
+        for i in range(1, num_streams):
+            X_train[i] = preprocessor.transform(X_train[i])
+        gc.collect()
+
+        print "Preprocess test set ..."
+        if X_test != None:
+            X_test[0] = preprocessor.transform(X_test[0])
+            for k in range(1, num_streams):
+                X_test[k] = preprocessor.transform(X_test[k])
+            gc.collect()
+    else:
+        num_channels = len(X_train[0])
+        print "Preprocess train set ..."
+        print preprocessor.__dict__
+        print type(X_train)
+        X_train = preprocessor.fit_transform(X_train, Y_train)
+        gc.collect()
+
+        print "Preprocess test set ..."
+        if X_test != None:
+            X_test = preprocessor.transform(X_test)
+            gc.collect()
+
+    return X_train, Y_train, X_test, Y_test
 
 class ImageDataGenerator:
 
@@ -158,7 +260,7 @@ class ImageDataGenerator:
         translation_range=(0.,0.), 
         flip=False,
         zoom_range=(1.,1.),
-        intensity_shift_std=True,
+        intensity_shift_std=0.1,
         output_shape=(64, 64),
 
         batch_size=32,
@@ -174,6 +276,7 @@ class ImageDataGenerator:
         self.flip = flip
         self.zoom_range = zoom_range
         self.intensity_shift_std = intensity_shift_std
+        self.intensity_shift_range = None
         self.output_shape = output_shape
 
         self.batch_size = batch_size
@@ -267,12 +370,15 @@ class ImageDataGenerator:
                 new_x[i] = gaussian_smooth(new_x[i], self.gs_size, self.gs_sigma)
             if self.gn_std != .0:
                 new_x[i] += gaussian_noise(new_x[i], self.gn_mean, self.gn_std)
+
         '''
         tmp = np.random.randint(10000)
         for i in range(len(new_x)):
             util.imwrite('aug_trfs_{}_{}.jpg'.format(tmp, i), new_x[i])
             print 'aug {} {} : {} {}'.format(tmp, i, np.min(new_x[i]), np.max(new_x[i]))
         '''
+        
+        #print("ptb pars {}".format((self.translation_range, self.zoom_range, self.rotation_range, self.flip, self.intensity_shift_range, self.gs_sigma, self.gn_std)))
          
         return np.array(new_x)
 
@@ -317,9 +423,6 @@ class ImageDataGenerator:
 
     def _augment_hdf5(self, X, y, cropped_shape, disable_perturb=False):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
-        if self.intensity_shift_std:
-            std = np.std(X)
-            self.intensity_shift_range = (-std, std)
         
         factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
         # balance
@@ -363,9 +466,6 @@ class ImageDataGenerator:
 
     def _augment_numpy(self, X, y, cropped_shape, disable_perturb=False):
         assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
-        if self.intensity_shift_std:
-            std = np.std(X)
-            self.intensity_shift_range = (-std, std)
         
         factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
         # balance
@@ -428,7 +528,9 @@ class ImageDataGenerator:
                     for k in range(len(aX[i])):
                         util.imwrite('img_{}_{}.jpg'.format(i, k), aX[i][k])
                 '''
+                #print("{} img mean {} min,max {}".format(i, np.mean(aX[i]), (np.min(aX[i]), np.max(aX[i]))))
                 x = self.perturb(aX[i])
+                #print("pert mean {} min,max {}".format(np.mean(x), (np.min(x), np.max(x))))
                 '''
                 if i < 96:
                     for k in range(len(aX[i])):
@@ -438,90 +540,108 @@ class ImageDataGenerator:
             aX = None
             gc.collect()
             return np.array(new_X), ay    
-    '''
-    def augment2(self, X, y, output_shape):
-        assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
 
-        factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
-        # balance
-        print 'Mode: {} ...'.format(self.mode)
-        if self.mode == 'balance_batch':
-            idx = y.T[1]
-            positives = X[idx > 0]
-            negatives = X[idx == 0]
-            l_pos = y[idx > 0][0]
-            l_neg = y[idx == 0][0]
-            aX = np.zeros((2 * negatives.shape[0],) + output_shape, dtype=X[0].dtype)
-            ay = np.zeros((2 * negatives.shape[0],) + y[0].shape, dtype=y[0].dtype)
-            n_batches = int(math.ceil(float(2 * negatives.shape[0]) / self.batch_size))
+    def fit(self, X):
+        assert isinstance(X, np.ndarray), "Perturbation object fit function only supports numpy arrays"
+        std = np.std(X)
+        self.intensity_shift_range = (-self.intensity_shift_std*std, self.intensity_shift_std*std)
 
-            for batch_idx in range(n_batches):
-                begin = batch_idx * (self.batch_size / 2)
-                end = min(begin + (self.batch_size / 2), negatives.shape[0]) 
-                chunk = end - begin
-                b_idx = self.rng.uniform(size=(chunk,))
-                b_idx = np.floor(b_idx * positives.shape[0]).astype(np.int)
-                for i in range(chunk):
-                    aX[2*begin + i] = self.perturb(negatives[begin + i])
-                    aX[2*begin + chunk + i] = self.perturb(positives[b_idx[i]])
+class DataGenerator:
+    def __init__(self, input, output, batch_size, perturb_func, data_shape):
+        self.input = input
+        self.output = output
+        self.batch_size = batch_size
+        self.perturb_func = perturb_func
 
-                ay[2*begin:2*begin + chunk] = np.full((chunk,) + l_neg.shape, dtype=l_neg.dtype, fill_value=l_neg)
-                ay[2*begin + chunk:2*(begin + chunk)] = np.full((end - begin,) + l_pos.shape, dtype=l_pos.dtype, fill_value=l_pos)
-
-        elif self.mode == 'balance_dataset':
-            aX = X.copy()
-            ay = y.copy()
-            for i in range(X.shape[0]):
-                if y[i][1] > 0:
-                    aXi = np.full((factor,) + X[i].shape, dtype=X[i].dtype, fill_value=X[i])
-                    aX = np.append(aX, aXi, axis=0)
-                    ayi = np.full((factor,) + y[i].shape, dtype=y[i].dtype, fill_value=y[i])
-                    ay = np.append(ay, ayi, axis=0)
-            seed = self.rng.randint(1, 10e6) 
-            np.random.seed(seed) 
-            np.random.shuffle(aX) 
-            np.random.seed(seed)
-            np.random.shuffle(ay)
-            # transform
-            new_X = []
-            for i in range(aX.shape[0]):
-                x = self.perturb(aX[i])
-                new_X.append(x)
-                aX = np.array(new_X)
-
-        return aX, ay
-    def online_augment(self, X, y):
-        assert self.batch_size % 2 == 0, 'Batch size should be even (batch_size = {}).'.format(self.batch_size)
-        factor = int((float(self.ratio * (len(y) - np.sum(y.T[1]))) / np.sum(y.T[1])))
-        # balance
-        print 'Mode: {} ...'.format(self.mode)
-        if self.mode == 'balance_batch':
-            idx = y.T[1]
-            positives = X[idx > 0]
-            negatives = X[idx == 0]
-            l_pos = y[idx > 0][0]
-            l_neg = y[idx == 0][0]
-            n_batches = int(math.ceil(float(2 * negatives.shape[0]) / self.batch_size))
-            for batch_idx in range(n_batches):
-                begin = batch_idx * (self.batch_size / 2)
-                end = min(begin + (self.batch_size / 2), negatives.shape[0]) 
-                chunk = end - begin
-
-                aX = np.zeros((2 * chunk,) + X[0].shape, dtype=X[0].dtype)
-                aY = np.zeros((2 * chunk,) + y[0].shape, dtype=y[0].dtype)
-
-                aX[0:chunk] = negatives[begin:end]
-                ay[0:chunk] = np.full((chunk,) + l_neg.shape, dtype=l_neg.dtype, fill_value=l_neg)
-            
-                b_idx = self.rng.uniform(size=(chunk,))
-                b_idx = np.floor(b_idx * positives.shape[0]).astype(np.int)
-
-                aX[chunk:2*chunk] = positives[b_idx]
-                ay[chunk:2*chunk] = np.full((end - begin,) + l_pos.shape, dtype=l_pos.dtype, fill_value=l_pos)
-                yield aX, ay
-        elif self.mode == 'balance_dataset':
-            print "ERR: Not supported"
+        self.step = int(batch_size/2)
+        self.len_pos = len(input[input.keys()[0]][0])
+        self.len_neg = len(input[input.keys()[0]][1])
+        print("Data generator len pos {} len neg {} data_shape {}".format(self.len_pos, self.len_neg, data_shape))
+        
         '''
+        if isinstance(input[input.keys()[0]], np.ndarray):
+            for k in self.input:
+                input[k] = np.hstack(input[k], input[k])
+        '''
+
+        self.data_shape = data_shape
+        self.offset = 0
+
+
+    def next(self):
+        if self.offset + self.step > self.len_neg: 
+            self.offset = 0
+
+        batch_input = {}
+        pos_idx = np.random.randint(0, self.len_pos, self.step)
+        for k in self.input:
+            input_ = np.zeros(shape = (2*self.step,) + self.data_shape, dtype=self.input[k][0][0].dtype)
+            pos = self.input[k][0][pos_idx]
+            neg = self.input[k][1][self.offset:(self.offset + self.step)]
+            for i in range(self.step):
+                input_[i] = self.perturb_func(pos[i])
+            for i in range(self.step):
+                input_[self.step + i] = self.perturb_func(neg[i])
+            batch_input[k] = input_
+
+        batch_output = {}
+        for k in self.output:
+            output_shape = self.output[k][0][0].shape
+            output_ = np.zeros(shape = (2*self.step,) + output_shape, dtype=self.output[k][0][0].dtype)
+            output_[:self.step] = self.output[k][0][pos_idx]
+            output_[self.step:] = self.output[k][1][self.offset:(self.offset + self.step)]
+            batch_output[k] = output_
+
+        self.offset += self.step
+
+        return batch_input, batch_output 
+
+    def __iter__(self):
+        return self
+
+    def __next__(self, *args, **kwargs):
+        return self.next(*args, **kwargs)
+
+class DataGeneratorOnMemory:
+    def __init__(self, input, output, batch_size, perturb_func, data_shape):
+        self.input = input
+        self.output = output
+        self.batch_size = batch_size
+        self.perturb_func = perturb_func
+
+        self.step = int(batch_size)
+        self.length= len(input[input.keys()[0]][0])
+        
+        self.data_shape = data_shape
+        self.offset = 0
+
+    def next(self):
+        if self.offset + self.step > self.length: 
+            self.offset = 0
+
+        batch_input = {}
+        for k in self.input:
+            input_ = np.zeros(shape = (self.step,) + self.data_shape, dtype=self.input[k][0][0].dtype)
+            data_ = self.input[k][0][self.offset:(self.offset + self.step)]
+            for i in range(self.step):
+                #input_[i] = self.perturb_func(data_[i])
+                input_[i] = data_[i]
+                #print ("{} input mean {} max min {}, perturbed mean {} max min {}".format(i, np.mean(data_[i]), (np.max(data_[i]), np.min(data_[i])), np.mean(input_[i]), (np.max(input_[i]), np.min(input_[i]))))
+            batch_input[k] = input_
+
+        batch_output = {}
+        for k in self.output:
+            batch_output[k] = self.output[k][0][self.offset:(self.offset + self.step)]
+
+        self.offset += self.step
+            
+        return batch_input, batch_output 
+
+    def __iter__(self):
+        return self
+
+    def __next__(self, *args, **kwargs):
+        return self.next(*args, **kwargs)
 
 # Test
 if __name__ == '__main__':
@@ -535,7 +655,6 @@ if __name__ == '__main__':
 
     augment_params = {'output_shape':(50, 50), 'ratio':1, 'batch_size':32, 'rotation_range':(-5, 5), 'translation_range':(-0.05, 0.05), 'flip':True, 'mode':'balance_batch', 'zoom_range':(1.0, 1.2)}
     gen = ImageDataGenerator(**augment_params)
-
     for i in range(10):
         print 'rnd_{}_{}'.format(i, fname)
         rnd_img = random_transform(img.astype("float32"), 15, 0.1, 0.1, True, False)
@@ -544,4 +663,6 @@ if __name__ == '__main__':
 
     ans = gen.centering_crop([img])
     util.imwrite('pos_{}'.format(fname), ans[0][0])
-    
+
+
+

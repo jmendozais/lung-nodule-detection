@@ -21,15 +21,16 @@ from keras.optimizers import SGD, Adadelta, Adagrad, Adam
 from keras.utils import np_utils, generic_utils
 from keras.regularizers import WeightRegularizer
 from six.moves import range
-from augment import ImageDataGenerator, Preprocessor
 from sklearn.externals import joblib
 import util
 import classify
+from augment import *
 from resnet import resnet_cifar10 as resnet
 
 # Layers
 from keras.engine import Layer
 from keras import backend as K
+
 class Softmax4D(Layer):
     def __init__(self, axis=-1,**kwargs):
         self.axis=axis
@@ -224,7 +225,6 @@ def standard_cnn_ldp(nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[
 
 class StageScheduler(keras.callbacks.Callback):
     def __init__(self, stages=[], decay=0.1):
-        #super(StageScheduler, self).init()
         sorted(stages)
         self.stages = stages
         self.idx = 0
@@ -249,7 +249,6 @@ class LossHistory(keras.callbacks.Callback):
 
 class ModelCheckpoint(keras.callbacks.Callback):
     def __init__(self, filepath, verbose=0, epoch_interval=5):
-        #super(Callback, self).__init__()
         self.verbose = verbose
         self.filepath = filepath
         self.epoch_interval = epoch_interval
@@ -314,6 +313,7 @@ class NetModel:
         joblib.dump(self.preprocessor, '{}_pre.pkl'.format(name))
         joblib.dump(self.generator, '{}_gen.pkl'.format(name))
 
+    # DEPRECATED
     def preprocess_augment(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, disable_perturb=False):
         gc.collect()
         if streams:
@@ -384,140 +384,29 @@ class NetModel:
             new_X.append(self.generator.perturb(X[i]))
         print "End perturb ..."
 
-    def fit_online_data_aug(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, checkpoint_prefix=None, checkpoint_interval=5, loss='categorical_crossentropy'):
-        X_train, Y_train, X_test, Y_test = self.preprocess_augment(X_train, Y_train, X_test, Y_test, streams, cropped_shape, disable_perturb=True)
-        print 'Fit network ...'
-        opt = get_optimizer(self.training_params)
-        self.network.compile(loss=loss, optimizer=opt, metrics=['accuracy'])
-        data_size = len(X_train)
-        batch_size = self.training_params['batch_size']
 
-        #nb_iterations = self.training_params['nb_iterations']
-        nb_epoch = self.training_params['nb_epoch']
-        #nb_epoch = nb_iterations * batch_size / data_size
-        nb_iterations = (data_size/batch_size) * nb_epoch
-
-        loss_bw_history = LossHistory()
-        callbacks = [loss_bw_history]
-
-        if checkpoint_prefix != None:
-            checkpoint_cb = ModelCheckpoint(verbose=True, filepath=checkpoint_prefix, epoch_interval=checkpoint_interval)
-            callbacks.append(checkpoint_cb)
-
-        if 'schedule' in self.training_params:
-            lr_scheduler = StageScheduler(self.training_params['schedule'])
-            callbacks.append(lr_scheduler)
-
-        schedule = self.training_params['schedule']
-        schedule_idx = 0
-        schedule_decay = 0.1
-        history = None
-        if X_test is None:
-            history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=callbacks, shuffle=False, validation_split=0.1, show_accuracy=True)
-        else:
-            #history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=callbacks, shuffle=False, validation_data=(X_test, Y_test))
-
-            import threading
-            tmp = []
-            t = threading.Thread(target=self.perturb_dataset, args=(X_train, tmp))
-            t.start()
-
-            t.join()
-            X_train_perturbed = np.array(tmp)
-            tmp = []
-            t = threading.Thread(target=self.perturb_dataset, args=(X_train, tmp,))
-            t.start()
-
-
-            start = 0
-            end = batch_size
-            
-            iter_per_epoch = int(data_size / batch_size)
-            epoch = 1
-            batch_losses = []
-            batch_metrics = []
-            loss_on_epochs = []
-            metrics_on_epochs = []
-            val_loss_on_epochs = []
-            val_metrics_on_epochs = []
-            loss_on_iterations = None
-            for i in range(nb_iterations):
-                X_batch = X_train_perturbed[start:end]
-                Y_batch = Y_train[start:end]
-                loss, metrics = self.network.train_on_batch(X_batch, Y_batch)
-
-                batch_losses.append(loss)
-                batch_metrics.append(metrics)
-
-                # End of epoch
-                if end >= data_size:
-                    print "Epoch {}".format(epoch)
-                    if loss_on_iterations == None:
-                       loss_on_iterations = batch_losses 
-                    else :
-                       loss_on_iterations += batch_losses 
-
-                    if epoch % checkpoint_interval == 0 and epoch > 0:
-                        self.network.save_weights((checkpoint_prefix + ".epoch_{}_weights.h5").format(epoch), overwrite=True)
-
-                    loss_on_epochs.append(np.mean(np.array(batch_losses)))
-                    metrics_on_epochs.append(np.mean(np.array(batch_metrics)))
-                    batch_losses = []
-                    batch_metrics = []
-
-                    print "Train {}".format((loss_on_epochs[-1], metrics_on_epochs[-1]))
-                    val_loss, val_metrics = self.network.evaluate(X_test, Y_test, batch_size=batch_size)
-                    val_loss_on_epochs.append(val_loss)
-                    val_metrics_on_epochs.append(val_metrics)
-                    print "Val {}".format((val_loss_on_epochs[-1], val_metrics_on_epochs[-1]))
-
-                    # Update learning rate
-                    print 'lr {}'.format(self.network.optimizer.lr.get_value())
-                    if schedule_idx < len(schedule):
-                        if epoch >= schedule[schedule_idx]:
-                            lr = self.network.optimizer.lr.get_value()
-                            self.network.optimizer.lr.set_value(float(lr * schedule_decay))
-                            schedule_idx += 1
-
-                    t.join()
-                    X_train_perturbed = np.array(tmp)
-                    tmp = []
-                    t = threading.Thread(target=self.perturb_dataset, args=(X_train, tmp,))
-                    t.start()
-
-                    start = 0
-                    end = batch_size
-                    epoch += 1
-                else:
-                    start += batch_size
-                    end += batch_size
-
-
-
-        gc.collect()
-        print_trainable_state(self.network.layers)
-
-        history = {}
-        history['loss'] = loss_on_epochs
-        history['val_loss'] = val_loss_on_epochs
-        history['loss_detail'] = loss_on_iterations
-        history['acc'] = metrics_on_epochs
-        history['val_acc'] = val_metrics_on_epochs
-
-        return history
-
-    '''
-    Fit with fixed data aug
-    '''
     def fit(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, checkpoint_prefix=None, checkpoint_interval=5, loss='categorical_crossentropy'):
-        X_train, Y_train, X_test, Y_test = self.preprocess_augment(X_train, Y_train, X_test, Y_test, streams, cropped_shape)
+
+        batch_size = self.training_params['batch_size']
+        nb_epoch = self.training_params['nb_epoch']
+        data_shape = (len(X_train[0]),) + self.generator.output_shape
+
+        self.preprocessor.fit(X_train, Y_train)
+        X_train, Y_train, X_test, Y_test = preprocess_dataset(self.preprocessor, X_train, Y_train, X_test, Y_test, streams)
+        self.generator.fit(X_train)
+
+        X_train, Y_train = util.split_data_pos_neg(X_train, Y_train)
+        X_test, Y_test = util.split_data_pos_neg(X_test, Y_test)
+
+        input_name = self.network.layers[0].name
+        output_name = self.network.layers[-1].name
+        train_gen = DataGenerator({input_name:[X_train[0], X_train[1]]}, {output_name:[Y_train[0], Y_train[1]]}, batch_size, self.generator.perturb, data_shape)
+        test_gen = DataGenerator({input_name:[X_test[0], X_test[1]]}, {output_name:[Y_test[0], Y_test[1]]}, batch_size, self.generator.perturb, data_shape)
 
         print 'Fit network ...'
         opt = get_optimizer(self.training_params)
 
         self.network.compile(loss=loss, optimizer=opt, metrics=['accuracy'])
-        batch_size = self.training_params['batch_size']
-        nb_epoch = self.training_params['nb_epoch']
 
         loss_bw_history = LossHistory()
         callbacks = [loss_bw_history]
@@ -530,13 +419,13 @@ class NetModel:
 
         history = None
         if X_test is None:
-            history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=callbacks, shuffle=False, validation_split=0.1, show_accuracy=True)
+            history = self.network.fit_generator(train_gen, 2*len(X_train[1]), nb_epoch, verbose=1, callbacks=callbacks)
         else:
-            history = self.network.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, callbacks=callbacks, shuffle=False, validation_data=(X_test, Y_test))
+            history = self.network.fit_generator(train_gen, 2*len(X_train[1]), nb_epoch, validation_data=test_gen, nb_val_samples=2*len(X_test[1]), verbose=1, callbacks=callbacks)
         gc.collect()
+
         print_trainable_state(self.network.layers)
 
-        print 'history obj'
         print history.history
         history.history['loss_detail'] = loss_bw_history.losses
         return history.history
@@ -561,18 +450,11 @@ class NetModel:
 Configurations
 '''
 
-default_augment_params = {'output_shape':(64, 64), 'ratio':1, 'batch_size':32, 'rotation_range':(-5, 5), 'translation_range':(-0.05, 0.05), 'flip':True, 'intensity_shift_std':True, 'mode':'balance_batch', 'zoom_range':(1.0, 1.2)}
+default_augment_params = {'output_shape':(64, 64), 'ratio':1, 'batch_size':32, 'rotation_range':(-5, 5), 'translation_range':(-0.05, 0.05), 'flip':True, 'intensity_shift_std':0.1, 'mode':'balance_batch', 'zoom_range':(1.0, 1.2)}
 default_preproc_params = {'zmuv':True}
-
-def lnd_a(input_shape):
-    network = standard_cnn(nb_modules=3, module_depth=1, nb_filters=[32, 64, 96], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 128], input_shape=input_shape, init='orthogonal')
 
 def lnd_a_3p(input_shape, repeats=1, nb_classes=2, base_filters=32):
     network = standard_cnn(nb_modules=3, module_depth=repeats, nb_filters=[base_filters, 2*base_filters, 3*base_filters], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal', nb_classes=2)
-    return network
-
-def lnd_a_3p_fat(input_shape):
-    network = standard_cnn(nb_modules=3, module_depth=1, nb_filters=[64, 128, 192], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal')
     return network
 
 def lnd_a_4p(input_shape, repeats):
@@ -871,7 +753,6 @@ def vgg16(mode='fc'):
     return model
 
 # Convnets
-
     
 def to_two_class_probs(y):
     Y = np.zeros((len(y), 2), dtype=np.float32)
@@ -880,11 +761,11 @@ def to_two_class_probs(y):
         Y[i][0] = 1.0 - y[i]
     return Y
 
-# utils
+# Utils
 
 def create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr,
                             feats_test=None, pred_blobs_test=None, real_blobs_test=None,
-                            streams='none', detector=False, dataset_type='numpy'):
+                            streams='none', detector=False, dataset_type='numpy', container=None):
     nb_classes = 2
     X_train, tmp, y_train = [], [], []
     
@@ -894,13 +775,13 @@ def create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr,
             if detector:
                 tmp, y_train = classify.create_training_set_for_detector(feats_tr[i], pred_blobs_tr, real_blobs_tr)
             else:
-                tmp, y_train = classify.create_training_set_from_feature_set(feats_tr[i], pred_blobs_tr, real_blobs_tr, dataset_type)
+                tmp, y_train = classify.create_training_set_from_feature_set(feats_tr[i], pred_blobs_tr, real_blobs_tr, dataset_type, container, 'train')
             X_train.append(tmp.astype('float32'))
     else:
         if detector: 
             X_train, y_train = classify.create_training_set_for_detector(feats_tr, pred_blobs_tr, real_blobs_tr)
         else:
-            X_train, y_train = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr, dataset_type)
+            X_train, y_train = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr, dataset_type, container=container, suffix='train')
         #X_train = X_train.astype('float32')
 
     X_test, Y_test = None, None
@@ -912,13 +793,13 @@ def create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr,
                 if detector:
                     tmp, y_test = classify.create_training_set_for_detector(feats_test[i], pred_blobs_test, real_blobs_test)
                 else:
-                    tmp, y_test = classify.create_training_set_from_feature_set(feats_test[i], pred_blobs_test, real_blobs_test, dataset_type)
+                    tmp, y_test = classify.create_training_set_from_feature_set(feats_test[i], pred_blobs_test, real_blobs_test, dataset_type, container, 'test')
                 X_test.append(tmp.astype('float32'))
         else:
             if detector:
                 X_test, y_test = classify.create_training_set_for_detector(feats_test, pred_blobs_test, real_blobs_test)
             else:
-                X_test, y_test = classify.create_training_set_from_feature_set(feats_test, pred_blobs_test, real_blobs_test, dataset_type)
+                X_test, y_test = classify.create_training_set_from_feature_set(feats_test, pred_blobs_test, real_blobs_test, dataset_type, container, 'test')
             #X_test = X_test.astype('float32')
 
     if detector:
@@ -983,12 +864,6 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
     elif model == 'd3p_c':
         network = dxp(input_shape, detector=detector, kernels=[32, 64, 64], blocks=3)
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
-
-    elif model == 'LND-A':
-        network = lnd_a(input_shape)
-        schedule=[20, 30, 35]
-        train_params = {'schedule':schedule, 'nb_epoch':3, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
-        net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
     elif model == '3P':
         network = lnd_a_3p(input_shape)
@@ -1130,7 +1005,7 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
 
     elif model == '3P-GN':
-        network = lnd_a_3p(input_shape)
+        network = lnd_a_3p(input_shape, base_filters=64)
         schedule=[35, 60, 60]
         train_params = {'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
@@ -1173,12 +1048,14 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
-    elif model in {'3P-br32', '3P-br32-uar24-rpi500', '3P-br32-uar24-rpi1000', '3p-br32-uar24-rpi1000-bal'}:
+    elif model in {'3P-br32', '3P-br32-is0.2', '3P-br32-uar24-rpi500', '3P-br32-uar24-rpi1000', '3p-br32-uar24-rpi1000-bal'}:
         network = lnd_a_3p(input_shape, base_filters=64)
         schedule=[50, 70, 70]
         train_params = {'schedule':schedule, 'nb_epoch':70, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
-        net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
+        augment_params = default_augment_params
+        augment_params['intensity_shift_std'] = 0.2
+        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
 
     elif model in {'3P-br40'}:
         network = lnd_a_3p(input_shape, base_filters=64)
@@ -1316,7 +1193,6 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
 
     elif model == 'LND-A-3P-TRFS':
-        #network = lnd_a_3p_fat(input_shape)
         network = lnd_a_3p(input_shape)
         schedule=[20, 30, 35]
         train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 
@@ -1326,7 +1202,6 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
         net_model = NetModel(network, train_params, augment_params)
 
     elif model == 'LND-A-3P-STR-SEG':
-        #network = lnd_a_3p_fat(input_shape)
         network = lnd_a_3p_streams(input_shape, 2)
         schedule=[20, 30, 35]
         train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 
@@ -1336,7 +1211,6 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
 
     elif model == 'LND-A-3P-STR-FOVEA':
-        #network = lnd_a_3p_fat(input_shape)
         network = lnd_a_3p_streams(input_shape, 2)
         schedule=[60, 60, 50]
         train_params = {'schedule':schedule, 'nb_epoch':60, 'batch_size':32, 
@@ -1346,7 +1220,6 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
         net_model = NetModel(network, train_params, augment_params, {})
 
     elif model == 'LND-3P-STR-TRF':
-        #network = lnd_a_3p_fat(input_shape)
         network = lnd_a_3p_streams(input_shape, 3)
         schedule=[20, 30, 35]
         train_params = {'schedule':schedule, 'nb_epoch':40, 'batch_size':32, 
