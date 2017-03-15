@@ -149,48 +149,90 @@ class NumpyPreprocessor:
             X -= self.zmuv_mean
             X /= self.zmuv_std + util.EPS
             
-        print("np zmuv mean {} std {}".format(self.zmuv_mean, self.zmuv_std))
         return X
+
+''' Numpy & HDF5 compatible functions ''' 
+
+def _mean(X, low, high):
+    chunksize = None
+    if isinstance(X, np.ndarray):
+        chunksize = X.shape[0] 
+    else:
+        chunksize = X.chunks[0]
+
+    i = 0
+    sum_ = .0
+    while True:
+        start = low + i * chunksize
+        end = min((i + 1) * chunksize, high)
+        X_chunk = X[start:end]
+        sum_ += X_chunk.sum()
+        i += 1
+        if end == high:
+            break
+
+    return sum_/(high - low)
+
+def _sum_squared_differences(X, low, high, mean):
+    chunksize = None
+    if isinstance(X, np.ndarray):
+        chunksize = X.shape[0] 
+    else:
+        chunksize = X.chunks[0]
+
+    i = 0
+    sum_ = .0
+    while True:
+        start = low + i * chunksize
+        end = min((i + 1) * chunksize, high)
+        X_chunk = X[start:end]
+        sum_ += np.sum(np.power(X_chunk - mean, 2))
+        i += 1
+        if end == high:
+            break
+    return sum_
+
+def _mean_std_balancing_pos_neg(X, Y):
+    split_pos = int(np.sum(Y.T[1]))
+    mean_pos = _mean(X, 0, split_pos)
+    mean_neg = _mean(X, split_pos, X.shape[0])
+    mean = (mean_pos + mean_neg)/2.0
+
+    ssd_pos = _sum_squared_differences(X, 0, split_pos, mean)
+    ssd_neg = _sum_squared_differences(X, split_pos, X.shape[0], mean)
+
+    len_neg = X.shape[0] - split_pos
+    pos_weight = len_neg * 1.0 / split_pos
+    
+    item_size = 1.0
+    for dim in X.shape:
+        item_size *= dim
+    item_size /= X.shape[0]
+
+    var_pos = ssd_pos * pos_weight / (len_neg * item_size - 1)
+    var_neg = ssd_neg / (len_neg * item_size - 1)
+    std = math.sqrt((var_pos + var_neg)/2.0)
+    
+    iters = int(len_neg/split_pos)
+    arr = X[0:split_pos]
+    for i in range(1, iters):
+        arr = np.vstack((arr, X[0:split_pos]))
+
+    arr = np.vstack((arr, X[split_pos:len(X)]))
+    
+    std_pos = math.sqrt(ssd_pos / (split_pos * item_size - 1))
+    std_neg = math.sqrt(ssd_neg / (len_neg * item_size - 1))
+
+    return mean, std
 
 class Preprocessor:
     def __init__(self, zmuv=True, **kwargs):
         self.zmuv = zmuv
-            
+
     def fit(self, X, Y):
-        if isinstance(X, np.ndarray):
-            if self.zmuv == True:
-                self.zmuv_mean = np.mean(X) 
-                self.zmuv_std = np.std(X)
-        else:
-            chunksize = X.chunks[0]
-            if self.zmuv == True:
-                i = 0
-                sum_ = .0
-                while True:
-                    start = i * chunksize
-                    end = min((i + 1) * chunksize, X.shape[0])
-                    X_chunk = X[start:end]
-                    sum_ += X_chunk.sum()
-                    i += 1
-                    if end == X.shape[0]:
-                        break
-                self.zmuv_mean = sum_/X.shape[0]
-                self.zmuv_std = .0
-                i = 0
-                sum_ = .0
-                while True:
-                    start = i * chunksize
-                    end = min((i + 1) * chunksize, X.shape[0])
-                    X_chunk = X[start:end]
-                    sum_ += np.sum(np.power(X_chunk - self.zmuv_mean, 2))
-                    
-                    i += 1
-                    if end == X.shape[0]:
-                        break
-
-                size_ = np.product([dim for dim in X.shape])
-                self.zmuv_std = math.sqrt(sum_/(size_-1))
-
+        if self.zmuv == True:
+            self.zmuv_mean, self.zmuv_std = _mean_std_balancing_pos_neg(X, Y)
+    
     def transform(self, X):
         if isinstance(X, np.ndarray):
             return (X - self.zmuv_mean)/self.zmuv_std
@@ -215,7 +257,6 @@ def get_preprocessor(config='zmuv'):
     params = None
     if config == 'zmuv':
         params = {'zmuv': True}
-
     return Preprocessor(**params)
 
 def preprocess_dataset(preprocessor, X_train, Y_train, X_test=None, Y_test=None, streams=False):
@@ -240,6 +281,7 @@ def preprocess_dataset(preprocessor, X_train, Y_train, X_test=None, Y_test=None,
             gc.collect()
     else:
         num_channels = len(X_train[0])
+
         print "Preprocess train set ..."
         print preprocessor.__dict__
         print type(X_train)
@@ -471,16 +513,7 @@ class ImageDataGenerator:
         # balance
         print 'Mode: {} ...'.format(self.mode)
         if self.mode == 'balance_batch':
-            '''
-            idx = y.T[1].astype(np.int)
-            '''
             idx = y.T[1]
-            '''
-            positives = X[idx > 0]
-            negatives = X[idx == 0]
-            l_pos = y[idx > 0][0]
-            l_neg = y[idx == 0][0]
-            '''
             thold = 0.8
             positives = X[idx >= thold]
             negatives = X[idx < thold]
@@ -663,6 +696,4 @@ if __name__ == '__main__':
 
     ans = gen.centering_crop([img])
     util.imwrite('pos_{}'.format(fname), ans[0][0])
-
-
 

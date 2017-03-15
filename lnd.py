@@ -1792,7 +1792,9 @@ def create_datasets(detection_model, blobs_filename, chunk_size=10000):
                                                 rois_te, pred_blobs[te_idx], blobs[te_idx], streams=detection_model.streams, dataset_type='hdf5', container=group)
         
         print 'preprocess_dataset in (before call) {}'.format((type(X_train), type(Y_train), type(X_test), type(Y_test)))
-        X_train, Y_train, X_test, Y_test = augment.preprocess_dataset(X_train, Y_train, X_test, Y_test, streams=(detection_model.streams != 'none'), config=detection_model.args.preprocess_dataset, mode='hdf5')
+
+        preprocessor = augment.get_preprocessor(detection_model.args.preprocess_dataset)
+        X_train, Y_train, X_test, Y_test = augment.preprocess_dataset(preprocessor, X_train, Y_train, X_test, Y_test, streams=(detection_model.streams != 'none'))
 
         len_train_pos = int(np.sum(Y_train.T[1]))
         len_train_neg = len(Y_train) - len_train_pos

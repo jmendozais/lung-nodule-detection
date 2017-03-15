@@ -391,7 +391,6 @@ class NetModel:
         nb_epoch = self.training_params['nb_epoch']
         data_shape = (len(X_train[0]),) + self.generator.output_shape
 
-        self.preprocessor.fit(X_train, Y_train)
         X_train, Y_train, X_test, Y_test = preprocess_dataset(self.preprocessor, X_train, Y_train, X_test, Y_test, streams)
         self.generator.fit(X_train)
 
@@ -1048,13 +1047,14 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
-    elif model in {'3P-br32', '3P-br32-is0.2', '3P-br32-uar24-rpi500', '3P-br32-uar24-rpi1000', '3p-br32-uar24-rpi1000-bal'}:
+    elif model in {'3P-br32', '3P-br32-is0.3', '3P-br32-is0.2', '3P-br32-is0.1', '3P-br32-is0.0', '3P-br32-uar24-rpi500', '3P-br32-uar24-rpi1000', '3p-br32-uar24-rpi1000-bal'}:
         network = lnd_a_3p(input_shape, base_filters=64)
-        schedule=[50, 70, 70]
+        #schedule=[50, 70, 70]
+        schedule=[70, 70, 70]
         train_params = {'schedule':schedule, 'nb_epoch':70, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         augment_params = default_augment_params
-        augment_params['intensity_shift_std'] = 0.2
+        augment_params['intensity_shift_std'] = 0.1
         net_model = NetModel(network, train_params, augment_params, default_preproc_params)
 
     elif model in {'3P-br40'}:
