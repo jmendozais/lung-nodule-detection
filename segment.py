@@ -3,6 +3,23 @@ from itertools import *
 from math import *
 import cv2
 import util
+import scr
+import argparse
+import os
+
+# Util functions 
+
+def finite_derivatives(img):
+    size = img.shape
+    dx = img.copy()
+    dy = img.copy()
+
+    for i, j in product(range(1, size[0] - 1), range(1, size[1] - 1)):
+        dy[i, j] = (img[i, j + 1] - img[i, j - 1]) / 2.0
+        dx[i, j] = (img[i + 1, j] - img[i - 1, j]) / 2.0
+    mag = (dx ** 2 + dy ** 2) ** 0.5
+
+    return mag, dx, dy
 
 def circunference(img, blobs):
     masks = []
@@ -16,7 +33,6 @@ def circunference(img, blobs):
         
     return blobs, np.array(masks)
 
-# ADT by ARG segmentation
 def cos_angle(a, b):
     dot = 1.0 * (a[0] * b[0] + a[1] * b[1])
     len_a = sqrt(a[0] * a[0] + a[1] * a[1])
@@ -33,6 +49,8 @@ def cos_angle(a, b):
     
     # cos(acos(tmp)
     return tmp
+
+''' Nodule segmentation using Adaptive Distance thresold '''
 
 def distance_thold(img, point, grad, dx, dy, t0=0,):
     point = (int(point[0]), int(point[1]))
@@ -109,19 +127,6 @@ def _adaptive_thold(img, point, grad, dx, dy):
 
     return np.array(mask)
 
-# TODO: replace by efficient fd
-def finite_derivatives(img):
-    size = img.shape
-    dx = img.copy()
-    dy = img.copy()
-
-    for i, j in product(range(1, size[0] - 1), range(1, size[1] - 1)):
-        dy[i, j] = (img[i, j + 1] - img[i, j - 1]) / 2.0
-        dx[i, j] = (img[i + 1, j] - img[i - 1, j]) / 2.0
-    mag = (dx ** 2 + dy ** 2) ** 0.5
-
-    return mag, dx, dy
-
 def adaptive_distance_thold(img, blobs):
     masks = []
     mag, dx, dy = finite_derivatives(img)
@@ -132,3 +137,26 @@ def adaptive_distance_thold(img, blobs):
         masks.append(mask)
 
     return blobs, np.array(masks)
+
+''' 
+Lung segmentation using Active Shape Models 
+'''
+
+def train():
+    data = scr.load_data()
+    left_points = data[0]
+    right_points = data[1]
+
+def segment(image_path):
+    raise Exception('Not implemented yet')
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(prog='segment.py')
+    parser.add_argument('file', nargs='?', default=os.getcwd())
+    parser.add_argument('--train', action='store_true')
+    args = parser.parse_args()
+
+    if args.train:
+        train()
+    elif args.file:
+        segment(args.file)
