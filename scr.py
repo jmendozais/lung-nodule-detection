@@ -2,7 +2,13 @@
 Methods to access to the SCR (Segmentation in Chest Radiographs) database.
 '''
 
-SCR_PATH = '/home/juliomb/dbs/scr/landmarks'
+SCR_LANDMARKS_DIR = '../dbs/scr/landmarks'
+SCR_MASKS_DIR = '../dbs/scr/masks'
+
+LMPATH = '../dbs/jsrt-masks/left_masks.txt'
+RMPATH = '../dbs/jsrt-masks/right_masks.txt'
+
+overlapped = ['LN060','LN065','LN105','LN108','LN112','LN113','LN115','LN126','LN130','LN133','LN136','LN149','LN151','LN152']
 
 #DATASET_LABELS = ['right lung', 'left lung', 'heart', 'right clavicle', 'left clavicle']
 DATASET_LABELS = ['right lung', 'left lung']
@@ -10,16 +16,16 @@ DATASET_LABELS = ['right lung', 'left lung']
 from os import listdir
 from os.path import isfile, join
 import re
+import numpy as np
 
-def get_paths(scr_path=SCR_PATH, suffix='pfs'):
+def get_paths(root=SCR_LANDMARKS_DIR, suffix='pfs'):
     paths = []
-    for pfs_file in listdir(scr_path):
-        if len(pfs_file) > len(suffix):
-            pfs_file = join(scr_path, pfs_file)
-            cur_suffix = pfs_file[len(pfs_file) - len(suffix):]
-            if isfile(pfs_file) and cur_suffix == 'pfs':
-                paths.append(pfs_file)
-
+    for file_ in listdir(root):
+        if len(file_) > len(suffix):
+            file_ = join(root, file_)
+            cur_suffix = file_[len(file_) - len(suffix):]
+            if isfile(file_) and cur_suffix == 'pfs':
+                paths.append(file_)
     return paths
 
 def parse_point(point_string):
@@ -44,7 +50,7 @@ def read_dataset(dataset_string):
     for i in range(len(entries)):
         points.append(parse_point(entries[i]))
 
-    return label, points
+    return label, np.array(points)
 
 def read_pfs(path):
     pfs_file = file(path, 'rb') 
@@ -54,15 +60,12 @@ def read_pfs(path):
     for line in lines:
         content_pfs += line
 
-    #print "pre content pfs {}".format(content_pfs)
     begin_idx = content_pfs.find('{')
     end_idx = content_pfs.rfind('}')
     content_pfs = content_pfs[begin_idx+1:end_idx]
 
-    #print "content pfs {}".format(content_pfs)
     datasets_pfs = re.split('},{|}{', content_pfs)
 
-    #print("datasets num {}".format(len(datasets_pfs)))
     datasets = dict()
 
     for dataset_pfs in datasets_pfs:
@@ -71,9 +74,20 @@ def read_pfs(path):
 
     return datasets
     
-def load_data():
-    paths = get_paths()
-    scr_dataset = []
+def load_data(set='jsrt140'):
+    paths = get_paths(root=SCR_LANDMARKS_DIR, suffix='pfs')
+    scr_landmarks = [[] for i in range(len(DATASET_LABELS))]
+    for path in paths:
+        point_sets = read_pfs(path)
+        for i in range(len(DATASET_LABELS)):
+            scr_landmarks[i].append(point_sets[DATASET_LABELS[i]])
+    scr_landmarks[0] = np.array(scr_landmarks[0])
+    scr_landmarks[1] = np.array(scr_landmarks[1])
+
+    '''
+    TODO: implement mask reading
+    paths = get_paths(root=SCR_MASKS_DIR, suffix='bmp')
+    scr_masks = []
     for path in paths:
         print path
         point_sets = read_pfs(path)
@@ -82,6 +96,8 @@ def load_data():
         for label in DATASET_LABELS:
             entry.append(point_sets[label])
             print "label {} len {}".format(label, len(point_sets[label]))
-        scr_dataset.append(entry)
+        scr_masks.append(entry)
+    '''
 
-    return scr_dataset
+    print ("landmarks 1-d {}, 2-n-d {}".format(len(scr_landmarks), scr_landmarks[0].shape))
+    return scr_landmarks

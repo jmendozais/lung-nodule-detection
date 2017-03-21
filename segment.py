@@ -6,9 +6,15 @@ import util
 import scr
 import argparse
 import os
+import pickle
+import jsrt
+
+from skimage import draw
+from skimage.segmentation import find_boundaries
+from sklearn.cross_validation import StratifiedKFold
 
 # Util functions 
-
+SEGMENTATION_IMAGE_SHAPE = (512, 512)
 def finite_derivatives(img):
     size = img.shape
     dx = img.copy()
@@ -139,24 +145,127 @@ def adaptive_distance_thold(img, blobs):
     return blobs, np.array(masks)
 
 ''' 
-Lung segmentation using Active Shape Models 
+Lung segmentation
 '''
+FOLDS_SEED = 113
 
-def train():
-    data = scr.load_data()
-    left_points = data[0]
-    right_points = data[1]
+def create_mask_from_landmarks(landmarks, mask_shape=(512, 512)):
+    landmarks = (landmarks/2).astype(np.int)
+    mask = np.full(shape=mask_shape, fill_value=False, dtype=np.bool)
 
-def segment(image_path):
-    raise Exception('Not implemented yet')
+    rr, cc = draw.polygon(landmarks.T[1], landmarks.T[0])
+    mask[rr, cc] = True
+
+    return mask
+
+class MeanShape:
+    def __init__(self):
+        self.mean_landmarks = None 
+        self.image_shape = None
+
+    def fit(self, images, landmarks):
+        num_samples = len(landmarks)
+        num_landmarks = len(landmarks[0])
+
+        self.mean_landmarks = np.zeros(shape=(num_landmarks, 2))
+        self.image_shape = images[0].shape
+
+        for i in range(num_samples):
+            for j in range(num_landmarks):
+                self.mean_landmarks[j][0] += landmarks[i][j][0]
+                self.mean_landmarks[j][1] += landmarks[i][j][1]
+
+        for j in range(num_landmarks):
+            self.mean_landmarks[j][0] /= num_samples
+            self.mean_landmarks[j][1] /= num_samples
+
+    def transform(self, images):
+        if len(images[0].shape) == 2:
+            num_samples = len(images)
+            masks = np.zeros(shape=(num_samples,) + self.image_shape)
+            for i in range(num_samples):
+                masks[i] = create_mask_from_landmarks(self.mean_landmarks)
+            return masks
+        elif len(images.shape) == 2:
+            return create_mask_from_landmarks(self.mean_landmarks)
+
+
+def get_shape_model(model_name):
+    if model_name == 'mean-shape':
+        return MeanShape()
+    else:
+        raise Exception("{} not implemented yet!".format(model_name))
+
+def load_shape_models_by_fold(model_name, fold=0):
+    raise Exception("{} not implemented yet!".format(model_name))
+
+def load_masks_sets(model_name):
+    masks_sets = []
+    for i in range(len(masks_sets)): 
+        masks = np.load('data/{}-fold-{}'.format(model_name, i))
+        masks_sets.append(masks)
+
+    return masks_sets 
+
+def train_with_method(model_name):
+    set_name = 'jsrt140'
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set=set_name)
+    images = jsrt.images_from_paths(paths, dsize=(512, 512))
+    landmarks = scr.load_data(set=set_name)
+
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
+
+    i = 0
+    for tr_idx, te_idx in folds:    
+        left_shape_model = get_shape_model(model_name)
+        right_shape_model = get_shape_model(model_name)
+
+        left_shape_model.fit(images[tr_idx], landmarks[0][tr_idx])
+        left_pred_masks = left_shape_model.transform(landmarks[0][te_idx])
+
+        right_shape_model.fit(images[tr_idx], landmarks[1][tr_idx])
+        right_pred_masks = right_shape_model.transform(landmarks[1][te_idx])
+
+        pred_masks = []
+        for j in range(len(te_idx)):
+            pred_masks.append(np.logical_or(left_pred_masks[j], right_pred_masks[j]))
+
+        lm_file = open('data/{}-lmodel-f{}.pkl'.format(model_name, i), 'wb')
+        pickle.dump(left_shape_model, lm_file)
+        lm_file.close()
+        rm_file = open('data/{}-rmodel-f{}.pkl'.format(model_name, i), 'wb')
+        pickle.dump(right_shape_model, rm_file)
+        rm_file.close()
+
+        np.save('data/{}-pred-masks-f{}'.format(model_name, i), np.array(pred_masks))
+
+        i += 1
+
+def segment(image_path, model_name):
+    lmodel = pickle.load(open('data/{}-lmodel-f0.pkl'.format(model_name), 'rb'))
+    rmodel = pickle.load(open('data/{}-rmodel-f0.pkl'.format(model_name), 'rb'))
+    cxr = np.load(image_path)
+    cxr = cv2.resize(cxr, SEGMENTATION_IMAGE_SHAPE, interpolation=cv2.INTER_CUBIC)
+    lmask = lmodel.transform(cxr)
+    rmask = rmodel.transform(cxr)
+    lboundary = find_boundaries(lmask)
+    rboundary = find_boundaries(rmask)
+    max_value = np.max(cxr)
+    print('shapes {} boundary shapes {} {}'.format(cxr.shape, lboundary.shape, rboundary.shape))
+    cxr[lboundary] = max_value
+    cxr[rboundary] = max_value
+    util.imshow('Segment: {}'.format(image_path), cxr)
+
+    return util
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='segment.py')
     parser.add_argument('file', nargs='?', default=os.getcwd())
     parser.add_argument('--train', action='store_true')
+    parser.add_argument('--method', default='mean-shape')
     args = parser.parse_args()
 
     if args.train:
-        train()
+        train_with_method(args.method)
     elif args.file:
-        segment(args.file)
+        segment(args.file, args.method)
