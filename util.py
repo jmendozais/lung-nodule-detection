@@ -336,7 +336,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
     plt.ylabel('Sensitivity')
 
     if legend != None:
-        plt.legend(legend, loc=4, fontsize='small', numpoints=1)
+        plt.legend(legend, loc=4, fontsize='x-small', numpoints=1)
 
     if not unique:
         name='{}_{}'.format(name, time.clock())
