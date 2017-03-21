@@ -213,13 +213,6 @@ def _mean_std_balancing_pos_neg(X, Y):
     var_neg = ssd_neg / (len_neg * item_size - 1)
     std = math.sqrt((var_pos + var_neg)/2.0)
     
-    iters = int(len_neg/split_pos)
-    arr = X[0:split_pos]
-    for i in range(1, iters):
-        arr = np.vstack((arr, X[0:split_pos]))
-
-    arr = np.vstack((arr, X[split_pos:len(X)]))
-    
     std_pos = math.sqrt(ssd_pos / (split_pos * item_size - 1))
     std_neg = math.sqrt(ssd_neg / (len_neg * item_size - 1))
 
