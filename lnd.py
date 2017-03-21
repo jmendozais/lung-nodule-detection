@@ -20,12 +20,12 @@ from sklearn import ensemble
 from sklearn import preprocessing
 from sklearn.metrics import auc
 
-from data import DataProvider
 import baseline
 import model
 import eval
 import util
 import jsrt
+from jsrt import DataProvider
 import neural
 import bovw
 import augment
