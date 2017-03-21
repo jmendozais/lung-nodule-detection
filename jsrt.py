@@ -234,3 +234,38 @@ def right_lung(set=None):
                 continue
         paths.append(line.rstrip())
     return np.array(paths)
+
+def images_from_paths(paths, dsize=(512, 512)): 
+    imgs = []
+    for i in range(len(paths)):
+        img = np.load(paths[i]).astype(np.float)
+        img = cv2.resize(img, dsize, interpolation=cv2.INTER_CUBIC)
+        imgs.append(img)
+    return np.array(imgs)
+
+class DataProvider:
+
+    def __init__(self, img_paths, lm_paths, rm_paths):
+        self.img_paths = img_paths
+        self.ll_paths = lm_paths
+        self.lr_paths = rm_paths
+
+    def __len__(self):
+        return len(self.img_paths)
+
+    def get(self, i, downsample=True, dsize=(512, 512)):
+        img = np.load(self.img_paths[i]).astype(np.float)
+
+        ll_mask = cv2.imread(self.ll_paths[i])
+        lr_mask = cv2.imread(self.lr_paths[i])
+        lung_mask = ll_mask + lr_mask
+
+        if downsample:
+            lung_mask = cv2.resize(lung_mask, dsize, interpolation=cv2.INTER_CUBIC)
+        else:
+            lung_mask = cv2.resize(lung_mask, img.shape, interpolation=cv2.INTER_CUBIC)
+
+        lung_mask = cv2.cvtColor(lung_mask, cv2.COLOR_BGR2GRAY)
+        lung_mask = (lung_mask > 0).astype(np.uint8)
+
+        return img, lung_mask
