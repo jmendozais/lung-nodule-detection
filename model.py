@@ -530,7 +530,6 @@ class BaselineModel(object):
 
     def train_with_feature_set(self, feature_set, pred_blobs, real_blobs, feat_weight=False):
         X, Y = classify.create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs)
-        print 'min value on dataset {}'.format(np.min(X))
         return classify.train(X, Y, self.clf, self.scaler, self.selector, feat_weight)
         
     def train_with_feature_set_keras(self, feats_tr, pred_blobs_tr, real_blobs_tr,
@@ -751,7 +750,8 @@ class BaselineModel(object):
         cropped_shape = (self.roi_size, self.roi_size)
         channels = X_train.shape[1] if self.args.datasets == None else X_train[0].shape[1]
         self.network = neural.create_network(model, (channels,) + cropped_shape, fold, streams)
-        self.load_cnn_weights('data/{}_fold_{}'.format(model, fold))
+        #self.load_cnn_weights('data/{}_fold_{}'.format(model, fold))
+        self.load_cnn('data/{}_fold_{}'.format(model, fold))
 
         if mode in {'add-random'}:
             self.network.generator.ratio = pos_neg_ratio
@@ -768,20 +768,13 @@ class BaselineModel(object):
             X_train, Y_train = self._split_data_pos_neg(X_train, Y_train)
             X_test, Y_test = self._split_data_pos_neg(X_test, Y_test)
             std = np.std(X_train[0])
-            self.network.generator.intensity_shift_range = (-1*std, std)
             '''
-            #self.network.preprocessor = get_preprocessor(mode='hdf5')
-            #self.network.preprocessor.fit(X_train[0], Y_train[0])
-            
-            self.helper_model = ae.swwae_augment(self.network.network, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
-            #self.helper_model = ae.swwae_augment_hdf5(self.network.network, self.network.generator, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
+            #self.helper_model = ae.swwae_augment(self.network.network, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
+            self.helper_model = ae.swwae_augment_hdf5(self.network.network, self.network.generator, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
 
         else:
-            std = np.std(X_train[0])
-            factor = 0.2
-            self.network.generator.intensity_shift_range = (-1*std*factor, std*factor)
-            self.network.preprocessor = get_preprocessor()
-            self.network.preprocessor.fit(X_train[0], Y_train[0])
+            print "Preprocessor {}".format(self.network.preprocessor)
+            print "Generator {}".format(self.network.generator)
             self.helper_model = ae.swwae_augment_hdf5(self.network.network, self.network.generator, X_train, Y_train, X_test, Y_test, finetune_epochs=nb_epoch, multipliers=self.multipliers, layerwise_epochs=self.lw_epochs, decoder_epochs=self.dec_epochs, lr=self.lr, model_name=self.init)
 
     def fit_transform_bovw(self, rois_tr, pred_blobs_tr, blobs_tr, rois_te, pred_blobs_te, blobs_te,  model):
