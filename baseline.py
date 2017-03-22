@@ -15,7 +15,7 @@ from sklearn import ensemble
 from sklearn.metrics import auc
 import matplotlib.pyplot as plt
 
-from data import DataProvider
+from jsrt import DataProvider
 import model
 import eval
 import util
