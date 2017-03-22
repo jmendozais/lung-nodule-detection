@@ -4,6 +4,7 @@ import sys
 sys.setrecursionlimit(10000)
 import time
 from itertools import product
+import os
 from os import path
 import argparse
 
@@ -29,6 +30,9 @@ from jsrt import DataProvider
 import neural
 import bovw
 import augment
+import detect
+import segment
+from segment import MeanShape
 
 # Globals
 FOLDS_SEED = 113
@@ -86,7 +90,6 @@ def _split_rois(rois, tr_idx, te_idx, streams):
         rois_tr = rois[tr_idx]
         rois_te = rois[te_idx]
     return rois_tr, rois_te
-    
 
 def get_froc_on_folds_keras(detection_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, network_init=None, mode=None):
     fold = 1
@@ -95,12 +98,16 @@ def get_froc_on_folds_keras(detection_model, paths, left_masks, right_masks, blo
     frocs_ = []
     for tr_idx, te_idx in folds:    
         print "Fold {}".format(fold),
+        rois_tr, _ = _split_rois(rois, tr_idx, te_idx, detection_model.streams)
 
-        rois_tr, rois_te = _split_rois(rois, tr_idx, te_idx, detection_model.streams)
+        pred_blobs_te = detect.read_blobs('data/{}-blobs-f{}.pkl'.format(detection_model.args.blob_detector, fold))
+        data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+        assert len(data_te) == len(pred_blobs_te)
+        rois_te = detection_model.create_rois(data_te, pred_blobs_te)
             
         history = detection_model.train_with_feature_set_keras(rois_tr, pred_blobs[tr_idx], 
             blobs[tr_idx], rois_te, 
-            pred_blobs[te_idx], blobs[te_idx], 
+            pred_blobs_te, blobs[te_idx], 
             model=network_model, fold=fold,
             network_init=network_init, mode=mode
             )
@@ -110,7 +117,7 @@ def get_froc_on_folds_keras(detection_model, paths, left_masks, right_masks, blo
             blobs_te.append([bl])
         blobs_te = np.array(blobs_te)
  
-        blobs_te_pred, probs_te_pred = detection_model.predict_proba_from_feature_set_keras(rois_te, pred_blobs[te_idx])
+        blobs_te_pred, probs_te_pred = detection_model.predict_proba_from_feature_set_keras(rois_te, pred_blobs_te)
         froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
         frocs.append(froc)
 
@@ -841,10 +848,7 @@ def protocol_froc_1(detection_model, fname):
     right_masks = jsrt.right_lung(set=None)
     print len(right_masks)
     '''
-
     size = len(paths)
-
-
 
     # blobs detection
     blobs = []
@@ -1812,12 +1816,40 @@ def create_datasets(detection_model, blobs_filename, chunk_size=10000):
 
         fold += 1
 
+def detect_(detection_model, network_model, image, num_blobs=5):
+    detector_segmentator = detection_model.args.blob_detector
+    idx = detector_segmentator.find('-')
+    detector = detector_segmentator[:idx]
+    segmentator = detector_segmentator[idx+1:]
+    print('Detect(clf:{}, det:{}, seg:{})'.format(network_model, detector, segmentator))
+
+    cropped_shape = (detection_model.roi_size, detection_model.roi_size)
+    detection_model.network = neural.create_network(network_model, (1,) + cropped_shape, fold=1, streams=False)
+    detection_model.load_cnn('data/{}_fold_{}'.format(network_model, 1))
+    print detection_model.network.preprocessor.__dict__
+    print detection_model.network.generator.__dict__
+    blobs, _ = detect.detect(image, detector, segmentator, display=False)
+
+    rois_te = detection_model.create_rois(data_te, pred_blobs_te)
+
+    blobs, probs = detection_model.predict_proba_one_keras(image, blobs)
+    assert len(blobs) == len(probs)
+
+    entries = []
+    for i in range(len(blobs)):
+        entries.append([blobs[i], probs[i]])
+    entries = sorted(entries, key=itemgetter(1))
+    entries = entries[:num_blobs]
+
+    util.show_blobs_with_probs('Detect(clf:{}, det:{}, seg:{})'.format(network_model, detector, segmentator), image, entries.T[0], entries.T[1])
+
 if __name__=="__main__": 
-    # TRADITIONAL PIPELINES
     parser = argparse.ArgumentParser(prog='lnd.py')
+    parser.add_argument('file', nargs='?', default=os.getcwd())
+    # TRADITIONAL PIPELINES
     parser.add_argument('--preprocess-lung', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='norm')
     parser.add_argument('--preprocess-roi', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='norm')
-    parser.add_argument('-b', '--blob_detector', help='Options: wmci(default), TODO hog, log.', default='wmci')
+    parser.add_argument('-b', '--blob-detector', help='Options: wmci-mean-shape, wmci-aam.', default='wmci-mean-shape')
     parser.add_argument('--eval-wmci', help='Measure sensitivity and fppi without classification', action='store_true')
     parser.add_argument('-d', '--descriptor', help='Options: baseline.hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='baseline.hardie')
     parser.add_argument('-c', '--classifier', help='Options: lda(default), svm.', default='lda')
@@ -1919,7 +1951,11 @@ if __name__=="__main__":
         detection_model.dataset_type = 'hdf5'
         detection_model.open_datasets_file(args.datasets)
          
-    if args.eval_wmci:
+    if args.file:
+        image = np.load(args.file).astype(np.float32)
+        detect_(detection_model, args.cnn, image)
+
+    elif args.eval_wmci:
         eval_wmci_and_postprocessing(detection_model, extractor_key)
 
     elif args.create_datasets != None:

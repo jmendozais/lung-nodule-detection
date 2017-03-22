@@ -100,13 +100,14 @@ def load_dataset(name):
 
 # Display utils 
 
-def imshow(windowName,  _img, wait=True):
+def imshow(windowName,  _img, wait=True, display_shape=(1024, 1024)):
     img = np.array(_img).astype(np.float64)
     a = np.min(img)
     b = np.max(img)
     img = (img - a) / (b - a + EPS);
     print np.min(img), np.max(img)
     
+    img = cv2.resize(img, display_shape, interpolation=cv2.INTER_CUBIC)
     cv2.imshow(windowName, img)
     if wait:
         cv2.waitKey()
@@ -119,39 +120,40 @@ def imwrite(fname, _img):
 
     cv2.imwrite(fname, 255 * img)
 
-def label_blob(img, blob, color=(255, 0, 0), margin=0):
+def label_blob(img, blob, border='circle', proba=-1, color=(255, 0, 0), margin=0):
     if len(img.shape) == 2:
         img = cv2.cvtColor(img.copy(), cv2.COLOR_GRAY2BGR)
-
-    ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
-    if np.max(ex) + 3 + margin >= img.shape[0] or np.max(ey) + 3 + margin >= img.shape[1]:
-        return img
-
-    img[ex, ey] = color 
-    ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+1+margin)
-    img[ex, ey] = color 
-    '''
-    ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+2+margin)
-    img[ex, ey] = color 
-    ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2]+3+margin)
-    img[ex, ey] = color 
-    '''
+    if border == 'circle':
+        ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
+        img[ex, ey] = color 
+    elif border == 'square':
+        coord_x = np.array([[blobs[0]-blobs[2], blobs[0]-blobs[2], blobs[0]+blobs[2]], blobs[0]+blobs[2]])
+        coord_y = np.array([[blobs[1]-blobs[2], blobs[1]+blobs[2], blobs[1]+blobs[2]], blobs[1]-blobs[2]])
+        ex, ey = draw.polygon_perimeter(coord_x, coord_y)
+        img[ex, ey] = color 
+    if proba != -1:
+        cv2.putText(image,str(proba), (blob[0] + blob[2], blob[1] - blob[2]), cv2.FONT_HERSHEY_SIMPLEX, 2, color)
     return img
 
 def show_blobs(windowName, img, blobs):
-  labeled = np.array(img).astype(np.float32)
-  maxima = np.max(labeled)
-  for blob in blobs:
-    labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=-5)
+    labeled = np.array(img).astype(np.float32)
+    maxima = np.max(labeled)
+    for blob in blobs:
+        labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=-5)
+    imshow(windowName, labeled)
 
-  imshow(windowName, labeled)
+def show_blobs_with_proba(windowName, img, blobs, probs):
+    labeled = np.array(img).astype(np.float32)
+    maxima = np.max(labeled)
+    for i in range(len(blobs)):
+        labeled = label_blob(labeled, blobs[i], color=(maxima, 0, 0), margin=-5, border='square', proba=probs[i])
+    imshow(windowName, labeled)
 
 def imwrite_with_blobs(fname, img, blobs):
     labeled = np.array(img).astype(np.float32)
     maxima = np.max(labeled)
     for blob in blobs:
         labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=-5)
-
     imwrite(fname, labeled)
 
 def show_blobs_real_predicted(img, idx, res1, res2):

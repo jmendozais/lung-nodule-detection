@@ -215,7 +215,7 @@ def train_with_method(model_name):
 
     folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
 
-    i = 0
+    i = 1
     for tr_idx, te_idx in folds:    
         left_shape_model = get_shape_model(model_name)
         right_shape_model = get_shape_model(model_name)
@@ -241,22 +241,20 @@ def train_with_method(model_name):
 
         i += 1
 
-def segment(image_path, model_name):
-    lmodel = pickle.load(open('data/{}-lmodel-f0.pkl'.format(model_name), 'rb'))
-    rmodel = pickle.load(open('data/{}-rmodel-f0.pkl'.format(model_name), 'rb'))
-    cxr = np.load(image_path)
-    cxr = cv2.resize(cxr, SEGMENTATION_IMAGE_SHAPE, interpolation=cv2.INTER_CUBIC)
-    lmask = lmodel.transform(cxr)
-    rmask = rmodel.transform(cxr)
-    lboundary = find_boundaries(lmask)
-    rboundary = find_boundaries(rmask)
-    max_value = np.max(cxr)
-    print('shapes {} boundary shapes {} {}'.format(cxr.shape, lboundary.shape, rboundary.shape))
-    cxr[lboundary] = max_value
-    cxr[rboundary] = max_value
-    util.imshow('Segment: {}'.format(image_path), cxr)
-
-    return util
+def segment(image, model_name, display=True):
+    lmodel = pickle.load(open('data/{}-lmodel-f1.pkl'.format(model_name), 'rb'))
+    rmodel = pickle.load(open('data/{}-rmodel-f1.pkl'.format(model_name), 'rb'))
+    image = cv2.resize(image, SEGMENTATION_IMAGE_SHAPE, interpolation=cv2.INTER_CUBIC)
+    lmask = lmodel.transform(image)
+    rmask = rmodel.transform(image)
+    if display:
+        lboundary = find_boundaries(lmask)
+        rboundary = find_boundaries(rmask)
+        max_value = np.max(image)
+        image[lboundary] = max_value
+        image[rboundary] = max_value
+        util.imshow('Segment with model {}'.format(model_name), image)
+    return np.logical_or(lmask, rmask)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='segment.py')
@@ -264,8 +262,9 @@ if __name__ == '__main__':
     parser.add_argument('--train', action='store_true')
     parser.add_argument('--method', default='mean-shape')
     args = parser.parse_args()
-
+    
     if args.train:
         train_with_method(args.method)
     elif args.file:
-        segment(args.file, args.method)
+        image = np.load(args.file).astype('float32')
+        segment(image, args.method)

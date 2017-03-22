@@ -1,7 +1,9 @@
 import sys
+import os
 import numpy as np
 from math import sqrt
 from skimage.feature import blob_dog, blob_log, blob_doh, peak_local_max
+from skimage.segmentation import find_boundaries
 from sklearn.cross_validation import StratifiedKFold
 from itertools import *
 import cv2
@@ -16,213 +18,215 @@ import model
 import eval
 import util
 import neural
-from data import DataProvider
-
+import pickle
+import segment
+from segment import MeanShape
+from jsrt import DataProvider
+FOLDS_SEED = 113
 # Detection thining
 def dst(a, b):
-	return sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]))
+    return sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]))
 
 def create_graph(points, thold):
-	G = {}
-	for i in range(len(points)):
-		G[i] = set()
-		for j in range(len(points)):
-			if i != j and dst(points[i], points[j]) < thold:
-				G[i].add(j)
-	return G
-		
+    G = {}
+    for i in range(len(points)):
+        G[i] = set()
+        for j in range(len(points)):
+            if i != j and dst(points[i], points[j]) < thold:
+                G[i].add(j)
+    return G
+        
 def dfs(graph, start, visited):
-	stack = [start]
-	component = set()
-	while stack:
-		vertex = stack.pop()
-		if vertex not in visited:
-			visited.add(vertex)
-			component.add(vertex)
-			stack.extend(graph[vertex] - visited)
-	return component
+    stack = [start]
+    component = set()
+    while stack:
+        vertex = stack.pop()
+        if vertex not in visited:
+            visited.add(vertex)
+            component.add(vertex)
+            stack.extend(graph[vertex] - visited)
+    return component
 
 def detection_thining(points): # 5 mm thold
-	G = create_graph(points, 7)
-	visited = set()
-	comps = []
-	resp = []
+    G = create_graph(points, 7)
+    visited = set()
+    comps = []
+    resp = []
 
-	for i in range(len(points)):
-		if i not in visited:	
-			comps.append(dfs(G, i, visited))
+    for i in range(len(points)):
+        if i not in visited:    
+            comps.append(dfs(G, i, visited))
 
-	for comp in comps:
-		avg = [0.0, 0.0]
-		for v in comp:
-			avg[0] += points[v][0]
-			avg[1] += points[v][1]
-		avg[0] /= len(comp)
-		avg[1] /= len(comp)
-		resp.append(avg)		
+    for comp in comps:
+        avg = [0.0, 0.0]
+        for v in comp:
+            avg[0] += points[v][0]
+            avg[1] += points[v][1]
+        avg[0] /= len(comp)
+        avg[1] /= len(comp)
+        resp.append(avg)        
 
-	return resp
+    return resp
 
 
 # Filtering
 def filter_by_size(blobs, lower=4, upper=32):
-	ans = []
-	for blob in blobs:
-		x, y, r = blob
-		if r >= lower and r <= upper:
-			ans.append(blob)
-	return np.array(ans)
+    ans = []
+    for blob in blobs:
+        x, y, r = blob
+        if r >= lower and r <= upper:
+            ans.append(blob)
+    return np.array(ans)
 
 def filter_by_masks(blobs, mask):
-	ans = []
-	for blob in blobs:
-		x, y, r = blob
-		found = False
-		if mask[x][y] != 0:
-			ans.append(blob)
-	return np.array(ans)
-	
+    ans = []
+    for blob in blobs:
+        x, y, r = blob
+        found = False
+        if mask[x][y] != 0:
+            ans.append(blob)
+    return np.array(ans)
+    
 def filter_by_margin(blobs, mask, margin=30):
-	ans = []
-	for blob in blobs:
-		x, y, r = blob
-		found = False
-		if x > margin and y > margin and x < mask.shape[0] - margin and y < mask.shape[1] - margin:
-			ans.append(blob)
-	return np.array(ans)
+    ans = []
+    for blob in blobs:
+        x, y, r = blob
+        found = False
+        if x > margin and y > margin and x < mask.shape[0] - margin and y < mask.shape[1] - margin:
+            ans.append(blob)
+    return np.array(ans)
 
-# Common blob detectors	
+# Common blob detectors 
 def log_(img, mask, threshold=0.001, proba=False):
-	blobs_log = blob_log(img, min_sigma=4,  max_sigma=32, num_sigma=10, log_scale=True, threshold=threshold, overlap=0.5)
-	if len(blobs_log) > 0:
-		blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
-	return filter_by_margin(filter_by_size(filter_by_masks(blobs_log, mask)), mask)
+    blobs_log = blob_log(img, min_sigma=4,  max_sigma=32, num_sigma=10, log_scale=True, threshold=threshold, overlap=0.5)
+    if len(blobs_log) > 0:
+        blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
+    return filter_by_margin(filter_by_size(filter_by_masks(blobs_log, mask)), mask)
 
 def dog(img, mask, threshold=0.05, proba=False):
-	blobs_dog = blob_dog(img, max_sigma=20, threshold=threshold)
-	if len(blobs_dog) > 0:
-		blobs_dog[:, 2] = blobs_dog[:, 2] * sqrt(2)
-	return filter_by_margin(filter_by_size(filter_by_masks(blobs_dog, mask)), mask)
+    blobs_dog = blob_dog(img, max_sigma=20, threshold=threshold)
+    if len(blobs_dog) > 0:
+        blobs_dog[:, 2] = blobs_dog[:, 2] * sqrt(2)
+    return filter_by_margin(filter_by_size(filter_by_masks(blobs_dog, mask)), mask)
 
 def doh(img, mask, threshold=0.0005, proba=False):
-	blobs_doh = blob_doh(1 - img, min_sigma=4, num_sigma=10, max_sigma=30, threshold=threshold)
-	return filter_by_margin(filter_by_size(filter_by_masks(blobs_doh, mask)), mask)
+    blobs_doh = blob_doh(1 - img, min_sigma=4, num_sigma=10, max_sigma=30, threshold=threshold)
+    return filter_by_margin(filter_by_size(filter_by_masks(blobs_doh, mask)), mask)
 
 # wmci detector
 def finite_derivatives(img):
-	size = img.shape
+    size = img.shape
 
-	dx = np.empty(img.shape, dtype=np.double)
-	dx[0, :] = 0
-	dx[-1, :] = 0
-	dx[1:-1, :] = (img[2:, :] - img[:-2, :]) / 2.0
+    dx = np.empty(img.shape, dtype=np.double)
+    dx[0, :] = 0
+    dx[-1, :] = 0
+    dx[1:-1, :] = (img[2:, :] - img[:-2, :]) / 2.0
 
-	dy = np.empty(img.shape, dtype=np.double)
-	dy[:, 0] = 0
-	dy[:, -1] = 0
-	dy[:, 1:-1] = (img[:, 2:] - img[:, :-2]) / 2.0
+    dy = np.empty(img.shape, dtype=np.double)
+    dy[:, 0] = 0
+    dy[:, -1] = 0
+    dy[:, 1:-1] = (img[:, 2:] - img[:, :-2]) / 2.0
 
-	mag = (dx ** 2 + dy ** 2) ** 0.5 + 1e-9
-	return mag, dx, dy
+    mag = (dx ** 2 + dy ** 2) ** 0.5 + 1e-9
+    return mag, dx, dy
 
 def hardie_filters():
-	sizes = [7, 10, 13]
-	energy = [1.0, 0.47, 0.41]
-	k = sizes[2] * 2 + 1
-	filters = []
+    sizes = [7, 10, 13]
+    energy = [1.0, 0.47, 0.41]
+    k = sizes[2] * 2 + 1
+    filters = []
 
-	for idx in range(3):
-		filter = np.empty((k, k), dtype=np.float64)
-		for i in range(k):
-			for j in range(k):
-				if ((i - k/2) * (i - k/2) + (j - k/2) * (j - k/2) <= sizes[idx] * sizes[idx]):
-					filter[i, j] = 1
-				else:
-					filter[i, j] = 0
+    for idx in range(3):
+        filter = np.empty((k, k), dtype=np.float64)
+        for i in range(k):
+            for j in range(k):
+                if ((i - k/2) * (i - k/2) + (j - k/2) * (j - k/2) <= sizes[idx] * sizes[idx]):
+                    filter[i, j] = 1
+                else:
+                    filter[i, j] = 0
 
-		filters.append(filter);	
-		_sum = np.sum(filter);
-		filter /= _sum
-		filter *= energy[idx];
-	
-	filters[1] += filters[0];
-	filters[2] += filters[1];
-	return filters
+        filters.append(filter); 
+        _sum = np.sum(filter);
+        filter /= _sum
+        filter *= energy[idx];
+    
+    filters[1] += filters[0];
+    filters[2] += filters[1];
+    return filters
 
 def wci(img, filter):
-	size = filter.shape
-	magnitude, dx, dy = finite_derivatives(img)
-	
-	fx = np.empty(size, dtype=np.float64)
-	fy = np.empty(size, dtype=np.float64)
-	ax = np.empty(size, dtype=np.float64)
-	ay = np.empty(size, dtype=np.float64)
+    size = filter.shape
+    magnitude, dx, dy = finite_derivatives(img)
+    
+    fx = np.empty(size, dtype=np.float64)
+    fy = np.empty(size, dtype=np.float64)
+    ax = np.empty(size, dtype=np.float64)
+    ay = np.empty(size, dtype=np.float64)
 
-	for i in range(size[0]):
-		for j in range(size[1]):
-			x = -1 * (i - size[0] / 2)
-			y = -1 * (j - size[1] / 2)
-			mu = sqrt(x * x + y * y) + 1e-9;	
-			fx[i, j] = filter[i, j] * x * 1.0 / mu
-			fy[i, j] = filter[i, j] * y * 1.0 / mu
+    for i in range(size[0]):
+        for j in range(size[1]):
+            x = -1 * (i - size[0] / 2)
+            y = -1 * (j - size[1] / 2)
+            mu = sqrt(x * x + y * y) + 1e-9;    
+            fx[i, j] = filter[i, j] * x * 1.0 / mu
+            fy[i, j] = filter[i, j] * y * 1.0 / mu
 
-	nx = dx / magnitude
-	ny = dy / magnitude
+    nx = dx / magnitude
+    ny = dy / magnitude
 
-	ax = cv2.filter2D(nx, -1, fx)
-	ay = cv2.filter2D(ny, -1, fy)
-	return ax + ay
+    ax = cv2.filter2D(nx, -1, fx)
+    ay = cv2.filter2D(ny, -1, fy)
+    return ax + ay
 
 def wmci(img, mask, threshold=0.5):
-	filters = hardie_filters()
-	min_distance = 7
+    filters = hardie_filters()
+    min_distance = 7
 
-	ans = wci(img, filters[0])
-	for i in range(1, len(filters)):
-		tmp = wci(img, filters[i])
-		ans = np.maximum(tmp, ans)
+    ans = wci(img, filters[0])
+    for i in range(1, len(filters)):
+        tmp = wci(img, filters[i])
+        ans = np.maximum(tmp, ans)
 
-	coords = peak_local_max(ans, min_distance)
+    coords = peak_local_max(ans, min_distance)
 
-	# Fix this, you should return the radio
-	blobs = []
-	for coord in coords:
-		if ans[coord[0], coord[1]] >= threshold:
-			blobs.append((coord[0], coord[1], 25))
+    # Fix this, you should return the radio
+    blobs = []
+    for coord in coords:
+        if ans[coord[0], coord[1]] >= threshold:
+            blobs.append((coord[0], coord[1], 25))
 
-	blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
-	#show_blobs("wci", ans, blobs)
-	#imwrite_with_blobs("wci.jpg", ans, blobs)
-	#sys.exit()
-	return blobs, ans
+    blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
+    #show_blobs("wci", ans, blobs)
+    #imwrite_with_blobs("wci.jpg", ans, blobs)
+    #sys.exit()
+    return blobs, ans
 
 def wmci_proba(img, mask, threshold=0.5):
-	filters = hardie_filters()
-	min_distance = 7
+    filters = hardie_filters()
+    min_distance = 7
 
-	ans = wci(img, filters[0])
+    ans = wci(img, filters[0])
 
-	for i in range(1, len(filters)):
-		tmp = wci(img, filters[i])
-		ans = np.maximum(tmp, ans)
+    for i in range(1, len(filters)):
+        tmp = wci(img, filters[i])
+        ans = np.maximum(tmp, ans)
 
-	coords = peak_local_max(ans, min_distance)
+    coords = peak_local_max(ans, min_distance)
 
-	blobs = []
-	proba = []
-	for coord in coords:
-		if ans[coord[0], coord[1]] >= threshold:
-			blobs.append((coord[0], coord[1], 25))
+    blobs = []
+    proba = []
+    for coord in coords:
+        if ans[coord[0], coord[1]] >= threshold:
+            blobs.append((coord[0], coord[1], 25))
 
-	blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
+    blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
+    for blob in blobs:
+        proba.append(ans[blob[0], blob[1]])
 
-	for blob in blobs:
-		proba.append(ans[blob[0], blob[1]])
-
-	return blobs, ans, np.array(proba)
+    return blobs, ans, np.array(proba)
 
 # Framework methods
-def detect_blobs_proba(img, lung_mask, method='wmci', threshold=0.5):
+def detect_blobs(img, lung_mask, method='wmci', threshold=0.5):
     sampled, lce, norm = preprocess(img, lung_mask)
     blobs = None
     proba = None
@@ -239,9 +243,12 @@ def detect_blobs_proba(img, lung_mask, method='wmci', threshold=0.5):
         raise Exception("Undefined detection method")
     return blobs, norm, lce, ci, proba
 
-def detect_blobs_proba_batch(data, method='wmci', threshold=0.5):
+def detect_blobs_with_dataprovider(data, method='wmci', threshold=0.5, masks=None):
     blob_set = []
     prob_set = []
+    if masks != None:
+        assert len(data) == len(masks)
+
     print "detect blobs with probs ..."
     print '[',
     for i in range(len(data)):
@@ -249,7 +256,10 @@ def detect_blobs_proba_batch(data, method='wmci', threshold=0.5):
             print ".",
             sys.stdout.flush()
         img, lung_mask = data.get(i)
-        blobs, norm, lce, ci, proba = detect_blobs_proba(img, lung_mask, method, threshold)
+        if masks != None:
+            lung_mask = masks[i]
+
+        blobs, norm, lce, ci, proba = detect_blobs(img, lung_mask, method, threshold)
         blob_set.append(blobs)
         prob_set.append(proba)
     print ']'
@@ -341,7 +351,7 @@ def detect_with_network(network, imgs, masks, threshold=0.5, fold=-1):
         prob_set[-1] = np.array(prob_set[-1])
 
     return np.array(blob_set), np.array(prob_set)
-	
+    
     
 def eval_cnn_detector(data, blobs, augmented_blobs, rois, folds, model):
     fold = 1
@@ -472,12 +482,11 @@ def eval_models(model_instance, network_set, save_history=True):
     frocs = []
     legend = []
 
-    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
     for i in range(len(methods)):
-        pred_blobs, proba = detect_blobs_proba_batch(data, methods[i], thresholds[i])
+        pred_blobs, proba = detect_blobs_with_dataprovider(data, methods[i], thresholds[i])
         frocs.append(froc_given_blobs(blobs, pred_blobs, proba, folds))
         legend.append('{}, t={}'.format(methods[i], thresholds[i]))
-
     
     augmented_blobs = add_random_blobs(data, blobs, blobs_by_image=512, rng=np.random)
     rois = model_instance.create_rois(data, augmented_blobs, model_instance.downsample)
@@ -504,9 +513,9 @@ def eval_network_by_epoch(model_instance, network_name, save_history=True):
     frocs = []
     legend = []
 
-    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
     for i in range(len(methods)):
-        pred_blobs, proba = detect_blobs_proba_batch(data, methods[i], thresholds[i])
+        pred_blobs, proba = detect_blobs_with_dataprovider(data, methods[i], thresholds[i])
         frocs.append(froc_given_blobs(blobs, pred_blobs, proba, folds))
         legend.append('{}, t={}'.format(methods[i], thresholds[i]))
 
@@ -517,11 +526,61 @@ def eval_network_by_epoch(model_instance, network_name, save_history=True):
     frocs, legend = froc_by_epochs(data, blobs, augmented_blobs, rois, folds, network_model=network_name)
     util.save_froc(frocs, 'data/{}-by-epoch'.format(network_name), legend, with_std=False, fppi_max=fppi_range[-1])
 
+def read_blobs(fname):
+    fileh = open(fname, 'rb')
+    blobs = pickle.load(fileh)
+    fileh.close()
+    return blobs
+
+def write_blobs(blobs, fname):
+    fileh = open(fname, 'wb')
+    pickle.dump(blobs, fileh)
+    fileh.close()
+
+def save_blobs(detector, segmentator):
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
+    left_masks = jsrt.left_lung(set='jsrt140')
+    right_masks = jsrt.right_lung(set='jsrt140')
+    data = DataProvider(paths, left_masks, right_masks)
+
+    size = len(paths)
+    blobs = []
+    for i in range(size):
+        blobs.append([[locs[i][0], locs[i][1], rads[i]]])
+    blobs = np.array(blobs)
+ 
+    threshold = 0.5
+    pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold)
+    write_blobs(pred_blobs, 'data/{}-{}-gt-masks.pkl'.format(detector, segmentator))
+
+    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
+    fold_idx = 1
+    for tr_idx, te_idx in folds:
+        data = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
+        masks = np.load('data/{}-pred-masks-f{}.npy'.format(segmentator, fold_idx))
+        pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold, masks)
+        write_blobs(pred_blobs, 'data/{}-{}-blobs-f{}.pkl'.format(detector, segmentator, fold_idx))
+        fold_idx += 1
+    
+def detect(image, detector, segmentator, display=True):
+    mask = segment.segment(image, segmentator, display=False)
+    blobs, norm, lce, ci, proba = detect_blobs(image, mask, method=detector)
+    if display:
+        boundary = find_boundaries(mask)
+        image = cv2.resize(image, (512, 512), interpolation=cv2.INTER_CUBIC)
+        max_value = np.max(image)
+        image[boundary] = max_value
+        util.show_blobs('Detect with model {}-{}'.format(detector, segmentator), image, blobs)
+    return blobs, proba
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='detect.py')
+    parser.add_argument('file', nargs='?', default=os.getcwd())
+    parser.add_argument('--save-blobs', help='Use the detector and segmentator to generate blobs', action='store_true')
+    parser.add_argument('--detector', help='Method used to extract candidates', type=str, default='wmci')
+    parser.add_argument('--segmentator', help='Method used to segment lung area used on candidate filtering', type=str, default='mean-shape')
     parser.add_argument('--mode', help='', default='models', type=str)
     parser.add_argument('--roi-size', help='Roi size', default=32, type=int)
-
     args = parser.parse_args()
  
     model_instance = model.BaselineModel()
@@ -534,15 +593,20 @@ if __name__ == '__main__':
     model_instance.label = 'nodule'
     model_instance.augment = 'bt'
     model_instance.downsample = True
+
     '''
     network_set = ['d1p_a', 'd2p_a', 'd3p_a',
                    'd1p_b', 'd2p_b', 'd3p_b',
                    'd1p_c', 'd2p_c', 'd3p_c']
     '''
+
     network_set = ['d2p_a']
-    if args.mode == 'models':
+    if args.file:
+        image = np.load(args.file).astype('float32')
+        detect(image, args.detector, args.segmentator)
+    elif args.save_blobs:
+        save_blobs(args.detector, args.segmentator)
+    elif args.mode == 'models':
         eval_models(model_instance, network_set)
-    if args.mode == 'epochs':
+    elif args.mode == 'epochs':
         eval_network_by_epoch(model_instance, network_set[0])
-
-

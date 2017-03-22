@@ -59,14 +59,14 @@ def input(img_path, ll_path, lr_path):
     return img, lung_mask
 
 def adjacency_rule(blobs, probs):
-    # candidate cue adjacency rule: 22 mm
+    MAX_DIST2 = 987.755
     filtered_blobs = []
     filtered_probs = []
     for j in range(len(blobs)):
         valid = True
         for k in range(len(blobs)):
             dist2 = (blobs[j][0] - blobs[k][0]) ** 2 + (blobs[j][1] - blobs[k][1]) ** 2
-            if dist2 < 988 and probs[j] + EPS < probs[k]:
+            if dist2 < MAX_DIST2 and probs[j] + EPS < probs[k]:
                 valid = False
                 break
 
@@ -74,7 +74,7 @@ def adjacency_rule(blobs, probs):
             filtered_blobs.append(blobs[j])
             filtered_probs.append(probs[j])
 
-    return filtered_blobs, filtered_probs
+    return np.array(filtered_blobs), np.array(filtered_probs)
 
 # Baseline Model
 class BaselineModel(object):
@@ -165,6 +165,8 @@ class BaselineModel(object):
         if path.isfile('{}_arch.json'.format(name)):
             self.network = neural.NetModel()
             self.network.load(name)
+        else:
+            raise Exception('{} model not found'.format(name))
 
     def load_cnn_weights(self, name):
             self.network.network.load_weights('{}_weights.h5'.format(name))
@@ -226,11 +228,11 @@ class BaselineModel(object):
             dsize = (int(self.roi_size * pad_size), int(self.roi_size * pad_size))
         else:
             dsize = (self.roi_size, self.roi_size)
+
         print 'dsize: {} rsize: {}'.format(dsize, self.roi_size)
         # Create image set
         img_set = []
 
-        print 'Calc min max value'
         min_value = []
         max_value = []
         for i in range(len(data)):
@@ -421,6 +423,7 @@ class BaselineModel(object):
         return np.array(roi_set)
     
     def detect_blobs(self, img, lung_mask, threshold=0.5):
+        print("img {} {} {}".format(img.shape, np.max(img), np.min(img)))
         sampled, lce, norm = preprocess(img, lung_mask)
         blobs, ci = wmci(lce, lung_mask, threshold)
         return blobs, norm, lce, ci
@@ -486,7 +489,7 @@ class BaselineModel(object):
             probs = self.clf.predict(feature_vectors)
             
         blobs = np.array(blobs)
-
+        blobs, probs = adjacency_rule(blobs, probs)
         return blobs, probs
 
     def predict_proba_one_keras(self, blobs, rois):
@@ -495,6 +498,7 @@ class BaselineModel(object):
         probs = np.max(probs.T[1:], axis=0)
         blobs = np.array(blobs)
 
+        blobs, probs = adjacency_rule(blobs, probs)
         return blobs, probs
 
     def extract_features_one_keras(self, rois, layer=-1):
@@ -535,6 +539,7 @@ class BaselineModel(object):
     def train_with_feature_set_keras(self, feats_tr, pred_blobs_tr, real_blobs_tr,
                                         feats_test=None, pred_blobs_test=None, real_blobs_test=None,
                                         model='shallow_1', fold=None, network_init=None, mode=None):
+        print("{} {} {} {} {} {}".format(len(feats_tr), len(pred_blobs_tr), len(real_blobs_tr), len(feats_test), len(pred_blobs_test), len(real_blobs_test)))
         X_train, Y_train, X_test, Y_test = neural.create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr, 
                                                 feats_test, pred_blobs_test, real_blobs_test, streams=self.streams )
 
@@ -563,25 +568,8 @@ class BaselineModel(object):
             blobs, nod_masks = self.segment(lce, blobs)
             feats = self.extract(norm, lce, ci, lung_mask, blobs, nod_masks)
             blobs, probs = self.predict_proba_one(blobs, feats)
-
-            # candidate cue adjacency rule: 22 mm
-            filtered_blobs = []
-            filtered_probs = []
-            for j in range(len(blobs)):
-                valid = True
-                for k in range(len(blobs)):
-                    dist2 = (blobs[j][0] - blobs[k][0]) ** 2 + (blobs[j][1] - blobs[k][1]) ** 2
-                    if dist2 < 988 and probs[j] + EPS < probs[k]:
-                        valid = False
-                        break
-
-                if valid:
-                    filtered_blobs.append(blobs[j])
-                    filtered_probs.append(probs[j])
-
-            #show_blobs("Predict result ...", lce, filtered_blob)
-            data_blobs.append(np.array(filtered_blobs)) 
-            data_probs.append(np.array(filtered_probs))
+            data_blobs.append(blobs) 
+            data_probs.append(probs)
 
         return np.array(data_blobs), np.array(data_probs)
 
@@ -636,33 +624,13 @@ class BaselineModel(object):
         return np.array(data_blobs)
 
     def predict_proba_from_feature_set(self, feature_set, blob_set):
-        DIST2 = 987.755
-        
         data_blobs = []
         data_probs = []
 
         for i in range(len(feature_set)):
             blobs, probs = self.predict_proba_one(blob_set[i], feature_set[i])
-
-            ## candidate cue adjacency rule: 22 mm
-            filtered_blobs = []
-            filtered_probs = []
-            for j in range(len(blobs)):
-                valid = True
-                for k in range(len(blobs)):
-                    dist2 = (blobs[j][0] - blobs[k][0]) ** 2 + (blobs[j][1] - blobs[k][1]) ** 2
-                    if dist2 < DIST2 and probs[j] + EPS < probs[k]:
-                        valid = False
-                        break
-
-                if valid:
-                    filtered_blobs.append(blobs[j])
-                    filtered_probs.append(probs[j])
-
-            #show_blobs("Predict result ...", lce, filtered_blob)
-            data_blobs.append(np.array(filtered_blobs)) 
-            data_probs.append(np.array(filtered_probs))
-
+            data_blobs.append(blobs) 
+            data_probs.append(probs)
         return np.array(data_blobs), np.array(data_probs)
 
     def predict_proba_from_feature_set_keras(self, feature_set, blob_set):
@@ -673,27 +641,11 @@ class BaselineModel(object):
         data_probs = []
         if self.streams != 'none':
             feature_set = np.swapaxes(feature_set, 0, 1)
+
         for i in range(len(feature_set)):
             blobs, probs = self.predict_proba_one_keras(blob_set[i], feature_set[i])
-
-            ## candidate cue adjacency rule: 22 mm
-            filtered_blobs = []
-            filtered_probs = []
-            for j in range(len(blobs)):
-                valid = True
-                for k in range(len(blobs)):
-                    dist2 = (blobs[j][0] - blobs[k][0]) ** 2 + (blobs[j][1] - blobs[k][1]) ** 2
-                    if dist2 < DIST2 and probs[j] + EPS < probs[k]:
-                        valid = False
-                        break
-
-                if valid:
-                    filtered_blobs.append(blobs[j])
-                    filtered_probs.append(probs[j])
-
-            #show_blobs("Predict result ...", lce, filtered_blob)
-            data_blobs.append(np.array(filtered_blobs)) 
-            data_probs.append(np.array(filtered_probs))
+            data_blobs.append(blobs) 
+            data_probs.append(probs)
         return np.array(data_blobs), np.array(data_probs)
 
     def extract_features_from_network(self, roi_set, layer):
