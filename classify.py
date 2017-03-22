@@ -186,7 +186,6 @@ def _create_training_set_from_feature_set_numpy(feature_set, pred_blobs, real_bl
     # create positives
     print "Creating positives ..."
     for i in range(size):
-        #print "real {} pred {} ft {}".format(real_blobs[i][2], len(pred_blobs), len(feature_set))
         if real_blobs[i][2] == -1:
             continue
         nb = []
