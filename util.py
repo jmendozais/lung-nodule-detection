@@ -26,6 +26,8 @@ import csv
 
 # Data utils
 EPS = 1e-9
+FOLDS_SEED = 113
+
 def load_list(path, blob_type='rad'):
     detect_f = open(path, 'r+') 
     paths = []
@@ -529,6 +531,31 @@ def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random, flat=Tru
             #roi_set.append(rois)
     return np.array(rois)
 
+def stratified_kfold_train_val_test(stratified_labels, n_folds, shuffle=True, random_state=util.FOLDS_SEED):
+    folds = StratifiedKFold(stratified_labels, n_folds=n_folds, shuffle=shuffle, random_state=random_state)
+    te_folds = []
+    for tr, te in folds:
+        te_folds.append(list(te))
+
+    val_folds = []
+    tr_folds = []
+
+    for i in range(n_folds):
+        val_folds.append(te_folds[(i+n_folds-1)%n_folds])
+        tr_folds.append([])
+        for j in range(n_folds-2):
+            print 'tr {}'.format((i+1+j)%n_folds)
+            tr_folds[i] = tr_folds[i] + te_folds[(i+1+j)%n_folds]
+        print 'val {}'.format((i+n_folds-1)%n_folds)
+        print 'te {}\n'.format(i)
+            
+
+    result = []
+    for i in range(n_folds):
+        result.append((tr_folds[i], val_folds[i], te_folds[i]))
+
+    return result
+
 '''
 Neural network utils
 ''' 
@@ -536,11 +563,13 @@ Neural network utils
 if __name__ == '__main__':
     import jsrt
     from sklearn.cross_validation import StratifiedKFold
-    paths, locs, rads, subs = jsrt.jsrt(set='jsrt140')
-    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=113)
+    paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
 
-    for tr, te in folds:
-        print 'tr'
-        print subs[tr]
-        print 'te'
-        print subs[te]
+    data = np.array(range(20))
+    strat = np.zeros((20,)).astype(int)
+    strat[10:] = 1
+
+    folds = stratified_kfold_train_val_test(strat, n_folds=5, shuffle=True, random_state=113)
+
+    for tr, val, te in folds:
+        print tr, val, te
