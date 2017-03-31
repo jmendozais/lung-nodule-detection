@@ -556,6 +556,7 @@ def save_blobs(detector, segmentator):
     folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
     fold_idx = 1
     for tr_idx, te_idx in folds:
+        print("Fold {}".format(fold_idx))
         data = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
         masks = np.load('data/{}-pred-masks-f{}.npy'.format(segmentator, fold_idx))
         pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold, masks)
@@ -575,7 +576,7 @@ def detect(image, detector, segmentator, display=True):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='detect.py')
-    parser.add_argument('file', nargs='?', default=os.getcwd())
+    parser.add_argument('file', nargs='?', default=None, type=str)
     parser.add_argument('--save-blobs', help='Use the detector and segmentator to generate blobs', action='store_true')
     parser.add_argument('--detector', help='Method used to extract candidates', type=str, default='wmci')
     parser.add_argument('--segmentator', help='Method used to segment lung area used on candidate filtering', type=str, default='mean-shape')
@@ -601,12 +602,12 @@ if __name__ == '__main__':
     '''
 
     network_set = ['d2p_a']
-    if args.file:
-        image = np.load(args.file).astype('float32')
-        detect(image, args.detector, args.segmentator)
-    elif args.save_blobs:
+    if args.save_blobs:
         save_blobs(args.detector, args.segmentator)
     elif args.mode == 'models':
         eval_models(model_instance, network_set)
     elif args.mode == 'epochs':
         eval_network_by_epoch(model_instance, network_set[0])
+    elif args.file:
+        image = np.load(args.file).astype('float32')
+        detect(image, args.detector, args.segmentator)

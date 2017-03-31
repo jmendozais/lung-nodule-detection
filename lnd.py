@@ -1845,11 +1845,11 @@ def detect_(detection_model, network_model, image, num_blobs=5):
 
 if __name__=="__main__": 
     parser = argparse.ArgumentParser(prog='lnd.py')
-    parser.add_argument('file', nargs='?', default=os.getcwd())
+    parser.add_argument('file', nargs='?', default=None, type=str)
     # TRADITIONAL PIPELINES
     parser.add_argument('--preprocess-lung', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='norm')
     parser.add_argument('--preprocess-roi', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='norm')
-    parser.add_argument('-b', '--blob-detector', help='Options: wmci-mean-shape, wmci-aam.', default='wmci-mean-shape')
+    parser.add_argument('-b', '--blob-detector', help='Options: wmci-mean-shape, wmci-aam.', default='wmci-amm')
     parser.add_argument('--eval-wmci', help='Measure sensitivity and fppi without classification', action='store_true')
     parser.add_argument('-d', '--descriptor', help='Options: baseline.hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='baseline.hardie')
     parser.add_argument('-c', '--classifier', help='Options: lda(default), svm.', default='lda')
@@ -1902,7 +1902,6 @@ if __name__=="__main__":
     parser.add_argument('--dec-epochs', help='number of epochs used on decoder training', default=6, type=int)
     parser.add_argument('--lr', help='Learning rate', default=0.01, type=float)
 
-
     # Transfer learning
     parser.add_argument('--init-transfer', help='Enable initialization from a existing network', default='none')
 
@@ -1951,10 +1950,6 @@ if __name__=="__main__":
         detection_model.dataset_type = 'hdf5'
         detection_model.open_datasets_file(args.datasets)
          
-    if args.file:
-        image = np.load(args.file).astype(np.float32)
-        detect_(detection_model, args.cnn, image)
-
     elif args.eval_wmci:
         eval_wmci_and_postprocessing(detection_model, extractor_key)
 
@@ -2102,8 +2097,13 @@ if __name__=="__main__":
                 protocol_pretrained_cnn(detection_model, extractor_key, args.cnn, args.init)
             elif args.init_transfer != 'none':
                 protocol_pretrained_cnn(detection_model, extractor_key, args.cnn, args.init_trainsfer, mode='transfer')
+            elif args.file:
+                print 'args.file {}'.format(args.file)
+                image = np.load(args.file).astype(np.float32)
+                detect_(detection_model, args.cnn, image)
             else:
                 protocol_cnn_froc(detection_model, '{}'.format(extractor_key), args.cnn)
+
     else:
         method = protocol_froc_2
         if args.fts:
@@ -2139,3 +2139,5 @@ if __name__=="__main__":
             method(detection_model, '{}'.format(extractor_key), args.fw)
         else:
             method(detection_model, '{}'.format(extractor_key))
+
+
