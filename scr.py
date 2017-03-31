@@ -26,6 +26,8 @@ def get_paths(root=SCR_LANDMARKS_DIR, suffix='pfs'):
             cur_suffix = file_[len(file_) - len(suffix):]
             if isfile(file_) and cur_suffix == 'pfs':
                 paths.append(file_)
+
+    paths = sorted(paths)
     return paths
 
 def parse_point(point_string):
@@ -78,6 +80,12 @@ def load_data(set='jsrt140'):
     paths = get_paths(root=SCR_LANDMARKS_DIR, suffix='pfs')
     scr_landmarks = [[] for i in range(len(DATASET_LABELS))]
     for path in paths:
+        valid = True;
+        for tok in overlapped:
+            if path.find(tok) != -1:
+                valid = False;
+        if not valid:
+            continue;
         point_sets = read_pfs(path)
         for i in range(len(DATASET_LABELS)):
             scr_landmarks[i].append(point_sets[DATASET_LABELS[i]])
