@@ -553,15 +553,21 @@ def save_blobs(detector, segmentator):
     pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold)
     write_blobs(pred_blobs, 'data/{}-{}-gt-masks.pkl'.format(detector, segmentator))
 
-    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
+    tr_val_folds, tr_val, te = util.stratified_kfold_holdout(subs, n_folds=5, shuffle=True)
+
     fold_idx = 1
-    for tr_idx, te_idx in folds:
+    for tr, val in tr_val_fols:
         print("Fold {}".format(fold_idx))
-        data = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
-        masks = np.load('data/{}-pred-masks-f{}.npy'.format(segmentator, fold_idx))
+        data = DataProvider(paths[val], left_masks[val], right_masks[val])
+        masks = np.load('data/{}-f{}-train-pred-masks.npy'.format(segmentator, fold_idx))
         pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold, masks)
         write_blobs(pred_blobs, 'data/{}-{}-blobs-f{}.pkl'.format(detector, segmentator, fold_idx))
         fold_idx += 1
+
+    data = DataProvider(paths[val], left_masks[val], right_masks[val])
+    masks = np.load('data/{}-train-val-pred-masks.npy'.format(segmentator, fold_idx))
+    pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold, masks)
+    write_blobs(pred_blobs, 'data/{}-{}-blobs.pkl'.format(detector, segmentator, fold_idx))
     
 def detect(image, detector, segmentator, display=True):
     mask = segment.segment(image, segmentator, display=False)

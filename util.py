@@ -8,6 +8,8 @@ import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
 from sklearn import metrics
+from sklearn.cross_validation import StratifiedKFold
+from sklearn.cross_validation import StratifiedShuffleSplit
 
 from preprocess import *
 font = {
@@ -531,30 +533,16 @@ def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random, flat=Tru
             #roi_set.append(rois)
     return np.array(rois)
 
-def stratified_kfold_train_val_test(stratified_labels, n_folds, shuffle=True, random_state=util.FOLDS_SEED):
-    folds = StratifiedKFold(stratified_labels, n_folds=n_folds, shuffle=shuffle, random_state=random_state)
-    te_folds = []
-    for tr, te in folds:
-        te_folds.append(list(te))
+def stratified_kfold_holdout(stratified_labels, n_folds, shuffle=True, random_state=util.FOLDS_SEED):
+    split = StratifiedShuffleSplit(stratified_labels, 1, test_size=0.4, random_state=util.FOLDS_SEED)
+    tr, te = list(split)[0]
 
-    val_folds = []
-    tr_folds = []
+    folds = StratifiedKFold(stratified_labels[tr], n_folds=n_folds, shuffle=shuffle, random_state=random_state)
+    tr_val_folds = []
+    for tr_tr, tr_val in folds:
+        tr_val_folds.append((tr[tr_tr], tr[tr_val]))
 
-    for i in range(n_folds):
-        val_folds.append(te_folds[(i+n_folds-1)%n_folds])
-        tr_folds.append([])
-        for j in range(n_folds-2):
-            print 'tr {}'.format((i+1+j)%n_folds)
-            tr_folds[i] = tr_folds[i] + te_folds[(i+1+j)%n_folds]
-        print 'val {}'.format((i+n_folds-1)%n_folds)
-        print 'te {}\n'.format(i)
-            
-
-    result = []
-    for i in range(n_folds):
-        result.append((tr_folds[i], val_folds[i], te_folds[i]))
-
-    return result
+    return tr_val_folds, tr, te
 
 '''
 Neural network utils

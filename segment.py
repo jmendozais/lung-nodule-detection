@@ -13,8 +13,25 @@ from skimage import draw
 from skimage.segmentation import find_boundaries
 from sklearn.cross_validation import StratifiedKFold
 
-# Util functions 
+from collections import OrderedDict
+import menpo.io as mio
+from menpo.image import Image
+from menpo.landmark import *
+from menpo.shape import *
+
+from menpofit.aam import HolisticAAM, PatchAAM
+from menpo.feature import *
+from menpofit.aam import LucasKanadeAAMFitter, WibergInverseCompositional
+from matplotlib import pyplot as plt
+
+'''
+Constants
+'''
 SEGMENTATION_IMAGE_SHAPE = (512, 512)
+
+'''
+Nodule segmentation utils
+'''
 def finite_derivatives(img):
     size = img.shape
     dx = img.copy()
@@ -56,7 +73,9 @@ def cos_angle(a, b):
     # cos(acos(tmp)
     return tmp
 
-''' Nodule segmentation using Adaptive Distance thresold '''
+''' 
+Nodule segmentation using Adaptive Distance threshold 
+'''
 
 def distance_thold(img, point, grad, dx, dy, t0=0,):
     point = (int(point[0]), int(point[1]))
@@ -73,8 +92,7 @@ def distance_thold(img, point, grad, dx, dy, t0=0,):
     dist = dist.astype(np.float64)
     ndist = dist / (rmax ** 2)
     ratio = (1.0 - np.exp(-1 * ndist)) / ( 1.0 - exp(-1))
-    T = t0 + tdelta * ratio
-
+    T = t0 + tdelta * ratio 
     mask = dist < rmax ** 2
     mask = mask.astype(np.uint8)
     T = T * mask
@@ -145,54 +163,165 @@ def adaptive_distance_thold(img, blobs):
     return blobs, np.array(masks)
 
 ''' 
-Lung segmentation
+Lung segmentation utils
 '''
-FOLDS_SEED = 113
 
 def create_mask_from_landmarks(landmarks, mask_shape=(512, 512)):
-    landmarks = (landmarks/2).astype(np.int)
     mask = np.full(shape=mask_shape, fill_value=False, dtype=np.bool)
-
-    rr, cc = draw.polygon(landmarks.T[1], landmarks.T[0])
+    rr, cc = draw.polygon(landmarks.T[0], landmarks.T[1])
     mask[rr, cc] = True
 
     return mask
 
-class MeanShape:
-    def __init__(self):
-        self.mean_landmarks = None 
-        self.image_shape = None
+''' 
+Lung segmentation model base class 
+'''
+
+class SegmentationModel:
 
     def fit(self, images, landmarks):
-        num_samples = len(landmarks)
-        num_landmarks = len(landmarks[0])
+        raise Exception('Fit method not implemented')
 
-        self.mean_landmarks = np.zeros(shape=(num_landmarks, 2))
-        self.image_shape = images[0].shape
-
-        for i in range(num_samples):
-            for j in range(num_landmarks):
-                self.mean_landmarks[j][0] += landmarks[i][j][0]
-                self.mean_landmarks[j][1] += landmarks[i][j][1]
-
-        for j in range(num_landmarks):
-            self.mean_landmarks[j][0] /= num_samples
-            self.mean_landmarks[j][1] /= num_samples
+    def transform_one_image(self, image):
+        raise Exception('Transform_one_image method not implemented')
 
     def transform(self, images):
         if len(images[0].shape) == 2:
             num_samples = len(images)
-            masks = np.zeros(shape=(num_samples,) + self.image_shape)
+            masks = []
             for i in range(num_samples):
-                masks[i] = create_mask_from_landmarks(self.mean_landmarks)
-            return masks
-        elif len(images.shape) == 2:
-            return create_mask_from_landmarks(self.mean_landmarks)
+                masks.append(self.transform_one_image(images[i]))
+            return np.array(masks)
 
+        elif len(images.shape) == 2:
+            return self.transform_one_image(images)
+        
+'''
+Use mean shape as predicted lung shape
+'''
+class MeanShape(SegmentationModel):
+    def __init__(self):
+        self.mean_shapes = None 
+        self.image_shape = None
+
+    def fit(self, images, landmarks):
+        num_shapes = len(landmarks)
+        num_samples = len(landmarks[0])
+        self.mean_shapes = []
+        for i in range(num_shapes):
+            landmarks[i] /= 2
+            self.mean_shapes.append(np.zeros(shape=(len(landmarks[i][0]), 2)))
+        self.mean_shapes = np.array(self.mean_shapes)
+
+        self.image_shape = images[0].shape
+        for s in range(num_shapes):
+            for i in range(num_samples):
+                for j in range(len(landmarks[s][i])):
+                    self.mean_shapes[s][j][1] += landmarks[s][i][j][0]
+                    self.mean_shapes[s][j][0] += landmarks[s][i][j][1]
+
+        for s in range(num_shapes):
+            for j in range(len(landmarks[s][0])):
+                self.mean_shapes[s][j][1] /= num_samples
+                self.mean_shapes[s][j][0] /= num_samples
+
+    def transform_one_image(self, image):
+        mask = create_mask_from_landmarks(self.mean_shapes[0])
+        for i in range(1, len(self.mean_shapes)):
+            mask = np.logical_or(mask, create_mask_from_landmarks(self.mean_shapes[i]))
+        return mask
+
+'''
+Lung segmentation based on Active Appearance Models
+'''
+
+def normalize_for_amm(image):
+    mean = np.mean(image)
+    std = np.std(image)
+    image = (image - mean)/std
+    min_ = np.min(image)
+    max_ = np.max(image)
+    image = (image - min_)/(max_ - min_ + 1e-7)
+    image = image.reshape((1,) + image.shape)
+    return image
+
+def prepare_data_for_aam(images, landmarks):
+    images_aam = []
+    for i in range(len(images)):
+        images[i] = normalize_for_amm(images[i])
+        images_aam.append(Image(images[i]))
+        lmx = landmarks[0][i].T[0]
+        lmy = landmarks[0][i].T[1]
+        num_points = len(landmarks[0])
+        rmx = landmarks[1][i].T[0]
+        rmy = landmarks[1][i].T[1]
+        pc = PointCloud(points=np.vstack((np.array([lmy, lmx]).T, np.array([rmy, rmx]).T))/2)
+        lg = LandmarkGroup.init_from_indices_mapping(pc, 
+            OrderedDict({'left':range(len(landmarks[0][i])), 'right':range(len(landmarks[0][i]), len(landmarks[0][i]) + len(landmarks[1][i]))}))
+        lm = LandmarkManager()
+        lm.setdefault('left', lg)
+        images_aam[-1].landmarks = lm
+    return images_aam
+
+class ActiveAppearanceModel(SegmentationModel):
+    def __init__(self):
+        self.mean_shape = None 
+        self.image_shape = None
+        self.fitter = None
+        self.num_landmarks_by_shape = None
+
+    def fit(self, images, landmarks):
+        num_samples = len(landmarks[0])
+
+        self.num_landmarks_by_shape = []
+        for i in range(len(landmarks)):
+            self.num_landmarks_by_shape.append(len(landmarks[i][0]))
+        
+        aam_images = prepare_data_for_aam(images, landmarks)
+        aam = PatchAAM(aam_images, group=None, patch_shape=[(15, 15), (23, 23)],
+                         diagonal=150, scales=(0.5, 1.0), holistic_features=fast_dsift,
+                         max_shape_components=20, max_appearance_components=150,
+                         verbose=True)
+
+        self.fitter = LucasKanadeAAMFitter(aam,
+                                  lk_algorithm_cls=WibergInverseCompositional,
+                                  n_shape=[5, 20], n_appearance=[30, 150])
+        
+        pc = []
+        for img in aam_images:
+            pc.append(img.landmarks[None].lms)
+            
+        self.mean_shape = mean_pointcloud(pc)
+        self.image_shape = images[0].shape
+
+        fitting_results = []
+        for img in aam_images[:10]:
+            fr = self.fitter.fit_from_shape(img, self.mean_shape, gt_shape=img.landmarks[None].lms) 
+            fitting_results.append(fr)
+
+    def transform_one_image(self, image):
+        image = Image(normalize_for_amm(image))
+        fr = self.fitter.fit_from_shape(image, self.mean_shape) 
+        pred_landmarks = fr.final_shape.points
+
+        begin = 0
+        mask = create_mask_from_landmarks(pred_landmarks[begin:begin + self.num_landmarks_by_shape[0]])
+        begin += self.num_landmarks_by_shape[0]
+
+        for i in range(1, len(self.num_landmarks_by_shape)):
+            mask = np.logical_or(mask, create_mask_from_landmarks(pred_landmarks[begin:begin + self.num_landmarks_by_shape[i]]))
+            begin += self.num_landmarks_by_shape[i]
+        return mask
+
+''' 
+segment.py protocol functions
+'''
 
 def get_shape_model(model_name):
     if model_name == 'mean-shape':
         return MeanShape()
+    elif model_name == 'aam':
+        return ActiveAppearanceModel()
     else:
         raise Exception("{} not implemented yet!".format(model_name))
 
@@ -207,54 +336,57 @@ def load_masks_sets(model_name):
 
     return masks_sets 
 
+def train_and_save(model, tr_images, tr_landmarks, te_images, model_name):
+    print "Fit model ..."
+    model.fit(tr_images, tr_landmarks)
+
+    print "\nRun model on test set ..."
+    pred_masks = model.transform(te_images)
+
+    print "Save model ..."
+    model_file = open('data/{}.pkl'.format(model_name), 'wb')
+    pickle.dump(model, model_file)
+    model_file.close()
+
+    print "Save masks ..."
+    np.save('data/{}-pred-masks'.format(model_name), np.array(pred_masks))
+ 
 def train_with_method(model_name):
     set_name = 'jsrt140'
     paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set=set_name)
     images = jsrt.images_from_paths(paths, dsize=(512, 512))
     landmarks = scr.load_data(set=set_name)
 
-    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
+    tr_val_folds, tr_val, te = util.stratified_kfold_holdout(subs, n_folds=5, shuffle=True)
 
     i = 1
-    for tr_idx, te_idx in folds:    
-        left_shape_model = get_shape_model(model_name)
-        right_shape_model = get_shape_model(model_name)
+    for tr, val in tr_val_folds:    
+        # Train set models
+        print "Fold {}".format(i)
+        landmarks_tr = [landmarks[0][tr], landmarks[1][tr]]
 
-        left_shape_model.fit(images[tr_idx], landmarks[0][tr_idx])
-        left_pred_masks = left_shape_model.transform(landmarks[0][te_idx])
-
-        right_shape_model.fit(images[tr_idx], landmarks[1][tr_idx])
-        right_pred_masks = right_shape_model.transform(landmarks[1][te_idx])
-
-        pred_masks = []
-        for j in range(len(te_idx)):
-            pred_masks.append(np.logical_or(left_pred_masks[j], right_pred_masks[j]))
-
-        lm_file = open('data/{}-lmodel-f{}.pkl'.format(model_name, i), 'wb')
-        pickle.dump(left_shape_model, lm_file)
-        lm_file.close()
-        rm_file = open('data/{}-rmodel-f{}.pkl'.format(model_name, i), 'wb')
-        pickle.dump(right_shape_model, rm_file)
-        rm_file.close()
-
-        np.save('data/{}-pred-masks-f{}'.format(model_name, i), np.array(pred_masks))
+        model = get_shape_model(model_name)
+        train_and_save(model, images[tr], landmarks_tr, images[val], '{}-f{}-train'.format(model_name, i))
 
         i += 1
 
+    landmarks_tr_val = [landmarks[0][tr_val], landmarks[1][tr_val]]
+    model = get_shape_model(model_name)
+    train_and_save(model, images[tr_val], landmarks_tr_val, images[te], '{}-train-val'.format(model_name))
+
 def segment(image, model_name, display=True):
-    lmodel = pickle.load(open('data/{}-lmodel-f1.pkl'.format(model_name), 'rb'))
-    rmodel = pickle.load(open('data/{}-rmodel-f1.pkl'.format(model_name), 'rb'))
+    print("Loading model ...")
+    model = pickle.load(open('data/{}-model-f1.pkl'.format(model_name), 'rb'))
+
+    print("Segment input ...")
     image = cv2.resize(image, SEGMENTATION_IMAGE_SHAPE, interpolation=cv2.INTER_CUBIC)
-    lmask = lmodel.transform(image)
-    rmask = rmodel.transform(image)
+    mask = model.transform(image)
     if display:
-        lboundary = find_boundaries(lmask)
-        rboundary = find_boundaries(rmask)
+        boundaries = find_boundaries(mask)
         max_value = np.max(image)
-        image[lboundary] = max_value
-        image[rboundary] = max_value
+        image[boundaries] = max_value
         util.imshow('Segment with model {}'.format(model_name), image)
-    return np.logical_or(lmask, rmask)
+    return mask
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='segment.py')
