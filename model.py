@@ -188,9 +188,9 @@ class BaselineModel(object):
         if self.feature_set != None:
             np.save(self.feature_set, '{}_fs.npy'.format(self.extractor.name))
         '''
-    def preprocess_rois(self, rois, range_values):
+
+    def preprocess_rois(self, rois):
         assert self.preprocess_roi != 'none'
-        range_non_channel = [range_values.T[0].min(), range_values.T[1].max()]
         result = []
         for j in range(len(rois)): 
             result.append([])
@@ -206,21 +206,8 @@ class BaselineModel(object):
                     result[-1].append(equalize_hist(rois[j][k]))
                 if 'nlm' in self.preprocess_roi:
                     result[-1].append(denoise_nl_means(rois[j][k]))
-                if 'max_white' in self.preprocess_roi:
-                    result[-1].append(max_white(rois[j][k], range_values[k][0], range_values[k][1]))
-                if 'stretch' in self.preprocess_roi:
-                    result[-1].append(stretch(rois[j][k], range_values[k][0], range_values[k][1]))
-
             result[-1] = np.array(result[-1])
-            if 'grey_world' in self.preprocess_roi:
-                result[-1].append(grey_world(rois[j], range_non_channel[0], range_non_channel[1]))
-            if 'retinex' in self.preprocess_roi:
-                result[-1].append(retinex(rois[j], range_non_channel[0], range_non_channel[1]))
-            if 'retinex_adjust' in self.preprocess_roi:
-                result[-1].append(retinex_adjust(rois[j], range_non_channel[0], range_non_channel[1]))
-
-        result = np.array(result)
-        return np.array(result)  
+        return np.array(result)
 
     def create_rois(self, data, blob_set, mode=None, pad=True, save=False):
         pad_size = 1.15
@@ -230,22 +217,6 @@ class BaselineModel(object):
             dsize = (self.roi_size, self.roi_size)
 
         print 'dsize: {} rsize: {}'.format(dsize, self.roi_size)
-        # Create image set
-        img_set = []
-
-        min_value = []
-        max_value = []
-        for i in range(len(data)):
-            img, mask = data.get(i, downsample=True) # img 2048 side, lung mask downsampled
-            img = antialiasing_dowsample(img, True) # img downsampled
-            img = img * mask
-            min_value.append(np.min(img[np.nonzero(img)]))
-            max_value.append(np.max(img[np.nonzero(img)]))
-            
-        img_set = np.array(img_set)
-        min_value = np.array(min_value).min()
-        max_value = np.array(max_value).max()
-        print 'Min {} Max {}'.format(min_value, max_value)
 
         img_set = []
         num_blobs = 0
@@ -277,20 +248,7 @@ class BaselineModel(object):
                 if not self.downsample:
                     ci = cv2.resize(ci, img.shape, interpolation=cv2.INTER_CUBIC)
                 results.append(ci)
-            if 'stretch' in self.preprocess_lung:
-                results.append(stretch(img, min_value, max_value))
-            if 'max_white' in self.preprocess_lung:
-                results.append(max_white(img, min_value, max_value))
-
-            # Multi-channel preprocessing
-            results = np.array(results)
-            if 'grey_world' in self.preprocess_lung:
-                results = grey_world(results, min_value, max_value)
-            elif 'retinex' in self.preprocess_lung:
-                results = retinex(results, min_value, max_value)
-            elif 'retinex_adjust' in self.preprocess_lung:
-                results = retinex_adjust(results, min_value, max_value)
-            img_set.append(results)
+            img_set.append(np.array(results))
 
         # Create roi set
         roi_set = []
@@ -387,7 +345,7 @@ class BaselineModel(object):
                     roi_set[i] = self.file.create_dataset('rois_{}'.format(i), data=self.preprocess_rois(roi_set[i], range_values))
                     self.file.create_dataset('pred_blobs_{}'.format(i), data=blob_set[i])
                 else:
-                    roi_set[i] = self.preprocess_rois(roi_set[i], range_values)
+                    roi_set[i] = self.preprocess_rois(roi_set[i])
 
         '''
             # Fix segment
@@ -538,24 +496,20 @@ class BaselineModel(object):
         
     def train_with_feature_set_keras(self, feats_tr, pred_blobs_tr, real_blobs_tr,
                                         feats_test=None, pred_blobs_test=None, real_blobs_test=None,
-                                        model='shallow_1', fold=None, network_init=None, mode=None):
+                                        model='shallow_1', model_suffix=None, network_init=None):
         print("{} {} {} {} {} {}".format(len(feats_tr), len(pred_blobs_tr), len(real_blobs_tr), len(feats_test), len(pred_blobs_test), len(real_blobs_test)))
         X_train, Y_train, X_test, Y_test = neural.create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr, 
                                                 feats_test, pred_blobs_test, real_blobs_test, streams=self.streams )
 
         print "X_train shape {}".format(X_train.shape)
-        self.network = neural.create_network(model, (X_train.shape[1], self.roi_size, self.roi_size), fold, self.streams) 
+        self.network = neural.create_network(model, (X_train.shape[1], self.roi_size, self.roi_size), self.streams) 
         if network_init is not None:
-            if mode != None: 
-                self.load_cnn_weights('data/{}_fold_{}'.format(network_init, fold))
+            if self.args.transfer:
+                self.load_cnn_weights('data/{}_{}'.format(network_init, model_suffix))
             else:
                 self.load_cnn_weights(network_init)
 
-        if fold == 1:
-            self.network.network.summary()
-            #visualize_util.plot(_model.network.network, to_file='data/{}.png'.format(network_model))
-
-        name =  'data/{}_fold_{}'.format(model, fold)
+        name =  'data/{}_{}'.format(model, model_suffix)
         history = self.network.fit(X_train, Y_train, X_test, Y_test, streams=(self.streams != 'none'), cropped_shape=(self.roi_size, self.roi_size), checkpoint_prefix=name, checkpoint_interval=2)
         return history
 

@@ -12,7 +12,7 @@ from util import *
 import skimage.io as io
 import argparse
 
-from preprocess import preprocess
+import preprocess
 import jsrt
 import model
 import eval
@@ -113,80 +113,9 @@ def doh(img, mask, threshold=0.0005, proba=False):
     blobs_doh = blob_doh(1 - img, min_sigma=4, num_sigma=10, max_sigma=30, threshold=threshold)
     return filter_by_margin(filter_by_size(filter_by_masks(blobs_doh, mask)), mask)
 
-# wmci detector
-def finite_derivatives(img):
-    size = img.shape
-
-    dx = np.empty(img.shape, dtype=np.double)
-    dx[0, :] = 0
-    dx[-1, :] = 0
-    dx[1:-1, :] = (img[2:, :] - img[:-2, :]) / 2.0
-
-    dy = np.empty(img.shape, dtype=np.double)
-    dy[:, 0] = 0
-    dy[:, -1] = 0
-    dy[:, 1:-1] = (img[:, 2:] - img[:, :-2]) / 2.0
-
-    mag = (dx ** 2 + dy ** 2) ** 0.5 + 1e-9
-    return mag, dx, dy
-
-def hardie_filters():
-    sizes = [7, 10, 13]
-    energy = [1.0, 0.47, 0.41]
-    k = sizes[2] * 2 + 1
-    filters = []
-
-    for idx in range(3):
-        filter = np.empty((k, k), dtype=np.float64)
-        for i in range(k):
-            for j in range(k):
-                if ((i - k/2) * (i - k/2) + (j - k/2) * (j - k/2) <= sizes[idx] * sizes[idx]):
-                    filter[i, j] = 1
-                else:
-                    filter[i, j] = 0
-
-        filters.append(filter); 
-        _sum = np.sum(filter);
-        filter /= _sum
-        filter *= energy[idx];
-    
-    filters[1] += filters[0];
-    filters[2] += filters[1];
-    return filters
-
-def wci(img, filter):
-    size = filter.shape
-    magnitude, dx, dy = finite_derivatives(img)
-    
-    fx = np.empty(size, dtype=np.float64)
-    fy = np.empty(size, dtype=np.float64)
-    ax = np.empty(size, dtype=np.float64)
-    ay = np.empty(size, dtype=np.float64)
-
-    for i in range(size[0]):
-        for j in range(size[1]):
-            x = -1 * (i - size[0] / 2)
-            y = -1 * (j - size[1] / 2)
-            mu = sqrt(x * x + y * y) + 1e-9;    
-            fx[i, j] = filter[i, j] * x * 1.0 / mu
-            fy[i, j] = filter[i, j] * y * 1.0 / mu
-
-    nx = dx / magnitude
-    ny = dy / magnitude
-
-    ax = cv2.filter2D(nx, -1, fx)
-    ay = cv2.filter2D(ny, -1, fy)
-    return ax + ay
-
 def wmci(img, mask, threshold=0.5):
-    filters = hardie_filters()
     min_distance = 7
-
-    ans = wci(img, filters[0])
-    for i in range(1, len(filters)):
-        tmp = wci(img, filters[i])
-        ans = np.maximum(tmp, ans)
-
+    ans = preprocess.wmci(img, mask, threshold); 
     coords = peak_local_max(ans, min_distance)
 
     # Fix this, you should return the radio
@@ -202,15 +131,8 @@ def wmci(img, mask, threshold=0.5):
     return blobs, ans
 
 def wmci_proba(img, mask, threshold=0.5):
-    filters = hardie_filters()
     min_distance = 7
-
-    ans = wci(img, filters[0])
-
-    for i in range(1, len(filters)):
-        tmp = wci(img, filters[i])
-        ans = np.maximum(tmp, ans)
-
+    ans = preprocess.wmci(img, mask, threshold); 
     coords = peak_local_max(ans, min_distance)
 
     blobs = []
@@ -227,7 +149,7 @@ def wmci_proba(img, mask, threshold=0.5):
 
 # Framework methods
 def detect_blobs(img, lung_mask, method='wmci', threshold=0.5):
-    sampled, lce, norm = preprocess(img, lung_mask)
+    sampled, lce, norm = preprocess.preprocess_hardie(img, lung_mask)
     blobs = None
     proba = None
     ci = norm
@@ -363,7 +285,7 @@ def eval_cnn_detector(data, blobs, augmented_blobs, rois, folds, model):
     masks = []
     for i in range(len(data)): 
         img, lung_mask = data.get(i, downsample=True)
-        sampled, lce, norm = preprocess(img, lung_mask, downsample=True)
+        sampled, lce, norm = preprocess.preprocess_hardie(img, lung_mask, downsample=True)
         imgs.append([lce]) 
         masks.append(lung_mask)
     imgs = np.array(imgs)
@@ -415,7 +337,7 @@ def froc_by_epochs(data, blobs, augmented_blobs, rois, folds, network_model, nb_
     masks = []
     for i in range(len(data)): 
         img, lung_mask = data.get(i, downsample=True)
-        sampled, lce, norm = preprocess(img, lung_mask, downsample=True)
+        sampled, lce, norm = preprocess.preprocess_hardie(img, lung_mask, downsample=True)
         imgs.append([lce]) 
         masks.append(lung_mask)
     imgs = np.array(imgs)
@@ -455,6 +377,7 @@ def froc_by_epochs(data, blobs, augmented_blobs, rois, folds, network_model, nb_
             froc = eval.froc(blobs2[te_idx], blobs_te_pred, probs_te_pred)
             frocs.append(froc)
             fold += 1
+
         names.append('{}, epoch {}'.format(network_model, epoch))
         ops = eval.average_froc(frocs, fppi_range)
         av_frocs.append(ops)
@@ -551,23 +474,22 @@ def save_blobs(detector, segmentator):
  
     threshold = 0.5
     pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold)
-    write_blobs(pred_blobs, 'data/{}-{}-gt-masks.pkl'.format(detector, segmentator))
+    write_blobs(pred_blobs, 'data/{}-{}-blobs-gt.pkl'.format(detector, segmentator))
 
-    tr_val_folds, tr_val, te = util.stratified_kfold_holdout(subs, n_folds=5, shuffle=True)
-
+    tr_val_folds, tr_val, te = util.stratified_kfold_holdout(subs, n_folds=5)
     fold_idx = 1
-    for tr, val in tr_val_fols:
-        print("Fold {}".format(fold_idx))
+    for tr, val in tr_val_folds:
+        print("Fold {}: len tr {}, len val {}".format(fold_idx, len(tr), len(val)))
         data = DataProvider(paths[val], left_masks[val], right_masks[val])
         masks = np.load('data/{}-f{}-train-pred-masks.npy'.format(segmentator, fold_idx))
         pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold, masks)
         write_blobs(pred_blobs, 'data/{}-{}-blobs-f{}.pkl'.format(detector, segmentator, fold_idx))
         fold_idx += 1
 
-    data = DataProvider(paths[val], left_masks[val], right_masks[val])
+    data = DataProvider(paths[te], left_masks[te], right_masks[te])
     masks = np.load('data/{}-train-val-pred-masks.npy'.format(segmentator, fold_idx))
     pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold, masks)
-    write_blobs(pred_blobs, 'data/{}-{}-blobs.pkl'.format(detector, segmentator, fold_idx))
+    write_blobs(pred_blobs, 'data/{}-{}-blobs-te.pkl'.format(detector, segmentator, fold_idx))
     
 def detect(image, detector, segmentator, display=True):
     mask = segment.segment(image, segmentator, display=False)
@@ -585,7 +507,7 @@ if __name__ == '__main__':
     parser.add_argument('file', nargs='?', default=None, type=str)
     parser.add_argument('--save-blobs', help='Use the detector and segmentator to generate blobs', action='store_true')
     parser.add_argument('--detector', help='Method used to extract candidates', type=str, default='wmci')
-    parser.add_argument('--segmentator', help='Method used to segment lung area used on candidate filtering', type=str, default='mean-shape')
+    parser.add_argument('--segmentator', help='Method used to segment lung area used on candidate filtering', type=str, default='aam')
     parser.add_argument('--mode', help='', default='models', type=str)
     parser.add_argument('--roi-size', help='Roi size', default=32, type=int)
     args = parser.parse_args()

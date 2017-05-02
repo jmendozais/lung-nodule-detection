@@ -34,6 +34,8 @@ import detect
 import segment
 from segment import MeanShape
 
+import pdb
+
 # Globals
 FOLDS_SEED = 113
 step = 10
@@ -45,7 +47,8 @@ def get_froc_on_folds(detection_model, paths, left_masks, right_masks, blobs, pr
     valid = True
     frocs = []
     feature_weights = []
-    for tr_idx, te_idx in folds:    
+    tr_val_folds, tr_val, te = folds
+    for tr_idx, te_idx in tr_val_folds:    
         print "Fold {}".format(fold + 1),
         #data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
         paths_te = paths[te_idx]
@@ -91,46 +94,84 @@ def _split_rois(rois, tr_idx, te_idx, streams):
         rois_te = rois[te_idx]
     return rois_tr, rois_te
 
+def froc_with_model(detection_model, network_model, rois_tr, pred_blobs_tr, blobs_tr, pred_blobs_te, blobs_te, data_te, model_suffix, network_init=None, rois_te=None):
+    if rois_te == None:
+        rois_te = detection_model.create_rois(data_te, pred_blobs_te)
+
+    history = detection_model.train_with_feature_set_keras(rois_tr, pred_blobs_tr, 
+        blobs_tr, rois_te, 
+        pred_blobs_te, blobs_te, 
+        model=network_model, model_suffix=model_suffix, 
+        network_init=network_init)
+
+    blobs_te_pred, probs_te_pred = detection_model.predict_proba_from_feature_set_keras(rois_te, pred_blobs_te)
+    froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
+
+    detection_model.save('data/{}_{}'.format(network_model, model_suffix))
+    util.save_loss_acc(history, 'data/{}_{}'.format(network_model, model_suffix))
+
+    return froc
+ 
 def get_froc_on_folds_keras(detection_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, network_init=None, mode=None):
     fold = 1
     valid = True
     frocs = []
     frocs_ = []
-    for tr_idx, te_idx in folds:    
-        print "Fold {}".format(fold),
-        rois_tr, _ = _split_rois(rois, tr_idx, te_idx, detection_model.streams)
+    tr_val_folds, tr_val, te = folds 
+    print "tr val {}".format(len(tr_val))
 
+    for tr_idx, te_idx in tr_val_folds:    
+        print "Fold {}".format(fold),
+        print "len tr {}, len te {}".format(len(tr_idx), len(te_idx))
+        rois_tr, _ = _split_rois(rois, tr_idx, te_idx, detection_model.streams)
         pred_blobs_te = detect.read_blobs('data/{}-blobs-f{}.pkl'.format(detection_model.args.blob_detector, fold))
         data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
-        assert len(data_te) == len(pred_blobs_te)
-        rois_te = detection_model.create_rois(data_te, pred_blobs_te)
-            
-        history = detection_model.train_with_feature_set_keras(rois_tr, pred_blobs[tr_idx], 
-            blobs[tr_idx], rois_te, 
-            pred_blobs_te, blobs[te_idx], 
-            model=network_model, fold=fold,
-            network_init=network_init, mode=mode
-            )
+        assert len(data_te) == len(pred_blobs_te), 'len(data_te) == len(pred_blobs_te), but {} != {}'.format(len(data_te), len(pred_blobs_te))
 
-        blobs_te = []
-        for bl in blobs[te_idx]:
-            blobs_te.append([bl])
-        blobs_te = np.array(blobs_te)
- 
-        blobs_te_pred, probs_te_pred = detection_model.predict_proba_from_feature_set_keras(rois_te, pred_blobs_te)
-        froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
+        froc = froc_with_model(detection_model, network_model, rois_tr, pred_blobs[tr_idx], blobs[tr_idx], pred_blobs_te, blobs[te_idx], data_te, model_suffix='fold_{}'.format(fold))
         frocs.append(froc)
+        frocs_.append(eval.average_froc([froc], np.linspace(0.0, 10.0, 101))) 
 
-        detection_model.save('data/{}_fold_{}'.format(network_model, fold))
-        legend_ = ['Fold {}'.format(i + 1) for i in range(len(frocs))]
-        frocs_.append(eval.average_froc([froc], np.linspace(0.0, 10.0, 101)))
-        util.save_froc(frocs_, 'data/{}_froc_kfold'.format(network_model), legend_)
-        util.save_loss_acc(history, 'data/{}_fold_{}'.format(network_model, fold))
+        legend_ = ['Fold {}'.format(i + 1) for i in range(len(frocs))] 
+        util.save_froc(frocs_, 'data/{}_froc_folds'.format(network_model), legend_)
+
         fold += 1
 
-    av_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
+    froc_on_val_sets = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
+    rois_tr_val, _ = _split_rois(rois, tr_val, te, detection_model.streams)
+    pred_blobs_te = detect.read_blobs('data/{}-blobs-te.pkl'.format(detection_model.args.blob_detector, fold))
+    data_te = DataProvider(paths[te], left_masks[te], right_masks[te])
+    rois_te = detection_model.create_rois(data_te, pred_blobs_te)
 
-    return av_froc
+    frocs_on_test_sets = []
+
+    if detection_model.args.bootstrap:
+        history = detection_model.train_with_feature_set_keras(rois_tr_val, pred_blobs[tr_val], 
+            blobs[tr_val], rois_te, 
+            pred_blobs_te, blobs[te], 
+            model=network_model, model_suffix="tr_val", 
+            network_init=network_init)
+
+        blobs_te_pred, probs_te_pred = detection_model.predict_proba_from_feature_set_keras(rois_te, pred_blobs_te)
+        idxs = util.bootstrap_sets(len(rois_te), num_sets=1000)
+
+        for i in range(len(idxs)):
+            blobs_bt = (blobs[te])[idxs[i]]
+            blobs_bt_pred = blobs_te_pred[idxs[i]]
+            probs_bt_pred = probs_te_pred[idxs[i]]
+            froc = eval.froc(blobs_bt, blobs_bt_pred, probs_bt_pred, verbose=False)
+            frocs_on_test_sets.append(froc)
+    else: 
+        for i in range(10):
+            froc = froc_with_model(detection_model, network_model, rois_tr_val, pred_blobs[tr_val], blobs[tr_val], pred_blobs_te, blobs[te], data_te, model_suffix='tr_val', rois_te=rois_te)
+            frocs_on_test_sets.append(froc)
+
+    froc_on_test_set, ci_low, ci_up = eval.average_froc_with_ci(frocs_on_test_sets, np.linspace(0.0, 10.0, 101)) 
+    print "CI low {} up {}".format(ci_low, ci_up)
+    legend_ = ['{} val sets'.format(network_model), '{} test set, CI 95% = [{:.2f} - {:.2f}]'.format(network_model, ci_low, ci_up)]
+    print network_model, ci_low, ci_up
+    util.save_froc([froc_on_val_sets, froc_on_test_set], 'data/{}_froc_val_test'.format(network_model), legend_, with_std=True)
+    return froc_on_test_set
 
 def bovw_folds(detection_model, fname, config, save_fw=False):
     # DATA
@@ -143,7 +184,6 @@ def bovw_folds(detection_model, fname, config, save_fw=False):
     for i in range(size):
         blobs.append([locs[i][0], locs[i][1], rads[i]])
     blobs = np.array(blobs)
-
     print "Loading blobs & features ..."
     data = DataProvider(paths, left_masks, right_masks)
     pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
@@ -411,30 +451,26 @@ def froc_classify_cnn(detection_model, paths, left_masks, right_masks, blobs, pr
 
 
 def froc_by_epoch(detection_model, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, epoch):
+    tr_val_folds, tr_val, te = folds 
     fold = 1
     valid = True
     frocs = []
-    for tr_idx, te_idx in folds:
+    for tr_idx, te_idx in tr_val_folds:
         print "Fold {}".format(fold),
+        rois_tr, _ = _split_rois(rois, tr_idx, te_idx, detection_model.streams)
+        pred_blobs_te = detect.read_blobs('data/{}-blobs-f{}.pkl'.format(detection_model.args.blob_detector, fold))
         data_te = DataProvider(paths[te_idx], left_masks[te_idx], right_masks[te_idx])
-        paths_te = paths[te_idx]
+        assert len(data_te) == len(pred_blobs_te)
 
         name = 'data/{}_fold_{}.epoch_{}'.format(network_model, fold,epoch)
         print 'load model {} ...'.format(name)
         detection_model.load_cnn('data/{}_fold_{}'.format(network_model, fold))
         detection_model.load_cnn_weights(name)
+        
         print "predict ..."
-
-        rois_tr, rois_te = _split_rois(rois, tr_idx, te_idx, detection_model.streams)
- 
-        blobs_te = []
-        for bl in blobs[te_idx]:
-            blobs_te.append([bl])
-        blobs_te = np.array(blobs_te)
-
-        blobs_te_pred, probs_te_pred = detection_model.predict_proba_from_feature_set_keras(rois_te, pred_blobs[te_idx])
-        print "eval ..."
-        froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
+        rois_te = detection_model.create_rois(data_te, pred_blobs_te)
+        blobs_te_pred, probs_te_pred = detection_model.predict_proba_from_feature_set_keras(rois_te, pred_blobs_te)
+        froc = eval.froc(blobs[te_idx], blobs_te_pred, probs_te_pred)
         frocs.append(froc)
         fold += 1
 
@@ -456,11 +492,11 @@ def frocs_by_epoch(detection_model, fname, network_model):
 
     print "Loading blobs ..."
     data = DataProvider(paths, left_masks, right_masks)
-    pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+    pred_blobs = detect.read_blobs('data/{}-blobs-gt.pkl'.format(detection_model.args.blob_detector))
     rois = detection_model.create_rois(data, pred_blobs)
 
     Y = (140 > np.array(range(size))).astype(np.uint8)
-    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
+    folds = util.stratified_kfold_holdout(subs, n_folds=5)
 
     legends = []
     legends.append('Hardie et al.')
@@ -646,7 +682,6 @@ def unsupervised_augment(detection_model, fname, network_model, init_name=None, 
             X_train, Y_train, X_test, Y_test = augment.preprocess_dataset(X_train, Y_train, X_test, Y_test, 
                                                     detection_model.streams!='none', detection_model.args.preprocess_dataset, detection_model.dataset_type)
             '''
-
         detection_model.unsupervised_augment(network_model, X_train, Y_train, X_test, Y_test, fold, detection_model.streams, nb_epoch=nb_epoch, pos_neg_ratio=pos_neg_ratio, mode=mode)
 
         print 'Save ...'
@@ -1360,12 +1395,12 @@ def protocol_cnn_froc(detections_source, fname, network_model):
 
     blobs = []
     for i in range(size):
-        blobs.append([locs[i][0], locs[i][1], rads[i]])
+        blobs.append(np.array([locs[i][0], locs[i][1], rads[i]]))
     blobs = np.array(blobs)
 
     print "Loading dataset ..."
     data = DataProvider(paths, left_masks, right_masks)
-    pred_blobs = np.load('data/{}_pred.blb.npy'.format(fname))
+    pred_blobs = detect.read_blobs('data/{}-blobs-gt.pkl'.format(detection_model.args.blob_detector))
     rois = detections_source.create_rois(data, pred_blobs)
 
     av_cpi = 0
@@ -1384,8 +1419,7 @@ def protocol_cnn_froc(detections_source, fname, network_model):
         Y = (140 > np.array(range(size)))
     Y = Y.astype(np.uint8)
     
-    folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
-    
+    folds = util.stratified_kfold_holdout(subs, n_folds=5) 
     ops = get_froc_on_folds_keras(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model)
 
     legend = []
@@ -1396,7 +1430,7 @@ def protocol_cnn_froc(detections_source, fname, network_model):
 
     return ops
 
-def protocol_pretrained_cnn(detections_source, fname, network_model, network_init, mode=None):
+def protocol_pretrained_cnn(detections_source, fname, network_model, network_init):
     paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
@@ -1420,7 +1454,7 @@ def protocol_pretrained_cnn(detections_source, fname, network_model, network_ini
     Y = (140 > np.array(range(size))).astype(np.uint8)
     folds = StratifiedKFold(subs, n_folds=10, shuffle=True, random_state=FOLDS_SEED)
     
-    ops = get_froc_on_folds_keras(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, network_init=network_init, mode=mode)
+    ops = get_froc_on_folds_keras(detections_source, paths, left_masks, right_masks, blobs, pred_blobs, rois, folds, network_model, network_init=network_init)
 
     legend = []
     legend.append('Hardie et al.')
@@ -1847,11 +1881,11 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(prog='lnd.py')
     parser.add_argument('file', nargs='?', default=None, type=str)
     # TRADITIONAL PIPELINES
-    parser.add_argument('--preprocess-lung', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='norm')
-    parser.add_argument('--preprocess-roi', help='Generates a bunch preprocessed images for the input. Exemple --preprocessor norm,lce,ci (generates 3 images)', default='norm')
-    parser.add_argument('-b', '--blob-detector', help='Options: wmci-mean-shape, wmci-aam.', default='wmci-amm')
+    parser.add_argument('--preprocess-lung', help='Generates a bunch preprocessed images for the input. Example --preprocessor norm,lce,ci (generates 3 images)', default='norm')
+    parser.add_argument('--preprocess-roi', help='Generates a bunch preprocessed images for the input. Example --preprocessor norm,lce,ci (generates 3 images)', default='norm')
+    parser.add_argument('-b', '--blob-detector', help='Options: wmci-mean-shape, wmci-aam.', default='wmci-aam')
     parser.add_argument('--eval-wmci', help='Measure sensitivity and fppi without classification', action='store_true')
-    parser.add_argument('-d', '--descriptor', help='Options: baseline.hardie(default), hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default='baseline.hardie')
+    parser.add_argument('-d', '--descriptor', help='Options: none, baseline.hardie, hog, hogio, lbpio, zernike, shape, all, set1, overf, overfin.', default=None, type=str)
     parser.add_argument('-c', '--classifier', help='Options: lda(default), svm.', default='lda')
     parser.add_argument('-r', '--reductor', help='Feature reductor or selector. Options: none(default), pca, lda, rfe, rlr.', default='none')
     
@@ -1903,7 +1937,7 @@ if __name__=="__main__":
     parser.add_argument('--lr', help='Learning rate', default=0.01, type=float)
 
     # Transfer learning
-    parser.add_argument('--init-transfer', help='Enable initialization from a existing network', default='none')
+    parser.add_argument('--transfer', help='Enable initialization from a existing network', action='store_true')
 
     # TODO: Optimization
     parser.add_argument('--opt', help='Select an optimization algorithm: sgd-nesterov, adagrad, adadelta, adam.', default='sgd-nesterov')
@@ -1916,6 +1950,7 @@ if __name__=="__main__":
 
     # Evals
     parser.add_argument('--frocs-by-epoch', help='Generate a figure with froc curves every 5 epochs', action='store_true')
+    parser.add_argument('--bootstrap', help='Bootstrap', action='store_true')
 
     # HDF5
     parser.add_argument('--create-datasets', help= 'Create rois set, train and test set for each fold, and store in file', default=None, type=str)
@@ -1926,7 +1961,8 @@ if __name__=="__main__":
     opts = vars(args)
     extractor_key = args.descriptor
     detection_model = model.BaselineModel("data/default")
-    detection_model.extractor = model.extractors[args.descriptor]
+    if (args.descriptor):
+        detection_model.extractor = model.extractors[args.descriptor]
     detection_model.args = args
 
     detection_model.preprocess_lung = args.preprocess_lung
@@ -1977,9 +2013,7 @@ if __name__=="__main__":
 
     elif args.cmp_cnn == 'caes':
         networks = ['3P', '3P-CAE1', '3P-CAE5', '3P-CAE10', '3P-CAE15', '3P-CAE20']
-        #networks = ['3P', '3P-CAE20']
         network_labels = ['Orthogonal init.', 'CAE, 1 epoch', 'CAE, 5 epochs', 'CAE, 10 epochs', 'CAE, 15 epochs', 'CAE, 20 epochs']
-        #network_labels = ['Orthogonal init.', 'CAE, 20 epochs']
         compare_cnndetection_models(detection_model, '{}'.format(extractor_key), networks, network_labels, 'data/models')
 
     elif args.cmp_cnn == 'caes2':
@@ -2095,8 +2129,6 @@ if __name__=="__main__":
         else:
             if args.init != 'none':
                 protocol_pretrained_cnn(detection_model, extractor_key, args.cnn, args.init)
-            elif args.init_transfer != 'none':
-                protocol_pretrained_cnn(detection_model, extractor_key, args.cnn, args.init_trainsfer, mode='transfer')
             elif args.file:
                 print 'args.file {}'.format(args.file)
                 image = np.load(args.file).astype(np.float32)

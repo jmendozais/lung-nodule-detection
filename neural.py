@@ -265,6 +265,7 @@ class ModelCheckpoint(keras.callbacks.Callback):
         self.epoch += self.epoch_interval
         if self.verbose > 0:
             print('Epoch %05d: saving model to %s' % (self.epoch, self.filepath))
+        print "params {} {}".format(self.filepath, self.epoch)
         self.model.save_weights((self.filepath + ".epoch_{}_weights.h5").format(self.epoch + 1), overwrite=True)
 
 class NetModel: 
@@ -810,15 +811,10 @@ def create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr,
 
     return X_train, Y_train, X_test, Y_test
 
-def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector=False):
+def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
     print 'Create model: {}'.format(model)
-    if streams:
-        print 'X-train streams: {} shape: {}'.format(streams, input_shape)
-    else:
-        print 'X-train shape: {}'.format(input_shape)
-
+    print 'Network input shape: {}, use streams? {} '.format(input_shape, streams)
     net_model = None
-    print 'cropped shape {}'.format(input_shape)
     default_augment_params['output_shape'] = input_shape[1:]
 
     if detector:
@@ -1047,7 +1043,7 @@ def create_network(model, input_shape=(1, 32, 32), fold=-1, streams=-1, detector
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
-    elif model in {'3P-br32-aam', '3P-br32-meanshape', '3P-br32', '3P-br32-is0.5', '3P-br32-is0.3', '3P-br32-is0.2', '3P-br32-is0.1', '3P-br32-is0.0', '3P-br32-uar24-rpi500', '3P-br32-uar24-rpi1000', '3p-br32-uar24-rpi1000-bal'}:
+    elif model in {'3P-bt0.1', '3P-bt0.2', '3P-bt0.4', '3P-data0.1', '3P-data0.2', '3P-data0.4', '3P-br32-aam', '3P-br32-meanshape', '3P-br32', '3P-br32-is0.5', '3P-br32-is0.3', '3P-br32-is0.2', '3P-br32-is0.1', '3P-br32-is0.0', '3P-br32-uar24-rpi500', '3P-br32-uar24-rpi1000', '3p-br32-uar24-rpi1000-bal'}:
         network = lnd_a_3p(input_shape, base_filters=64)
         #schedule=[50, 70, 70]
         schedule=[70, 70, 70]

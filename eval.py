@@ -190,7 +190,7 @@ def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random):
     return np.array(roi_set)
 
 
-def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False):
+def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False, verbose=True):
     img_set = []
     if data != None:
         for i in range(len(data)):
@@ -211,9 +211,9 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
     for i in range(n):
         if data != None:
             util.show_blobs_real_predicted(img_set[i][0], jsrt_idx[i], real[i], pred[i])
-        if real[i][0][0] != -1:
+        if real[i][0] != -1:
             p += 1
-        dist = np.linalg.norm(pred[i][:,:2] - real[i][0][:2], axis=1)
+        dist = np.linalg.norm(pred[i][:,:2] - real[i][:2], axis=1)
         entry = []
         entry.append(probs[i])
         entry.append(dist)
@@ -221,7 +221,6 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
         entry.append(np.arange(len(probs[i]), dtype=np.float))
         if jsrt_idx != None:
             entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
-        #print np.array(entry).T.shape
         entries = np.append(entries, np.array(entry).T, axis=0)
     
     entries = sorted(entries, key=itemgetter(0))
@@ -234,10 +233,6 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
     froc = []
     f_prev = -1.0
     
-    print 'checks'
-    print len(img_set)
-    print len(pred)
-
     for i in range(entries.shape[0]):
         idx = entries[i][2]
         if entries[i][0] != f_prev:
@@ -276,8 +271,9 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
                 best_op = op
         ops.append(best_op)
     ops.append(froc[-1])
-    print "fppi operating point: {}".format(ops)
-    print "mean fppi {}, tp {}, p {}".format(np.mean(fppi), tp, p)
+    if verbose:
+        print "fppi operating point: {}".format(ops)
+        print "mean fppi {}, tp {}, p {}".format(np.mean(fppi), tp, p)
 
     return np.array(froc)   
 
@@ -394,6 +390,30 @@ def average_froc(frocs, fppi_range):
     av_froc = np.array(av_froc).T
 
     return av_froc
+
+def average_froc_with_ci(frocs, fppi_range, confidence=0.95):
+    av_sen = []
+
+    for i in range(len(frocs)):
+        x = frocs[i].T
+        f = interp1d(x[0], x[1], kind='linear', fill_value=0.0, bounds_error=False)
+        sen = f(fppi_range)
+        av_sen.append(sen)
+
+    av_sen = np.array(av_sen)
+    assert len(fppi_range) == len(av_sen[i]) 
+
+    aucs = []
+    for i in range(len(av_sen)):
+        froc = np.array([fppi_range, av_sen[i]]).T
+        aucs.append(util.auc(froc, fppi_range))
+    
+    lo, up = util.ci(aucs, confidence)
+
+    av_froc = [fppi_range, np.mean(av_sen, axis=0), np.std(av_sen, axis=0)]
+    av_froc = np.array(av_froc).T
+
+    return av_froc, lo, up
 
 def sublety_stratified_kfold(y, sublety):
     nidx = np.arange(len(y))[y == 0]

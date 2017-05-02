@@ -253,7 +253,6 @@ def get_preprocessor(config='zmuv'):
     return Preprocessor(**params)
 
 def preprocess_dataset(preprocessor, X_train, Y_train, X_test=None, Y_test=None, streams=False):
-    print("Preprocess dataset with preprocessor {}".format(preprocessor))
     gc.collect()
     if streams:
         num_streams = len(X_train)

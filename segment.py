@@ -32,6 +32,7 @@ SEGMENTATION_IMAGE_SHAPE = (512, 512)
 '''
 Nodule segmentation utils
 '''
+
 def finite_derivatives(img):
     size = img.shape
     dx = img.copy()
@@ -168,7 +169,12 @@ Lung segmentation utils
 
 def create_mask_from_landmarks(landmarks, mask_shape=(512, 512)):
     mask = np.full(shape=mask_shape, fill_value=False, dtype=np.bool)
-    rr, cc = draw.polygon(landmarks.T[0], landmarks.T[1])
+    rr, cc = draw.polygon(landmarks.T[0], landmarks.T[1], shape=mask_shape)
+    '''
+    for it in rr:
+        print it,
+    print ''
+    '''
     mask[rr, cc] = True
 
     return mask
@@ -320,7 +326,7 @@ segment.py protocol functions
 def get_shape_model(model_name):
     if model_name == 'mean-shape':
         return MeanShape()
-    elif model_name == 'aam':
+    elif model_name.find('aam') != -1:
         return ActiveAppearanceModel()
     else:
         raise Exception("{} not implemented yet!".format(model_name))
@@ -337,13 +343,13 @@ def load_masks_sets(model_name):
     return masks_sets 
 
 def train_and_save(model, tr_images, tr_landmarks, te_images, model_name):
-    print "Fit model ..."
+    print "Fit model ... tr {}, te {}".format(len(tr_images), len(te_images))
     model.fit(tr_images, tr_landmarks)
 
     print "\nRun model on test set ..."
     pred_masks = model.transform(te_images)
 
-    print "Save model ..."
+    print "Save model ...".format(len(te_images))
     model_file = open('data/{}.pkl'.format(model_name), 'wb')
     pickle.dump(model, model_file)
     model_file.close()
@@ -357,17 +363,14 @@ def train_with_method(model_name):
     images = jsrt.images_from_paths(paths, dsize=(512, 512))
     landmarks = scr.load_data(set=set_name)
 
-    tr_val_folds, tr_val, te = util.stratified_kfold_holdout(subs, n_folds=5, shuffle=True)
+    tr_val_folds, tr_val, te = util.stratified_kfold_holdout(subs, n_folds=5)
 
     i = 1
     for tr, val in tr_val_folds:    
-        # Train set models
         print "Fold {}".format(i)
         landmarks_tr = [landmarks[0][tr], landmarks[1][tr]]
-
         model = get_shape_model(model_name)
         train_and_save(model, images[tr], landmarks_tr, images[val], '{}-f{}-train'.format(model_name, i))
-
         i += 1
 
     landmarks_tr_val = [landmarks[0][tr_val], landmarks[1][tr_val]]
@@ -392,7 +395,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='segment.py')
     parser.add_argument('file', nargs='?', default=os.getcwd())
     parser.add_argument('--train', action='store_true')
-    parser.add_argument('--method', default='mean-shape')
+    parser.add_argument('--method', default='aam')
     args = parser.parse_args()
     
     if args.train:

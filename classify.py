@@ -168,9 +168,7 @@ def create_training_set(data, y_blobs):
 '''
 
 def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs, array_class='numpy', container=None, suffix=None):
-    print (feature_set.__class__, pred_blobs.__class__, real_blobs.__class__, array_class, container, suffix)
     if array_class == 'numpy':
-        print 'call numpy create'
         return _create_training_set_from_feature_set_numpy(feature_set, pred_blobs, real_blobs)
     elif array_class == 'hdf5':
         return _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blobs, container=container, suffix=suffix)

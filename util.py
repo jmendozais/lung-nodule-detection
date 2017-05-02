@@ -19,14 +19,15 @@ font = {
 
 matplotlib.rc('font', **font)
 
-#import seaborn as sns
+#plt.switch_backend('agg')
+#plt.ioff()
 
-plt.switch_backend('agg')
-plt.ioff()
 import time
 import csv
 
-# Data utils
+'''
+Data utils
+'''
 EPS = 1e-9
 FOLDS_SEED = 113
 
@@ -102,7 +103,9 @@ def load_dataset(name):
     blobs_te = np.load('{}-bte.npy'.format(name))
     return V_tr, pred_blobs_tr, blobs_tr, V_te, pred_blobs_te, blobs_te
 
-# Display utils 
+'''
+Display utils
+'''
 
 def imshow(windowName,  _img, wait=True, display_shape=(1024, 1024)):
     img = np.array(_img).astype(np.float64)
@@ -124,17 +127,18 @@ def imwrite(fname, _img):
 
     cv2.imwrite(fname, 255 * img)
 
-def label_blob(img, blob, border='circle', proba=-1, color=(255, 0, 0), margin=0):
+def label_blob(img, blob, border='square', proba=-1, color=(255, 0, 0), margin=0):
     if len(img.shape) == 2:
         img = cv2.cvtColor(img.copy(), cv2.COLOR_GRAY2BGR)
     if border == 'circle':
         ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
         img[ex, ey] = color 
     elif border == 'square':
-        coord_x = np.array([[blobs[0]-blobs[2], blobs[0]-blobs[2], blobs[0]+blobs[2]], blobs[0]+blobs[2]])
-        coord_y = np.array([[blobs[1]-blobs[2], blobs[1]+blobs[2], blobs[1]+blobs[2]], blobs[1]-blobs[2]])
-        ex, ey = draw.polygon_perimeter(coord_x, coord_y)
-        img[ex, ey] = color 
+        for i in range(4):
+            coord_x = np.array([blob[0]-blob[2]+i, blob[0]-blob[2]+i, blob[0]+blob[2]+i, blob[0]+blob[2]+i])
+            coord_y = np.array([blob[1]-blob[2]+i, blob[1]+blob[2]+i, blob[1]+blob[2]+i, blob[1]-blob[2]+i])
+            ex, ey = draw.polygon_perimeter(coord_x, coord_y)
+            img[ex, ey] = color 
     if proba != -1:
         cv2.putText(image,str(proba), (blob[0] + blob[2], blob[1] - blob[2]), cv2.FONT_HERSHEY_SIMPLEX, 2, color)
     return img
@@ -269,6 +273,7 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     legend = []
 
     markers = ['o', 's', '8', 'v', 'p', '*', 'h', 'H', 'D', 'd', '^', '<', '>']
+
     for i in range(len(scatter_ops)):
         ops = scatter_ops[i].T
         print ops[0], ops[1]
@@ -315,22 +320,15 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
         
     for i in range(len(op_set)):
         ops = np.array(op_set[i]).T
-        if with_std and i > 0:
-            y_lower = ops[1] - ops[2]
-            #plt.errorbar(ops[0], ops[1], fmt=line_format[i%28], yerr=ops[2], marker=markers[i%13], markersize=3, fillstyle='none')
+        if with_std and len(ops) > 2:
             plt.plot(ops[0], ops[1], line_format[i%28], marker=markers[i%13], markersize=3, fillstyle='none')
             plt.fill_between(ops[0], ops[1] - ops[2], ops[1] + ops[2], facecolor=line_format[i%13][0], alpha=0.3)  
         else:
             plt.plot(ops[0], ops[1], line_format[i%28], marker=markers[i%13], markersize=3, fillstyle='none')
+
         if legend != None and with_auc:
             auc_ = auc(np.array(op_set[i]), range=(0.0, fppi_max))
-            legend[i] = '{} (AUC = {:.2f})'.format(legend[i], auc_)
-
-    '''
-    import baseline
-    for fp in baseline.interesting_fps:
-        print 'fp {}: {}'.format(fp, ops[1][int(fp * 10)])
-    '''
+            legend[i] = '{}, AUC = {:.2f}'.format(legend[i], auc_)
 
     x_ticks = np.linspace(0.0, fppi_max, 11)
     y_ticks = np.linspace(0.0, 1.0, 11)
@@ -361,18 +359,10 @@ def save_auc(epochs, aucs, name):
     ax.grid(True)
 
     plt.plot(epochs, aucs)
-
-    '''
-    import baseline
-    for fp in baseline.interesting_fps:
-        print 'fp {}: {}'.format(fp, ops[1][int(fp * 10)])
-    '''
-
     plt.xlabel('Epoch')
     plt.ylabel('AUC')
     plt.savefig('{}.pdf'.format(name))
     plt.clf()
-
 
 class MidpointNormalize(Normalize):
     def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
@@ -423,8 +413,7 @@ def save_loss(history, name):
     train_loss_detail = history['loss_detail']
     test_loss = history['val_loss'] 
 
-    print "loss shapes"
-    print len(train_loss_detail), len(train_loss), len(test_loss)
+    print "Loss shapes {} {} {}".format(len(train_loss_detail), len(train_loss), len(test_loss))
 
     trx_init = len(train_loss) * 1.0 / len(train_loss_detail)
     trx = np.linspace(trx_init, len(train_loss), len(train_loss_detail));
@@ -481,15 +470,6 @@ def add_random_blobs(data, blobs, blobs_by_image=100, rng=np.random, pred_blobs=
         rx, ry, _ = blobs[i]
         #TODO :assert blobs[i][2] == 25, "roi rad check failed {}".format(blobs[i])
 
-        '''
-        print "Augment random blobs: cur blob {}".format(blobs[i])
-        if rx >= 0 or ry >= 0:
-            assert lung_mask[rx, ry] > 0
-            #augmented_blobs[i].append(blobs[i][0])
-            blobs[i][2] = 25
-            augmented_blobs[i].append(blobs[i])
-        '''
-
         if pred_blobs != None:
             augmented_blobs[i] += list(pred_blobs[i])
         cnt = len(augmented_blobs[i])
@@ -533,20 +513,40 @@ def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random, flat=Tru
             #roi_set.append(rois)
     return np.array(rois)
 
-def stratified_kfold_holdout(stratified_labels, n_folds, shuffle=True, random_state=util.FOLDS_SEED):
-    split = StratifiedShuffleSplit(stratified_labels, 1, test_size=0.4, random_state=util.FOLDS_SEED)
-    tr, te = list(split)[0]
+'''
+Validation utils
+'''
 
+def bootstrap_sets(size, num_sets=1000):
+    bootstrapped_scores = []
+    rng = np.random.RandomState(100003)
+    sets = []
+
+    for i in range(num_sets):
+        indices = rng.random_integers(0, size - 1, size)
+        sets.append(indices)
+
+    return sets
+
+def ci(scores, confidence=0.95):
+    assert confidence < 1.0 and confidence > 0
+
+    delta = (1 - confidence)/2
+    sorted_scores = np.array(scores)
+    sorted_scores.sort()
+    confidence_lower = sorted_scores[int(delta * len(sorted_scores))]
+    confidence_upper = sorted_scores[int((1.0 - delta) * len(sorted_scores))]
+
+    return confidence_lower, confidence_upper
+
+def stratified_kfold_holdout(stratified_labels, n_folds, shuffle=True, random_state=util.FOLDS_SEED):
+    split = StratifiedShuffleSplit(stratified_labels, 1, test_size=0.2, random_state=util.FOLDS_SEED)
+    tr, te = list(split)[0]
     folds = StratifiedKFold(stratified_labels[tr], n_folds=n_folds, shuffle=shuffle, random_state=random_state)
     tr_val_folds = []
     for tr_tr, tr_val in folds:
         tr_val_folds.append((tr[tr_tr], tr[tr_val]))
-
     return tr_val_folds, tr, te
-
-'''
-Neural network utils
-''' 
 
 if __name__ == '__main__':
     import jsrt
