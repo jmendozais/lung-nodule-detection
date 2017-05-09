@@ -1043,7 +1043,7 @@ def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
-    elif model in {'3P-bt0.1', '3P-bt0.2', '3P-bt0.4', '3P-data0.1', '3P-data0.2', '3P-data0.4', '3P-br32-aam', '3P-br32-meanshape', '3P-br32', '3P-br32-is0.5', '3P-br32-is0.3', '3P-br32-is0.2', '3P-br32-is0.1', '3P-br32-is0.0', '3P-br32-uar24-rpi500', '3P-br32-uar24-rpi1000', '3p-br32-uar24-rpi1000-bal'}:
+    elif model in {'3P-bt0.1', '3P-bt0.2', '3P-bt0.3', '3P-bt0.4', '3P-data0.1', '3P-data0.2', '3P-data0.3', '3P-data0.4', '3P-br32-aam', '3P-br32-meanshape', '3P-br32', '3P-br32-is0.5', '3P-br32-is0.3', '3P-br32-is0.2', '3P-br32-is0.1', '3P-br32-is0.0', '3P-br32-uar24-rpi500', '3P-br32-uar24-rpi1000', '3p-br32-uar24-rpi1000-bal'}:
         network = lnd_a_3p(input_shape, base_filters=64)
         #schedule=[50, 70, 70]
         schedule=[70, 70, 70]

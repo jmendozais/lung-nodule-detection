@@ -8,6 +8,7 @@ import argparse
 import os
 import pickle
 import jsrt
+import lidc
 
 from skimage import draw
 from skimage.segmentation import find_boundaries
@@ -215,7 +216,6 @@ class MeanShape(SegmentationModel):
         num_samples = len(landmarks[0])
         self.mean_shapes = []
         for i in range(num_shapes):
-            landmarks[i] /= 2
             self.mean_shapes.append(np.zeros(shape=(len(landmarks[i][0]), 2)))
         self.mean_shapes = np.array(self.mean_shapes)
 
@@ -261,7 +261,7 @@ def prepare_data_for_aam(images, landmarks):
         num_points = len(landmarks[0])
         rmx = landmarks[1][i].T[0]
         rmy = landmarks[1][i].T[1]
-        pc = PointCloud(points=np.vstack((np.array([lmy, lmx]).T, np.array([rmy, rmx]).T))/2)
+        pc = PointCloud(points=np.vstack((np.array([lmy, lmx]).T, np.array([rmy, rmx]).T)))
         lg = LandmarkGroup.init_from_indices_mapping(pc, 
             OrderedDict({'left':range(len(landmarks[0][i])), 'right':range(len(landmarks[0][i]), len(landmarks[0][i]) + len(landmarks[1][i]))}))
         lm = LandmarkManager()
@@ -349,6 +349,13 @@ def train_and_save(model, tr_images, tr_landmarks, te_images, model_name):
     print "\nRun model on test set ..."
     pred_masks = model.transform(te_images)
 
+    for i in range(len(te_images)):
+        image = te_images[i]
+        boundaries = find_boundaries(pred_masks[i])
+        max_value = np.max(image)
+        image[boundaries] = max_value
+        util.imshow('Segment with model {}'.format(model_name), image)
+
     print "Save model ...".format(len(te_images))
     model_file = open('data/{}.pkl'.format(model_name), 'wb')
     pickle.dump(model, model_file)
@@ -361,7 +368,7 @@ def train_with_method(model_name):
     set_name = 'jsrt140'
     paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set=set_name)
     images = jsrt.images_from_paths(paths, dsize=(512, 512))
-    landmarks = scr.load_data(set=set_name)
+    landmarks = scr.load(set=set_name)
 
     tr_val_folds, tr_val, te = util.stratified_kfold_holdout(subs, n_folds=5)
 
@@ -376,6 +383,33 @@ def train_with_method(model_name):
     landmarks_tr_val = [landmarks[0][tr_val], landmarks[1][tr_val]]
     model = get_shape_model(model_name)
     train_and_save(model, images[tr_val], landmarks_tr_val, images[te], '{}-train-val'.format(model_name))
+
+''' 
+Functions for JSRT-LIDC
+'''
+
+def train(model_name):
+    images, blobs = jsrt.load(set_name='jsrt140n')
+    landmarks = scr.load(set_name='jsrt140n')
+    model = get_shape_model(model_name)
+
+    print('Training')
+    model.fit(images, landmarks)
+
+    print('Segment lidc')
+    lidc_images, _ = lidc.load()
+    pred_masks = model.transform(lidc_images)
+    np.save('data/{}-{}-pred-masks'.format(model_name, 'lidc'), np.array(pred_masks))
+
+    print('Segment jsrt positives')
+    jsrt_images, _ = jsrt.load(set_name='jsrt140p')
+    pred_masks = model.transform(jsrt_images)
+    np.save('data/{}-{}-pred-masks'.format(model_name, 'jsrt140p'), np.array(pred_masks))
+
+    print('Save model')
+    model_file = open('data/{}.pkl'.format(model_name), 'wb')
+    pickle.dump(model, model_file)
+    model_file.close()
 
 def segment(image, model_name, display=True):
     print("Loading model ...")
@@ -394,12 +428,15 @@ def segment(image, model_name, display=True):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='segment.py')
     parser.add_argument('file', nargs='?', default=os.getcwd())
+    parser.add_argument('--train-jsrt', action='store_true')
     parser.add_argument('--train', action='store_true')
     parser.add_argument('--method', default='aam')
     args = parser.parse_args()
     
     if args.train:
-        train_with_method(args.method)
-    elif args.file:
+        train(args.method)
+    if args.train_jsrt:
+        train_with_model(args.method)
+    elif args.file != os.getcwd():
         image = np.load(args.file).astype('float32')
         segment(image, args.method)

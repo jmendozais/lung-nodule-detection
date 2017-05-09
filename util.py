@@ -127,6 +127,9 @@ def imwrite(fname, _img):
 
     cv2.imwrite(fname, 255 * img)
 
+'''
+blob: tuple or list with (x, y, radius) values of the blob
+'''
 def label_blob(img, blob, border='square', proba=-1, color=(255, 0, 0), margin=0):
     if len(img.shape) == 2:
         img = cv2.cvtColor(img.copy(), cv2.COLOR_GRAY2BGR)
@@ -134,7 +137,7 @@ def label_blob(img, blob, border='square', proba=-1, color=(255, 0, 0), margin=0
         ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
         img[ex, ey] = color 
     elif border == 'square':
-        for i in range(4):
+        for i in range(1):
             coord_x = np.array([blob[0]-blob[2]+i, blob[0]-blob[2]+i, blob[0]+blob[2]+i, blob[0]+blob[2]+i])
             coord_y = np.array([blob[1]-blob[2]+i, blob[1]+blob[2]+i, blob[1]+blob[2]+i, blob[1]-blob[2]+i])
             ex, ey = draw.polygon_perimeter(coord_x, coord_y)
@@ -165,7 +168,6 @@ def imwrite_with_blobs(fname, img, blobs):
     imwrite(fname, labeled)
 
 def show_blobs_real_predicted(img, idx, res1, res2):
-    #img = np.load(path, 0)
     resized_img = cv2.resize(img, (512, 512), interpolation=cv2.INTER_CUBIC)
     color_img = cv2.cvtColor(resized_img.copy().astype(np.float32), cv2.COLOR_GRAY2BGR) 
     max_value = np.max(img)
@@ -540,7 +542,7 @@ def ci(scores, confidence=0.95):
     return confidence_lower, confidence_upper
 
 def stratified_kfold_holdout(stratified_labels, n_folds, shuffle=True, random_state=util.FOLDS_SEED):
-    split = StratifiedShuffleSplit(stratified_labels, 1, test_size=0.2, random_state=util.FOLDS_SEED)
+    split = StratifiedShuffleSplit(stratified_labels, 1, test_size=0.3, random_state=util.FOLDS_SEED)
     tr, te = list(split)[0]
     folds = StratifiedKFold(stratified_labels[tr], n_folds=n_folds, shuffle=shuffle, random_state=random_state)
     tr_val_folds = []

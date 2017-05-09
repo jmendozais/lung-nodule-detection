@@ -460,11 +460,11 @@ def write_blobs(blobs, fname):
     pickle.dump(blobs, fileh)
     fileh.close()
 
-def save_blobs(detector, segmentator):
+def save_blobs_jsrt(detector, segmentator):
     paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
     left_masks = jsrt.left_lung(set='jsrt140')
     right_masks = jsrt.right_lung(set='jsrt140')
-    data = DataProvider(paths, left_masks, right_masks)
+    data = dataprovider(paths, left_masks, right_masks)
 
     size = len(paths)
     blobs = []
@@ -479,19 +479,19 @@ def save_blobs(detector, segmentator):
     tr_val_folds, tr_val, te = util.stratified_kfold_holdout(subs, n_folds=5)
     fold_idx = 1
     for tr, val in tr_val_folds:
-        print("Fold {}: len tr {}, len val {}".format(fold_idx, len(tr), len(val)))
-        data = DataProvider(paths[val], left_masks[val], right_masks[val])
+        print("fold {}: len tr {}, len val {}".format(fold_idx, len(tr), len(val)))
+        data = dataprovider(paths[val], left_masks[val], right_masks[val])
         masks = np.load('data/{}-f{}-train-pred-masks.npy'.format(segmentator, fold_idx))
         pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold, masks)
         write_blobs(pred_blobs, 'data/{}-{}-blobs-f{}.pkl'.format(detector, segmentator, fold_idx))
         fold_idx += 1
 
-    data = DataProvider(paths[te], left_masks[te], right_masks[te])
+    data = dataprovider(paths[te], left_masks[te], right_masks[te])
     masks = np.load('data/{}-train-val-pred-masks.npy'.format(segmentator, fold_idx))
     pred_blobs, proba = detect_blobs_with_dataprovider(data, detector, threshold, masks)
     write_blobs(pred_blobs, 'data/{}-{}-blobs-te.pkl'.format(detector, segmentator, fold_idx))
-    
-def detect(image, detector, segmentator, display=True):
+
+def detect_jsrt(image, detector, segmentator, display=True):
     mask = segment.segment(image, segmentator, display=False)
     blobs, norm, lce, ci, proba = detect_blobs(image, mask, method=detector)
     if display:
@@ -501,6 +501,60 @@ def detect(image, detector, segmentator, display=True):
         image[boundary] = max_value
         util.show_blobs('Detect with model {}-{}'.format(detector, segmentator), image, blobs)
     return blobs, proba
+
+'''
+Functions for JSRT-LIDC protocol
+'''
+
+def detect_blobs(images, masks)
+    assert len(images) == len(masks)
+    blob_set = []
+    prob_set = []
+
+    print "detect blobs with probs ..."
+    print '[',
+    for i in range(len(images)):
+        if i % (len(data)/10) == 0:
+            print ".",
+            sys.stdout.flush()
+
+        lce = prepreprocess.lce(images[i])
+        blobs, ci, proba = wmci_proba(lce, masks[i], 0.5)
+        blob_set.append(blobs)
+        prob_set.append(proba)
+    print ']'
+    return np.array(blob_set), np.array(prob_set)
+
+def average_bppi(blobs):
+    num_images = len(blobs)
+    num_blobs = 0
+    for i in range(len(blobs)):
+        num_blobs += len(blobs[i])
+    return num_blobs * 1.0 / num_images
+
+def save_blobs(segmentator):
+    images, blobs = jsrt.load(set_name='jsrt140')
+    masks = jsrt.masks(set='jsrt140')
+    pred_blobs, proba = detect_blobs(images, masks)
+    write_blobs(pred_blobs, 'data/{}-blobs-gt.pkl'.format(segmentator))
+    print('Average BPPI JSRT {}'.format(average_bppi)
+    
+    # Save blobs for lidc
+    images, blobs = lidc.load()
+    masks = np.load('data/{}-{}-pred-masks.npy'.format(segmentator, 'lidc'))
+    pred_blobs, proba = detect_blobs(images, masks)
+    write_blobs(pred_blobs, 'data/{}-{}-blobs-gt.pkl'.format(segmentator, 'lidc'))
+    print('Average BPPI LIDC {}'.format(average_bppi)
+
+    # Save blobs for jsrt140p
+    images, blobs = jsrt.load(set_name='jsrt140p')
+    masks = np.load('data/{}-{}-pred-masks.npy'.format(segmentator, 'jsrt140p'))
+    pred_blobs, proba = detect_blobs(images, masks)
+    write_blobs(pred_blobs, 'data/{}-{}-blobs-gt.pkl'.format(segmentator, 'jsrt140p'))
+    print('Average BPPI LIDC {}'.format(average_bppi)
+
+def detect(image, detector, segmentator, display=True):
+    raise Exception("Not implemented yet")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='detect.py')

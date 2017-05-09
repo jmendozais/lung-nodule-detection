@@ -18,6 +18,8 @@ from os.path import isfile, join
 import re
 import numpy as np
 
+import jsrt 
+
 def get_paths(root=SCR_LANDMARKS_DIR, suffix='pfs'):
     paths = []
     for file_ in listdir(root):
@@ -76,21 +78,17 @@ def read_pfs(path):
 
     return datasets
     
-def load_data(set='jsrt140'):
+def load(set_name='jsrt140'):
     paths = get_paths(root=SCR_LANDMARKS_DIR, suffix='pfs')
+    idx = jsrt.set_index(paths, set_name)
     scr_landmarks = [[] for i in range(len(DATASET_LABELS))]
-    for path in paths:
+    for i in idx:
         valid = True;
-        for tok in overlapped:
-            if path.find(tok) != -1:
-                valid = False;
-        if not valid:
-            continue;
-        point_sets = read_pfs(path)
-        for i in range(len(DATASET_LABELS)):
-            scr_landmarks[i].append(point_sets[DATASET_LABELS[i]])
-    scr_landmarks[0] = np.array(scr_landmarks[0])
-    scr_landmarks[1] = np.array(scr_landmarks[1])
+        point_sets = read_pfs(paths[i])
+        for j in range(len(DATASET_LABELS)):
+            scr_landmarks[j].append(point_sets[DATASET_LABELS[j]])
+    scr_landmarks[0] = np.array(scr_landmarks[0])/2
+    scr_landmarks[1] = np.array(scr_landmarks[1])/2
 
     '''
     TODO: implement mask reading

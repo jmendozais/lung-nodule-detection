@@ -4,11 +4,14 @@ import cv2
 import sklearn.cross_validation as cross_val
 import numpy as np
 
+import preprocess
+
 PATH = '../dbs/jsrt-npy'
 NNINFO = '../dbs/jsrt-info/CNNDAT_EN.TXT'
 LNINFO = '../dbs/jsrt-info/CLNDAT_EN.txt'
 LMPATH = '../dbs/jsrt-masks/left_masks.txt'
 RMPATH = '../dbs/jsrt-masks/right_masks.txt'
+PIXEL_SPACING = 0.175
 
 DATASET_LEN = 257
 NUM_POSITIVES = 154
@@ -48,7 +51,7 @@ def get_metadata():
                 elif toks[3] == '?':
                         toks[3] = toks[2]
 
-                size.append([int(toks[2]), int(toks[3])])
+                size.append([float(toks[2]) / PIXEL_SPACING, float(toks[3]) / PIXEL_SPACING])
                 location.append([int(toks[5]), int(toks[6])])
 
                 if toks[7] == 'benign':
@@ -64,128 +67,57 @@ def get_metadata():
 
         lnfile.close()
         nnfile.close()
-
         return np.array(sublety), np.array(size), np.array(location), np.array(kind)
-
-def split_index(Y, train_percent, n_iter=1, seed=113): 
-    labels = []
-    for y in Y:
-        if y[0] == -1:
-            labels.append(0)
-        else:
-            labels.append(1)
-    return list(cross_val.StratifiedShuffleSplit(labels, n_iter, train_size=train_percent, shuffle=True, random_state=seed))
-
-def load_data():
-    paths = get_paths(PATH)
-    X = []
-    Y = [None]*DATASET_LEN
-
-    for i in range(len(paths)):
-        path = paths[i]
-        img = io.imread(path, as_grey=True)
-        X.append(np.array([img]))
-
-    _, _, location = get_metadata()
-
-    for i in range(10):
-        Y[i] = location[i]
-        img = np.copy(X[i])
-        gap = 20
-
-        if location[i][0] == -1:
-            continue
-
-        '''
-        x = np.array([location[i][0] - gap, location[i][0] - gap, location[i][0] + size[i][0] + gap, location[i][0] + size[i][0] + gap])
-        y = np.array([location[i][1] - gap, location[i][1] + size[i][1] + gap, location[i][1] - gap, location[i][1] + size[i][1] + gap])
-        '''
-
-        # draw bounding circle
-        ex, ey = draw.circle_perimeter(location[i][1], location[i][0], max(size[i])+gap)
-        img[ex, ey] = 0 
-        ex, ey = draw.circle_perimeter(location[i][1], location[i][0], max(size[i])+1+gap)
-        img[ex, ey] = 0 
-        ex, ey = draw.circle_perimeter(location[i][1], location[i][0], max(size[i])+2+gap)
-        img[ex, ey] = 0 
-        ex, ey = draw.circle_perimeter(location[i][1], location[i][0], max(size[i])+3+gap)
-        img[ex, ey] = 0
-        cv2.imshow(img, 0)
-
-    return X, Y
-
-def split_data(prop=0.7, seed=113):
-    paths, X = raw_data()
-    idx = [[]]*DATASET_LEN
-
-    for i in range(len(X)):
-        filename = paths[i].split('/')[-1]
-        jsrt_idx = int(filename[2:5]) 
-        if len(idx[jsrt_idx]) == 0:
-            idx[jsrt_idx] = []
-        idx[jsrt_idx].append(i)
-
-    X = np.array(X)
-    Y = np.zeros(len(X))
-    idx = np.array(idx)
-    idx1 = np.arange(0, NUM_POSITIVES, 1, dtype=np.int32)
-    idx2 = np.arange(NUM_POSITIVES, DATASET_LEN, 1, dtype=np.int32)
-    i1 = np.array([int(x) for x in np.concatenate(idx[idx1])])
-    i2 = np.array([int(x) for x in np.concatenate(idx[idx2])])
-    if len(i1) > 0:
-        Y[i1] = 0
-    if len(i2) > 0:
-        Y[i2] = 1
-
-    lim1 = int(NUM_POSITIVES * prop)
-    lim2 = int(93*prop)
-
-    tr_idx = np.concatenate((idx1[:lim1],idx2[:lim2]))
-    te_idx = np.concatenate((idx1[lim1:],idx2[lim2:]))
-    X_train = X[np.concatenate(idx[tr_idx]).astype(np.int32)]
-    X_test = X[np.concatenate(idx[te_idx]).astype(np.int32)]
-    Y_train = Y[np.concatenate(idx[tr_idx]).astype(np.int32)]
-    Y_test = Y[np.concatenate(idx[te_idx]).astype(np.int32)]
-
-    np.random.seed(seed)
-    np.random.shuffle(X_train)
-    np.random.seed(seed)
-    np.random.shuffle(Y_train)
-
-    return (X_train, np.array([Y_train]).T), (X_test, np.array([Y_test]).T)
 
 # Method to get lists
 overlapped = ['LN060','LN065','LN105','LN108','LN112','LN113','LN115','LN126','LN130','LN133','LN136','LN149','LN151','LN152']
 
+def set_index(paths, set_name=None):
+    index = [] 
+    for i in range(len(paths)):
+        valid = True
+        if set_name == 'jsrt140':
+            for tok in overlapped:
+                if paths[i].find(tok) != -1:
+                    valid = False
+                    break
+        elif set_name == 'jsrt140p':
+            for tok in overlapped:
+                if paths[i].find(tok) != -1 or paths[i].find('NN') != -1:
+                    valid = False
+                    break
+        elif set_name == 'jsrt140n':
+            for tok in overlapped:
+                if paths[i].find(tok) != -1 or paths[i].find('LN') != -1:
+                    valid = False
+                    break
+        if valid:
+            index.append(i)
+    return np.array(index)
+
 def jsrt(set=None):
     paths = get_paths()
-    sub, siz, loc, kind = get_metadata()
+    sub, siz, loc, kind = get_metadata() 
     xfactor = 0.25
     yfactor = 0.25
 
     npaths = []
     nloc = []
-    rads = []
+    diam = []
 
     subs = []
     tholds = [14.29, 28.57]
     sizes = []
     kinds = []
+
+    idx = set_index(set)
     
-    for i in range(len(paths)):
+    for i in idx:
         count = 1 if siz[i][0] != -1 else 0
-        if set == 'jsrt140':
-            valid = True
-            for tok in overlapped:
-                if paths[i].find(tok) != -1:
-                    valid = False
-                    break
-            if not valid:
-                continue
         npaths.append(paths[i])
         if count > 0:
             nloc.append([int(round(loc[i][1] * xfactor)), int(round(loc[i][0] * yfactor))])
-            rads.append(int(round(xfactor * max(siz[i][1], siz[i][0]))))
+            diam.append(int(round(xfactor * siz[i][0])))
             subs.append(sub[i])
             kinds.append(kind[i])
 
@@ -198,12 +130,12 @@ def jsrt(set=None):
 
         else:
             nloc.append([-1, -1])
-            rads.append(-1)
+            diam.append(-1)
             subs.append(0)
             sizes.append(0)
             kinds.append(0)
     
-    return np.array(npaths), np.array(nloc), np.array(rads), np.array(subs), np.array(sizes), np.array(kinds)
+    return np.array(npaths), np.array(nloc), np.array(diam), np.array(subs), np.array(sizes), np.array(kinds)
 
 def left_lung(set=None):
     f = open(LMPATH)
@@ -243,8 +175,38 @@ def images_from_paths(paths, dsize=(512, 512)):
         imgs.append(img)
     return np.array(imgs)
 
-class DataProvider:
+def load(set_name=None, dsize=(512, 512)):
+    paths = get_paths()
+    sub, siz, loc, kind = get_metadata() 
+    factor = 0.25
+    idx = set_index(paths, set_name)
+    blobs = []
+    imgs = []
+    for i in idx:
+        img = np.load(paths[i]).astype(np.float)
+        img = preprocess.antialiasing_dowsample(img, downsample=True)
+        imgs.append(img)
+        blobs.append([[int(round(loc[i][1] * factor)), int(round(loc[i][0] * factor)), int(round(factor * siz[i][0]))]])
 
+    return np.array(imgs), np.array(blobs)
+
+def masks(set_name=None, dsize=(512, 512)):
+    ll_paths = left_masks(set_name)
+    lr_paths = right_masks(set_name)
+
+    resp = []
+    for i in range(len(ll_paths)):
+        ll_mask = cv2.imread(self.ll_paths[i])
+        lr_mask = cv2.imread(self.lr_paths[i])
+        lung_mask = ll_mask + lr_mask
+        lung_mask = cv2.resize(lung_mask, dsize, interpolation=cv2.INTER_CUBIC)
+        lung_mask = cv2.cvtColor(lung_mask, cv2.COLOR_BGR2GRAY)
+        lung_mask = (lung_mask > 0).astype(np.uint8)
+        resp.append(lung_mask)
+
+    return resp
+
+class DataProvider:
     def __init__(self, img_paths, lm_paths, rm_paths):
         self.img_paths = img_paths
         self.ll_paths = lm_paths
@@ -269,3 +231,18 @@ class DataProvider:
         lung_mask = (lung_mask > 0).astype(np.uint8)
 
         return img, lung_mask
+
+import matplotlib.pyplot as plt
+if __name__ == '__main__':
+    import util
+    import detect
+    import preprocess
+    set_name = 'jsrt140'
+    imgs, blobs = load(set_name=set_name)
+    print len(imgs), len(blobs)
+    pred_blobs = detect.read_blobs('data/{}-blobs-gt.pkl'.format('wmci-aam'))
+
+    for i in range(len(imgs)):
+        max_intensity = np.max(imgs[i])
+        img = util.label_blob(imgs[i].astype(np.float32), list(blobs[i][0]), color=(max_intensity, 0, 0))
+        util.imshow('jsrt', img)
