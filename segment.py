@@ -358,7 +358,7 @@ def train_and_save(model, tr_images, tr_landmarks, te_images, model_name):
 
     print "Save model ...".format(len(te_images))
     model_file = open('data/{}.pkl'.format(model_name), 'wb')
-    pickle.dump(model, model_file)
+    pickle.dump(model, model_file, -1)
     model_file.close()
 
     print "Save masks ..."
@@ -408,7 +408,7 @@ def train(model_name):
 
     print('Save model')
     model_file = open('data/{}.pkl'.format(model_name), 'wb')
-    pickle.dump(model, model_file)
+    pickle.dump(model, model_file, -1)
     model_file.close()
 
 def segment(image, model_name, display=True):
