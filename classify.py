@@ -167,62 +167,55 @@ def create_training_set(data, y_blobs):
     return X, Y
 '''
 
-def create_training_set_from_feature_set(feature_set, pred_blobs, real_blobs, array_class='numpy', container=None, suffix=None):
+def create_training_set_from_feature_set(real_blobs, pred_blobs, feature_set, array_class='numpy', container=None, suffix=None):
     if array_class == 'numpy':
-        return _create_training_set_from_feature_set_numpy(feature_set, pred_blobs, real_blobs)
+        return _create_training_set_from_feature_set_numpy(real_blobs, pred_blobs, feature_set)
     elif array_class == 'hdf5':
-        return _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blobs, container=container, suffix=suffix)
+        return _create_training_set_from_feature_set_hdf5(real_blobs, pred_blobs, feature_set, container=container, suffix=suffix)
 
-def _create_training_set_from_feature_set_numpy(feature_set, pred_blobs, real_blobs):
+def _create_training_set_from_feature_set_numpy(real_blobs, pred_blobs, feature_set):
     MAX_DIST = 35
-
     size = len(real_blobs)
-
     X = []
     Y = []
 
-    # create positives
     print "Creating positives ..."
     for i in range(size):
-        if real_blobs[i][2] == -1:
-            continue
-        nb = []
-        tmp = []
-        for j in range(len(pred_blobs[i])):
-            x, y, z = pred_blobs[i][j]#
-            dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
-            if dst < MAX_DIST:
-                nb.append((dst, j))
-                tmp.append(pred_blobs[i][j])
+        for j in range(len(real_blobs[i])):
+            nb = []
+            for k in range(len(pred_blobs[i])):
+                x, y, z = pred_blobs[i][k]#
+                dst = ((x - real_blobs[i][j][0]) ** 2 + (y - real_blobs[i][j][1]) ** 2) ** 0.5
+                if dst < MAX_DIST:
+                    nb.append((dst, k))
+            nb = sorted(nb)
+            if len(nb) == 0:
+                continue
 
-        nb = sorted(nb)
-        if len(nb) == 0:
-            continue
-
-        X.append(feature_set[i][nb[0][1]])
-        Y.append(1)
+            X.append(feature_set[i][nb[0][1]])
+            Y.append(1)
     
-    # create negatives
     print "Creating negatives ..."
     for i in range(size):
+        for j in range(len(real_blobs[i])):
+            neg_idx = []
+            for k in range(len(pred_blobs[i])):
+                x, y, z = pred_blobs[i][k]
+                dst = ((x - real_blobs[i][j][0]) ** 2 + (y - real_blobs[i][j][1]) ** 2) ** 0.5
+                if dst >= MAX_DIST:
+                    neg_idx.append(k)
 
-        neg_idx = []
-        for j in range(len(pred_blobs[i])):
-            x, y, z = pred_blobs[i][j]
-            dst = ((x - real_blobs[i][0]) ** 2 + (y - real_blobs[i][1]) ** 2) ** 0.5
-            if dst > MAX_DIST:
-                neg_idx.append(j)
-
-        for idx in neg_idx:
-            X.append(feature_set[i][idx])
-            Y.append(0)
+            for idx in neg_idx:
+                X.append(feature_set[i][idx])
+                Y.append(0)
 
     X = np.array(X)
     Y = np.array(Y)
-    print type(X), type(Y)
+
     return X, Y
 
-def _create_training_set_from_feature_set_hdf5(feature_set, pred_blobs, real_blobs, container, chunk_size=10000, suffix=None):
+# FIX for multipe blobs
+def _create_training_set_from_feature_set_hdf5(real_blobs, pred_blobs, feature_set, container, chunk_size=10000, suffix=None):
     MAX_DIST = 35
     size = len(real_blobs)
 

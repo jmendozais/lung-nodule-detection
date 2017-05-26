@@ -10,7 +10,7 @@ from keras.layers.advanced_activations import LeakyReLU, PReLU
 
 from keras.optimizers import SGD, Adadelta, Adagrad, Adam
 from keras.utils import np_utils, generic_utils
-from keras.regularizers import WeightRegularizer
+from keras.regularizers import l1_l2
 from six.moves import range
 
 
@@ -24,15 +24,15 @@ def bottleneck(input, nb_filters, stride, increase_dim=True):
     if not increase_dim:
         output = BatchNormalization()(input)
         output = Activation('relu')(output)
-        output = Convolution2D(nb_bottleneck_filters, 1, 1, subsample=(stride, stride), border_mode='same', init=init, W_regularizer=WeightRegularizer(l1, l2))(output)
+        output = Convolution2D(nb_bottleneck_filters, 1, 1, subsample=(stride, stride), border_mode='same', init=init, W_regularizer=l1_l2(l1, l2))(output)
 
         output = BatchNormalization()(output)
         output = Activation('relu')(output)
-        output = Convolution2D(nb_bottleneck_filters, 3, 3, subsample=(1, 1), border_mode='same', init=init, W_regularizer=WeightRegularizer(l1, l2))(output)
+        output = Convolution2D(nb_bottleneck_filters, 3, 3, subsample=(1, 1), border_mode='same', init=init, W_regularizer=l1_l2(l1, l2))(output)
 
         output = BatchNormalization()(output)
         output = Activation('relu')(output)
-        output = Convolution2D(nb_filters, 1, 1, subsample=(1, 1), border_mode='same', init=init, W_regularizer=WeightRegularizer(l1, l2))(output)
+        output = Convolution2D(nb_filters, 1, 1, subsample=(1, 1), border_mode='same', init=init, W_regularizer=l1_l2(l1, l2))(output)
 
         # Implicit identity mapping
         output = [input, output]
@@ -41,18 +41,18 @@ def bottleneck(input, nb_filters, stride, increase_dim=True):
         block_input = BatchNormalization()(input)
         block_input = Activation('relu')(block_input)
 
-        output = Convolution2D(nb_bottleneck_filters, 1, 1, subsample=(stride, stride), border_mode='same', init=init, W_regularizer=WeightRegularizer(l1, l2))(block_input)
+        output = Convolution2D(nb_bottleneck_filters, 1, 1, subsample=(stride, stride), border_mode='same', init=init, W_regularizer=l1_l2(l1, l2))(block_input)
 
         output = BatchNormalization()(output)
         output = Activation('relu')(output)
-        output = Convolution2D(nb_bottleneck_filters, 3, 3, subsample=(1, 1), border_mode='same', init=init, W_regularizer=WeightRegularizer(l1, l2))(output)
+        output = Convolution2D(nb_bottleneck_filters, 3, 3, subsample=(1, 1), border_mode='same', init=init, W_regularizer=l1_l2(l1, l2))(output)
 
         output = BatchNormalization()(output)
         output = Activation('relu')(output)
-        output = Convolution2D(nb_filters, 1, 1, subsample=(1, 1), border_mode='same', init=init, W_regularizer=WeightRegularizer(l1, l2))(output)
+        output = Convolution2D(nb_filters, 1, 1, subsample=(1, 1), border_mode='same', init=init, W_regularizer=l1_l2(l1, l2))(output)
 
         # Conv 1x1 shortcut
-        block_input = Convolution2D(nb_filters, 1, 1, subsample=(stride, stride), border_mode='same', init=init, W_regularizer=WeightRegularizer(l1, l2))(block_input)
+        block_input = Convolution2D(nb_filters, 1, 1, subsample=(stride, stride), border_mode='same', init=init, W_regularizer=l1_l2(l1, l2))(block_input)
 
         output = [block_input, output]
         output = merge(output, 'sum')
@@ -72,7 +72,7 @@ def resnet_cifar10(input_shape, nb_classes, depth):
     input = Input(shape=input_shape, dtype='float32', name='input_layer')
     repeats = (depth - 2) / 9
     nb_filters = [16, 64, 128, 256]
-    output = Convolution2D(nb_filters[0], 3, 3, subsample=(1, 1), border_mode='same', W_regularizer=WeightRegularizer(l1, l2))(input)
+    output = Convolution2D(nb_filters[0], 3, 3, subsample=(1, 1), border_mode='same', W_regularizer=l1_l2(l1, l2))(input)
     output = layer(bottleneck, output, nb_filters[1], repeats, 1)
     output = layer(bottleneck, output, nb_filters[2], repeats, 2)
     output = layer(bottleneck, output, nb_filters[3], repeats, 2)
@@ -80,7 +80,7 @@ def resnet_cifar10(input_shape, nb_classes, depth):
     output = Activation('relu')(output)
     output = AveragePooling2D((8, 8))(output)
     output = Flatten()(output)
-    output = Dense(nb_classes, init=init, W_regularizer=WeightRegularizer(l1, l2))(output)
+    output = Dense(nb_classes, init=init, W_regularizer=l1_l2(l1, l2))(output)
 
     return Model(input=input, output=output)
 

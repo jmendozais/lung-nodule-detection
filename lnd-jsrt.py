@@ -108,7 +108,6 @@ def froc_with_model(detection_model, network_model, rois_tr, pred_blobs_tr, blob
     froc = eval.froc(blobs_te, blobs_te_pred, probs_te_pred)
 
     detection_model.save('data/{}_{}'.format(network_model, model_suffix))
-    util.save_loss_acc(history, 'data/{}_{}'.format(network_model, model_suffix))
 
     return froc
  

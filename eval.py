@@ -54,7 +54,6 @@ def _iou_circle(res1, res2):
 def _dist(blob1, blob2):
     return (blob1[0] - blob2[0]) ** 2 + (blob1[1] - blob2[1]) ** 2
 
-
 def _load_results(results_path, factor=1.0):
     fin = open(results_path)
     results = []
@@ -189,6 +188,9 @@ def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random):
     
     return np.array(roi_set)
 
+''' 
+ISSUE: We cant compare a multi-object FROC curve and a single-object one straighforwardly
+'''
 
 def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False, verbose=True):
     img_set = []
@@ -204,63 +206,79 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
 
     entries = []
     if jsrt_idx != None: 
-        entries = np.full((0,5), fill_value=0, dtype=float)
+        entries = np.full((0,6), fill_value=0, dtype=float)
     else: 
-        entries = np.full((0,4), fill_value=0, dtype=float)
-
+        entries = np.full((0,5), fill_value=0, dtype=float)
+    
+    pred_blob_idx = 0
+    
+    num_imgs_with_nods = len(real)
     for i in range(n):
+        # Remove
         if data != None:
             util.show_blobs_real_predicted(img_set[i][0], jsrt_idx[i], real[i], pred[i])
-        if real[i][0] != -1:
+
+        if len(real[i]) == 0:
+            num_imgs_with_nods -= 1
+
+        for j in range(len(real[i])):
+            dist = np.linalg.norm(pred[i][:,:2] - real[i][j][:2], axis=1)
+            entry = []
+            entry.append(probs[i])
+            entry.append(dist)
+            entry.append(np.full((probs[i].shape), fill_value=p, dtype=np.float))
+            entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
+            entry.append(np.arange(pred_blob_idx, pred_blob_idx + len(pred[i]), dtype=np.float))
+            if jsrt_idx != None:
+                entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
+
+            entries = np.append(entries, np.array(entry).T, axis=0)
             p += 1
-        dist = np.linalg.norm(pred[i][:,:2] - real[i][:2], axis=1)
-        entry = []
-        entry.append(probs[i])
-        entry.append(dist)
-        entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
-        entry.append(np.arange(len(probs[i]), dtype=np.float))
-        if jsrt_idx != None:
-            entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
-        entries = np.append(entries, np.array(entry).T, axis=0)
+
+        pred_blob_idx += len(pred[i])
     
-    entries = sorted(entries, key=itemgetter(0))
-    entries.reverse()
+    def compare_entries(a, b):
+        if a[0] == b[0]:
+            if a[1] == b[1]:
+                return 0
+            elif a[1] < b[1]:
+                return -1
+            else:
+                return 1
+        elif a[0] < b[0]:
+            return 1
+        else:
+            return -1
+
+    entries = sorted(entries, cmp=compare_entries)
     entries = np.array(entries)
 
     tp = 0.0
     fppi = np.full((n,), fill_value=0, dtype=np.float)
-    found = np.full((n,), fill_value=False, dtype=bool)
+    seen_blob = np.full((p,), fill_value=False, dtype=np.bool)
+    seen_pred_blob = np.full((pred_blob_idx,), fill_value=False, dtype=np.bool)
+
     froc = []
     f_prev = -1.0
     
     for i in range(entries.shape[0]):
-        idx = entries[i][2]
-        if entries[i][0] != f_prev:
-            froc.append([np.mean(fppi), tp / p])
-            f_prev = entries[i][0]
-        if not found[idx] and entries[i][1] < 31.43:
-            found[idx] = True
-            tp += 1
-            if rois != None:
-                tmp = rois[int(entries[i][2])][int(entries[i][3])]
-                for k in range(len(tmp)):
-                    foo=1
-                    #util.imwrite('{}-{}-tp.jpg'.format(int(entries[i][0] * 1000000) * 0.0001, entries[i][4]), tmp[k])
-                    #print 'check {} : {} - {}'.format(i, entries[i][2], entries[i][3])
-                    if save_rois:
-                        util.save_blob('{}-{}-tp.jpg'.format(int(entries[i][0] * 1000000000000) * 0.0000000001, entries[i][4]), img_set[entries[i][2]][0], pred[entries[i][2]][entries[i][3]])
-        else:
-            fppi[idx] += 1
-            if rois != None and entries[i][1] > 31.43:
-                tmp = rois[int(entries[i][2])][int(entries[i][3])]
-                for k in range(len(tmp)):
-                    foo=1
-                    #util.imwrite('{}-{}-fp.jpg'.format(int(entries[i][0] * 1000000) * 0.0001, entries[i][4]), tmp[k])
-                    #print 'check {} : {} - {}'.format(i, entries[i][2], entries[i][3])
-                    if save_rois:
-                        util.save_blob('{}-{}-fp.jpg'.format(int(entries[i][0] * 1000000000000) * 0.0000000001, entries[i][4]), img_set[entries[i][2]][0], pred[entries[i][2]][entries[i][3]])
+        blob_idx = int(entries[i][2])
+        img_idx = int(entries[i][3])
+        pred_blob_idx = int(entries[i][4])
 
-    froc.append([np.mean(fppi), tp / p])
+        if entries[i][0] != f_prev:
+            froc.append([np.sum(fppi)/num_imgs_with_nods, tp / p])
+            f_prev = entries[i][0]
+
+        if not seen_pred_blob[pred_blob_idx]:
+            seen_pred_blob[pred_blob_idx] = True
+            if entries[i][1] < 31.43 and not seen_blob[blob_idx]:
+                seen_blob[blob_idx] = True
+                tp += 1
+            else:
+                fppi[img_idx] += 1
+
+    froc.append([np.sum(fppi)/num_imgs_with_nods, tp / p])
     froc.append([1000.0, tp / p])
     targets = [2., 4., 10.]
     ops = []
@@ -271,9 +289,10 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
                 best_op = op
         ops.append(best_op)
     ops.append(froc[-1])
+
     if verbose:
         print "fppi operating point: {}".format(ops)
-        print "mean fppi {}, tp {}, p {}".format(np.mean(fppi), tp, p)
+        print "mean fppi {}, tp {}, p {}".format(np.sum(fppi)/num_imgs_with_nods, tp, p)
 
     return np.array(froc)   
 
@@ -289,6 +308,7 @@ def froc_stratified(real, pred, probs, kind, num_frocs):
         entry = []
         entry.append(probs[i])
         entry.append(dist)
+        entry.append(np.full((probs[i].shape), fill_value=p, dtype=np.float))
         entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
         entries = np.append(entries, np.array(entry).T, axis=0)
     
@@ -319,15 +339,16 @@ def froc_stratified(real, pred, probs, kind, num_frocs):
 
     f_prev = -1.0
     for i in range(entries.shape[0]):
-        idx = entries[i][2]
+        blob_id = entries[i][2]
+        img_id = entries[i][3]
         if entries[i][0] != f_prev:
-            froc[kind[idx]].append([np.mean(fppi), tp[kind[idx]] / p[kind[idx]]])
+            froc[kind[img_id]].append([np.mean(fppi), tp[kind[img_id]] / p[kind[img_id]]])
             f_prev = entries[i][0]
-        if not found[idx] and entries[i][1] < 31.43:
-            found[idx] = True
-            tp[kind[idx]] += 1
+        if not found[blob_id] and entries[i][1] < 31.43:
+            found[blob_id] = True
+            tp[kind[img_id]] += 1
         else:
-            fppi[idx] += 1
+            fppi[img_id] += 1
 
     for i in xrange(num_frocs):
         froc[i].append([np.mean(fppi), tp[i] / p[i]])
@@ -376,7 +397,8 @@ def fppi_sensitivity(real, pred, data=None):
         froc.append([np.mean(fppi), tp / p])
         return froc[-1]
     
-def average_froc(frocs, fppi_range):
+DEFAULT_FPPI_RANGE = np.linspace(0.0, 10.0, 101)
+def average_froc(frocs, fppi_range=DEFAULT_FPPI_RANGE):
     av_sen = []
 
     for i in range(len(frocs)):
@@ -414,6 +436,15 @@ def average_froc_with_ci(frocs, fppi_range, confidence=0.95):
     av_froc = np.array(av_froc).T
 
     return av_froc, lo, up
+
+def froc_on_folds(real_blobs, blobs, probs, folds):
+    frocs = []
+    for tr_idx, te_idx in folds:    
+        froc = eval.froc(real_blobs[te_idx], blobs[te_idx], probs[te_idx])
+        frocs.append(froc)
+
+    av_froc = eval.average_froc(frocs, fppi_range)
+    return av_froc
 
 def sublety_stratified_kfold(y, sublety):
     nidx = np.arange(len(y))[y == 0]

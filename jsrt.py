@@ -186,18 +186,22 @@ def load(set_name=None, dsize=(512, 512)):
         img = np.load(paths[i]).astype(np.float)
         img = preprocess.antialiasing_dowsample(img, downsample=True)
         imgs.append(img)
-        blobs.append([[int(round(loc[i][1] * factor)), int(round(loc[i][0] * factor)), int(round(factor * siz[i][0]))]])
+        if loc[i][0] != -1:
+            blobs.append([[int(round(loc[i][1] * factor)), int(round(loc[i][0] * factor)), int(round(factor * siz[i][0]))]])
+        else:
+            blobs.append([])
 
-    return np.array(imgs), np.array(blobs)
+    imgs = np.array(imgs)
+    return imgs.reshape((imgs.shape[0],) + (1,) + imgs.shape[1:]), np.array(blobs)
 
 def masks(set_name=None, dsize=(512, 512)):
-    ll_paths = left_masks(set_name)
-    lr_paths = right_masks(set_name)
+    ll_paths = left_lung(set_name)
+    lr_paths = right_lung(set_name)
 
     resp = []
     for i in range(len(ll_paths)):
-        ll_mask = cv2.imread(self.ll_paths[i])
-        lr_mask = cv2.imread(self.lr_paths[i])
+        ll_mask = cv2.imread(ll_paths[i])
+        lr_mask = cv2.imread(lr_paths[i])
         lung_mask = ll_mask + lr_mask
         lung_mask = cv2.resize(lung_mask, dsize, interpolation=cv2.INTER_CUBIC)
         lung_mask = cv2.cvtColor(lung_mask, cv2.COLOR_BGR2GRAY)
@@ -233,6 +237,7 @@ class DataProvider:
         return img, lung_mask
 
 import matplotlib.pyplot as plt
+
 if __name__ == '__main__':
     import util
     import detect
@@ -240,9 +245,11 @@ if __name__ == '__main__':
     set_name = 'jsrt140'
     imgs, blobs = load(set_name=set_name)
     print len(imgs), len(blobs)
-    pred_blobs = detect.read_blobs('data/{}-blobs-gt.pkl'.format('wmci-aam'))
+    pred_blobs = detect.read_blobs('data/wmci-aam-jsrt140-blobs-gt.pkl')
 
     for i in range(len(imgs)):
         max_intensity = np.max(imgs[i])
         img = util.label_blob(imgs[i].astype(np.float32), list(blobs[i][0]), color=(max_intensity, 0, 0))
-        util.imshow('jsrt', img)
+        plt.hist(np.array(img).ravel(), 256, range=(0,4096)); 
+        plt.show()
+        #util.imshow('jsrt', img)

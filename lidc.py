@@ -34,6 +34,15 @@ Missed nodules
 Functions for only XML data
 '''
 
+def idx_excluding_hard_cases():
+    cases = [4, 12, 35, 36, 40, 54, 65, 73, 80, 87, 90, 99, 107, 108, 114, 125, 130, 139, 141, 142, 152, 177, 178, 182, 201, 211, 212, 213, 217, 225, 235, 239, 251, 256, 263]
+
+    idx = []
+    for i in range(265):
+        if (i + 1) not in cases:
+            idx.append(i) 
+    return np.array(idx)
+
 def size_by_case_and_noid_map():
     size_by_case_noid = dict()
     with open(LIDC_NOD_SIZES, 'rb') as csvfile:
@@ -224,6 +233,8 @@ def generate_npy_dataset():
     multiple_nodules = 0
     roi_counter = 0
 
+    mins = []
+    maxs = []
     for i in range(len(paths)):
         dcm_path, xml_path = paths[i]
         case_id_pos = dcm_path.find('LIDC-IDRI-') + 10
@@ -285,8 +296,16 @@ def generate_npy_dataset():
         # resize and preprocess imgs
         img = cv2.resize(img, (2048, 2048), interpolation=cv2.INTER_CUBIC)
         img = preprocess.antialiasing_dowsample(img)
-        mask = np.ones(img.shape, dtype=np.int8)
-        img = preprocess.normalize(img, mask)
+
+        '''
+        min_value = np.min(img)
+        max_value = np.max(img)
+        img = (img - min_value)/(max_value - min_value) * 4096
+        '''
+
+        mins.append(np.min(img))
+        maxs.append(np.max(img))
+        print 'min {}, max {}'.format(np.min(img), np.max(img))
         
         # resize rois
         resized_rois = []
@@ -294,9 +313,12 @@ def generate_npy_dataset():
             resized_rois.append([int(roi[0]*factor*0.25), int(roi[1]*factor*0.25), int(roi[2]*factor*0.25)])
         roi_counter += len(rois)
 
+        plt.hist(np.array(img).ravel(), 256, range=(0,4096)); 
+        plt.show()
+
         np.save('{}/LIDC{}.npy'.format(LIDC_NPY_PATH, case_id), img)
         np.save('{}/LIDC{}-rois.npy'.format(LIDC_NPY_PATH, case_id), resized_rois)
-
+         
         '''
         max_intensity = np.max(img)
         for roi in resized_rois:
@@ -306,6 +328,8 @@ def generate_npy_dataset():
         util.imshow('lidc', img)
         '''
         
+    print 'av min, av max, min, max {} {} {} {}'.format(np.mean(mins), np.mean(maxs), np.min(mins), np.max(maxs))
+
     '''
     sizes = []
     for rpi in lidc_rois:
@@ -340,7 +364,8 @@ def load():
         images.append(np.load(paths[i]))
         blobs.append(np.load(blobs_path))
 
-    return np.array(images), np.array(blobs)
+    images = np.array(images)
+    return images.reshape((images.shape[0],) + (1,) + images.shape[1:]), np.array(blobs)
 
 if __name__ == '__main__':
     #plt.switch_backend('Qt4Agg')

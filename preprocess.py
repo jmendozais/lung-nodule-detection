@@ -3,6 +3,7 @@ import numpy as np
 import util
 import time
 from math import sqrt
+from itertools import product
 EPS = 1e-9
 
 # check a better low-pass anti-aliasing filter, boxfilter is better
@@ -12,12 +13,10 @@ def antialiasing(img):
     smt = cv2.GaussianBlur(img, ksize, sigma)
     return smt
 
-
 def _downsample(img):
     dsize = (512, 512)
     img = antialiasing(img)
     return cv2.resize(img, dsize, interpolation=cv2.INTER_CUBIC)
-
 
 def antialiasing_dowsample(img, downsample=True):
     if downsample:
@@ -25,7 +24,6 @@ def antialiasing_dowsample(img, downsample=True):
     else:
         img = antialiasing(img)
     return img
-
 
 def lce(img, downsample=True):
     if downsample:
@@ -35,11 +33,14 @@ def lce(img, downsample=True):
         hsize = (32 * 4 + 1, 32 * 4 + 1)
         hsigma = 16 * 4
 
+    img = img.astype(np.float64)
     mu = cv2.GaussianBlur(img, hsize, hsigma)
     ro2 = cv2.GaussianBlur(pow(img, 2), hsize, hsigma) - pow(mu, 2) + EPS
+
     assert np.min(ro2) >= 0
+
     res = (img - mu) / pow(ro2, 0.5)
-    return res
+    return res.astype(np.float32)
 
 def normalize(img, lung_mask):
     count = np.count_nonzero(lung_mask)
@@ -95,6 +96,18 @@ def hardie_filters():
     filters[2] += filters[1];
     return filters
 
+def grad_to_center_filter(size):
+    assert size[0]%2 == 1
+    fx = np.empty(size, dtype=np.float64)
+    fy = np.empty(size, dtype=np.float64)
+    for i, j in product(range(size[0]), range(size[0])):
+        x = -1 * (i - size[0] / 2)
+        y = -1 * (j - size[1] / 2)
+        mu = sqrt(x * x + y * y) + 1e-9;    
+        fx[i, j] = x * 1.0 / mu
+        fy[i, j] = y * 1.0 / mu
+    return fx, fy, np.ones(size, dtype=np.float64)
+
 def wci(img, filter):
     size = filter.shape
     magnitude, dx, dy = finite_derivatives(img)
@@ -131,6 +144,123 @@ def wmci(img, mask, threshold=0.5):
 def lce_wmci(img, mask, threshold=0.5):
     _, lce, _ = preprocess.preprocess_hardie(img, lung_mask)
     wmci(lce, mask, threshold)
+
+# Sliding Band Filter
+
+def sliding_band_filter(img, num_rays = 256, rad_range = (2, 22), band=5):
+    np.set_printoptions(suppress=True)
+
+    theta = np.linspace(-np.pi, np.pi, num_rays, endpoint=False)
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+    rads = np.arange(rad_range[0], rad_range[1] + band)
+    r_cos_t = cos_t[:,None] * rads[None,:]
+    r_sin_t = sin_t[:,None] * rads[None,:]
+  
+    # TODO: remove astype for interp
+    x_step = np.round(r_cos_t).astype(int).flatten()
+    y_step = np.round(r_sin_t).astype(int).flatten()
+    
+    side = int(2*rad_range[1] + 2*band + 1)
+
+    magnitude, dx, dy = finite_derivatives(img)
+    cx, cy, cmagnitude = grad_to_center_filter((side, side))
+    
+    sbf = np.zeros(img.shape, dtype=np.double)
+    rows, cols = img.shape
+
+    bx = cx[x_step + side/2, y_step + side/2]
+    by = cy[x_step + side/2, y_step + side/2]
+    bmag = cmagnitude[x_step + side/2, y_step + side/2]
+    
+    '''
+    simple 17 sec
+    with if 15.5 sec
+    with padding 14 sec
+    with take 11.5 sec
+    '''
+    for i, j in product(range(rows), range(cols)):
+        x_idx = x_step + i
+        y_idx = y_step + j
+        if i < side/2 or i >= rows - side/2:
+            x_idx[x_idx<0] = 0
+            x_idx[x_idx>=rows] = rows - 1
+        if j < side/2 or j >= cols - side/2:
+            y_idx[y_idx<0] = 0
+            y_idx[y_idx>=cols] = cols - 1
+
+        ax = dx.take(x_idx*cols + y_idx)
+        ay = dy.take(x_idx*cols + y_idx)
+        amag = magnitude.take(x_idx*cols + y_idx)
+
+        contrib = (ax * bx + ay * by) / (amag * bmag)
+        contrib = contrib.reshape(len(theta), len(rads)) 
+        contrib_acc = np.add.accumulate(contrib, axis=1)
+        acc = contrib_acc[:,band:] - contrib_acc[:,:-band] 
+
+        #argmax_band_by_angle = np.argmax(acc, axis=1)
+        max_band_by_angle = np.max(acc, axis=1)
+        sbf[i][j] = np.sum(max_band_by_angle)
+
+        '''
+        if j % 8 == 0 and i % 8 == 0 and i > 0 and j > 0 and i  > 22 and j > 22 and i < rows - 22 and j < cols - 22:
+            print sbf[i][j]
+            print i, j
+            roi = img[i-rad_range[1] - band:i + rad_range[1] + band, j-rad_range[1] - band: j + rad_range[1] + band]
+            img2 = np.copy(img)
+            
+            x_idx2 = []
+            y_idx2 = []
+            x_step2 = x_step.reshape(len(theta), len(rads))
+            y_step2 = y_step.reshape(len(theta), len(rads))
+            for k in range(len(argmax_band_by_angle)):
+                x_idx2.append(x_step2[k][argmax_band_by_angle[k]] + i)
+                y_idx2.append(y_step2[k][argmax_band_by_angle[k]] + j)
+                
+            print 'contour'
+            print x_idx2, y_idx2
+
+            img2[x_idx2, y_idx2] = np.max(img2)
+            roi2 = img2[i-rad_range[1] - band:i + rad_range[1] + band, j-rad_range[1] - band: j + rad_range[1] + band]
+            
+            print "contrib shape {}, roi shape {}".format(contrib.shape, roi.shape)
+            util.imshow('roi', roi, display_shape=(256, 256))
+            util.imshow('roi2', roi2, display_shape=(256, 256))
+ 
+        '''
+
+        '''
+        if j % 64 == 0 and i % 64 == 0 and i > 0 and j > 0:
+            print np.round(contrib, decimals=2)
+            print np.round(contrib_acc, decimals=2)
+            print contrib.dtype, contrib_acc.dtype
+            print np.round(acc, decimals=2)
+            print argmax_band_by_angle
+            print np.round(max_band_by_angle, decimals=2)
+
+            roi = img[i-rad_range[1] - band:i + rad_range[1] + band, j-rad_range[1] - band: j + rad_range[1] + band]
+            img2 = np.copy(img)
+            
+            x_idx2 = []
+            y_idx2 = []
+            x_step2 = x_step.reshape(len(theta), len(rads))
+            y_step2 = y_step.reshape(len(theta), len(rads))
+            for k in range(len(argmax_band_by_angle)):
+                x_idx2.append(x_step2[k][argmax_band_by_angle[k]] + i)
+                y_idx2.append(y_step2[k][argmax_band_by_angle[k]] + j)
+                
+            print 'contour'
+            print x_idx2, y_idx2
+
+            img2[x_idx2, y_idx2] = np.max(img2)
+            roi2 = img2[i-rad_range[1] - band:i + rad_range[1] + band, j-rad_range[1] - band: j + rad_range[1] + band]
+            
+            print "contrib shape {}, roi shape {}".format(contrib.shape, roi.shape)
+            util.imshow('roi', roi, display_shape=(256, 256))
+            util.imshow('roi2', roi2, display_shape=(256, 256))
+        '''
+
+    return sbf 
 
 # Algorithms adapted from https://gist.github.com/shunsukeaihara/4603234 
 
@@ -266,49 +396,22 @@ def preprocess_with_method(method, **kwargs):
 
 PREPROCESS_METHODS_WITH_MIN_MAX = ['stretch', 'max_white', 'grey_world', 'retinex', 'retinex_adjust']
 
-# TODO: Change data to hdf5/np arrays
-# TODO: Create a RoiGenerator class if needed
-class LungPreprocessor:
-    def __init__(self, preproc_methods_for_channels):
-        self.preproc_methods_for_channels = preproc_methods_for_channels
-    def fit(self, data):
-        need_min_max = False
-        for method in self.preproc_methods_for_channels:
-            if method in PREPROCESS_METHODS_WITH_MIN_MAX:
-                need_min_max = True
+if __name__ == '__main__':
+    '''
+    for i in range(50):
+        try:
+            print 'home/juliomb/dbs/lidc-idri-npy/LIDC{:04d}.npy'.format(i+1)
+            image = np.load('/home/juliomb/dbs/lidc-idri-npy/LIDC{:04d}.npy'.format(i+1))
+            rois = np.load('/home/juliomb/dbs/lidc-idri-npy/LIDC{:04d}-rois.npy'.format(i+1))
+            util.show_blobs('blobs', image, rois)
+        except: 
+            print 'Exception'
+    '''
+    image = np.load('/home/juliomb/dbs/lidc-idri-npy/LIDC0014.npy')
+    rois = np.load('/home/juliomb/dbs/lidc-idri-npy/LIDC0014-rois.npy')
+    #util.show_blobs('blobs', image, rois)
+    #image = image[50:250, 250:450]
+    util.imshow('roi', image, display_shape=(256, 256))
 
-        if need_min_max:
-            min_value = []
-            max_value = []
-            for i in range(len(data)):
-                img, mask = data.get(i, downsample=True) # img 2048 side, lung mask downsampled
-                img = antialiasing_dowsample(img, True) # img downsampled
-                img = img * mask
-                min_value.append(np.min(img[np.nonzero(img)]))
-                max_value.append(np.max(img[np.nonzero(img)]))
-                
-            self.min_value = np.array(min_value).min()
-            self.max_value = np.array(max_value).max()
-
-    def _transform_one(self, img, mask):
-        for method in self.preproc_methods_for_channels:
-            if method in PREPROCESS_METHODS_WITH_MIN_MAX:
-                preprocess_with_method(method, img, self.min_value, self.max_value)
-            else:
-                #FIXME: for method != norm
-                preprocess_with_method(method, img, mask)
-
-    def transform(self, data):
-        results = []
-        if len(masks.shape) > 2:
-            for i in range(len(data)):
-                img, mask = data.get(i, downsample=True)
-                img = antialiasing_dowsample(img, True)
-                results.append(self._transform_one(img, mask))
-        return results
-                
-    def fit_transform(self, data):
-        self.fit(data)
-        return self.transform(data)
-
-
+    sbf = sliding_band_filter(image, num_rays=256, rad_range=(2,21), band=3)
+    util.imshow('SBF image', sbf, display_shape=(256, 256))

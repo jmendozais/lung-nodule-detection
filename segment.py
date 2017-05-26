@@ -193,14 +193,14 @@ class SegmentationModel:
         raise Exception('Transform_one_image method not implemented')
 
     def transform(self, images):
-        if len(images[0].shape) == 2:
+        if len(images[0].shape) == 3:
             num_samples = len(images)
             masks = []
             for i in range(num_samples):
                 masks.append(self.transform_one_image(images[i]))
             return np.array(masks)
 
-        elif len(images.shape) == 2:
+        elif len(images.shape) == 3:
             return self.transform_one_image(images)
         
 '''
@@ -248,7 +248,6 @@ def normalize_for_amm(image):
     min_ = np.min(image)
     max_ = np.max(image)
     image = (image - min_)/(max_ - min_ + 1e-7)
-    image = image.reshape((1,) + image.shape)
     return image
 
 def prepare_data_for_aam(images, landmarks):
@@ -389,13 +388,14 @@ Functions for JSRT-LIDC
 '''
 
 def train(model_name):
-    images, blobs = jsrt.load(set_name='jsrt140n')
+    images, _ = jsrt.load(set_name='jsrt140n')
     landmarks = scr.load(set_name='jsrt140n')
     model = get_shape_model(model_name)
 
     print('Training')
     model.fit(images, landmarks)
 
+    '''
     print('Segment lidc')
     lidc_images, _ = lidc.load()
     pred_masks = model.transform(lidc_images)
@@ -405,11 +405,19 @@ def train(model_name):
     jsrt_images, _ = jsrt.load(set_name='jsrt140p')
     pred_masks = model.transform(jsrt_images)
     np.save('data/{}-{}-pred-masks'.format(model_name, 'jsrt140p'), np.array(pred_masks))
+    '''
 
+    print('Segment jsrt')
+    jsrt_images, _ = jsrt.load(set_name='jsrt140')
+    pred_masks = model.transform(jsrt_images)
+    np.save('data/{}-{}-pred-masks'.format(model_name, 'jsrt140'), np.array(pred_masks))
+
+    '''
     print('Save model')
-    model_file = open('data/{}.pkl'.format(model_name), 'wb')
+    model_file = open('data/{}-model.pkl'.format(model_name), 'wb')
     pickle.dump(model, model_file, -1)
     model_file.close()
+    '''
 
 def segment(image, model_name, display=True):
     print("Loading model ...")

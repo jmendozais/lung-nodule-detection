@@ -252,15 +252,6 @@ class BaselineModel(object):
 
         # Create roi set
         roi_set = []
-        '''
-        # NOT WORKING
-        if self.streams == 'trf':
-            roi_set = [[], [], []]
-        elif self.streams == 'seg':
-            roi_set = [[], []]
-        elif self.streams == 'fovea':
-            roi_set = [[], []]
-        '''
 
         print 'preprocess rois {}'.format(self.preprocess_roi)
         channels = len(img_set[0])
@@ -309,12 +300,6 @@ class BaselineModel(object):
                     tmp = cv2.resize(tmp, dsize, interpolation=cv2.INTER_CUBIC)
                     roi.append(tmp)
                     
-                '''
-                if mode == 'mask':
-                    mask = cv2.resize(masks[j], dsize, interpolation=cv2.INTER_CUBIC)
-                    for k in range(img.shape[0]):
-                        roi[k] *= mask.astype(np.float32)
-                '''
                 rois.append(roi)
 
             rois = np.array(rois)
@@ -331,10 +316,6 @@ class BaselineModel(object):
                 range_values[i][0] = min(range_values[i][0], min_by_channels[i])
                 range_values[i][1] = max(range_values[i][1], max_by_channels[i])
             
-            '''
-            for i in range(len(rois)):
-                util.imwrite('after_heq_{}.jpg'.format(i), rois[i])
-            '''
             gc.collect()
 
         if self.preprocess_roi != 'none':
@@ -347,37 +328,6 @@ class BaselineModel(object):
                 else:
                     roi_set[i] = self.preprocess_rois(roi_set[i])
 
-        '''
-            # Fix segment
-            if self.streams == 'trf':
-                #rois = np.swapaxes(np.swapaxes(np.swapaxes(rois, 2, 3), 1, 2), 0, 1)
-                rois = np.swapaxes(rois, 0, 1)
-                rois = rois.reshape(rois.shape[0], rois.shape[1], 1, rois.shape[2], rois.shape[3])
-                assert rois.shape[0] == len(roi_set)
-                for k in range(rois.shape[0]):
-                    roi_set[k].append(rois[k])
-            elif self.streams == 'seg':
-                masked_rois = np.copy(rois)
-                for j in xrange(len(masked_rois)):
-                    mask = cv2.resize(masks[j], dsize, interpolation=cv2.INTER_CUBIC)
-                    for k in xrange(len(masked_rois[j])): 
-                        masked_rois[j][k] *= mask.astype(np.float32)
-                roi_set[0].append(rois)
-                roi_set[1].append(masked_rois)
-            elif self.streams == 'fovea':
-                FOVEA_FACTOR = 2.5
-                tsize = (int(dsize[0] * FOVEA_FACTOR), int(dsize[1] * FOVEA_FACTOR))
-                offset = (tsize[0] - dsize[0]) / 2
-                fovea_rois = np.copy(rois)
-                for j in xrange(len(rois)):
-                    for k in xrange(len(rois[j])): 
-                        tmp = cv2.resize(rois[j][k], tsize, interpolation=cv2.INTER_CUBIC)
-                        fovea_rois[j][k] = tmp[offset:offset+dsize[0], offset:offset+dsize[1]]
-                roi_set[0].append(rois)
-                roi_set[1].append(fovea_rois)
-            else:
-                roi_set.append(rois)
-        '''
         return np.array(roi_set)
     
     def detect_blobs(self, img, lung_mask, threshold=0.5):

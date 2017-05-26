@@ -18,6 +18,8 @@ import h5py
 import util
 import time
 
+import matplotlib.pyplot as plt
+
 def gaussian_noise(x, mean=0, std=0.1):	
     noise = np.random.normal(loc=mean, scale=std, size=x.shape)
     scale_factor = np.max(x)
@@ -281,7 +283,7 @@ def preprocess_dataset(preprocessor, X_train, Y_train, X_test=None, Y_test=None,
         gc.collect()
 
         print "Preprocess test set ..."
-        if X_test != None:
+        if X_test is not None:
             X_test = preprocessor.transform(X_test)
             gc.collect()
 
@@ -592,7 +594,6 @@ class DataGenerator:
         self.data_shape = data_shape
         self.offset = 0
 
-
     def next(self):
         if self.offset + self.step > self.len_neg: 
             self.offset = 0
@@ -618,6 +619,24 @@ class DataGenerator:
             batch_output[k] = output_
 
         self.offset += self.step
+
+        # Show blobs and histograms here ! 
+        mean = [[], []]
+        std = [[], []]
+        for k in self.input:
+            for i in range(self.step):
+                pos = batch_input[k][i][0]
+                neg = batch_input[k][self.step + i][0]
+                mean[0].append(np.mean(pos))
+                std[0].append(np.std(pos))
+                mean[1].append(np.mean(neg))
+                std[1].append(np.std(neg))
+                '''
+                util.imshow('roi p', batch_input[k][i][0], display_shape=(256, 256))
+                util.imshow('roi n', batch_input[k][self.step + i][0], display_shape=(256, 256))
+                '''
+
+        print 'batch p:  mm {:.4f}, ms {:.4f} ss {:.4f}, n: mm {:.4f}, ms {:.4f}, ss {:.4f}'.format(np.mean(mean[0]), np.mean(std[0]), np.std(std[0]), np.mean(mean[1]), np.mean(std[1]), np.std(std[1]))
 
         return batch_input, batch_output 
 

@@ -9,7 +9,9 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
 from sklearn import metrics
 from sklearn.cross_validation import StratifiedKFold
+from sklearn.model_selection import KFold
 from sklearn.cross_validation import StratifiedShuffleSplit
+from skimage.segmentation import find_boundaries
 
 from preprocess import *
 font = {
@@ -30,6 +32,7 @@ Data utils
 '''
 EPS = 1e-9
 FOLDS_SEED = 113
+NUM_VAL_FOLDS = 5
 
 def load_list(path, blob_type='rad'):
     detect_f = open(path, 'r+') 
@@ -200,6 +203,12 @@ def show_nodule(roi, mask, scale=4):
     cv2.drawContours(drawing, contours, -1, color, 1)
     imshow("nodule", drawing)
 
+def imshow_with_mask(image, mask):
+    boundaries = find_boundaries(mask)
+    max_value = np.max(image)
+    image[boundaries] = max_value
+    imshow('Image with mask', np.array(image))
+
 def print_detection(path, blobs):
     print path,
     print len(blobs),
@@ -278,7 +287,6 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
 
     for i in range(len(scatter_ops)):
         ops = scatter_ops[i].T
-        print ops[0], ops[1]
         plt.plot(ops[0], ops[1], '{}{}'.format(line_format[idx%28][0], markers[idx%13]), markersize=5, markeredgewidth=1)
         idx += 1
         legend.append(scatter_legend[i])
@@ -307,6 +315,8 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
     if legend != None:
         assert len(legend) == len(op_set)
     legend = list(legend)
+
+    print "save froc params {} {} {}, {}, {} {}".format(len(op_set), op_set[0].shape, op_set[0].dtype, name, len(legend), type(legend))
 
     ax = plt.gca()
     ax.grid(True)
@@ -345,9 +355,9 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
         plt.legend(legend, loc=4, fontsize='x-small', numpoints=1)
 
     if not unique:
-        name='{}_{}'.format(name, time.clock())
+        name='{}-{}'.format(name, time.clock())
 
-    plt.savefig('{}_cnn_clf.pdf'.format(name))
+    plt.savefig('{}.pdf'.format(name))
     plt.clf()
 
 def auc(ops, range):
@@ -541,17 +551,31 @@ def ci(scores, confidence=0.95):
 
     return confidence_lower, confidence_upper
 
-def stratified_kfold_holdout(stratified_labels, n_folds, shuffle=True, random_state=util.FOLDS_SEED):
-    split = StratifiedShuffleSplit(stratified_labels, 1, test_size=0.3, random_state=util.FOLDS_SEED)
+def stratified_kfold_holdout(stratified_labels, n_folds, shuffle=True, random_state=FOLDS_SEED):
+    split = StratifiedShuffleSplit(stratified_labels, 1, test_size=0.3, random_state=random_state)
     tr, te = list(split)[0]
     folds = StratifiedKFold(stratified_labels[tr], n_folds=n_folds, shuffle=shuffle, random_state=random_state)
     tr_val_folds = []
     for tr_tr, tr_val in folds:
         tr_val_folds.append((tr[tr_tr], tr[tr_val]))
+
     return tr_val_folds, tr, te
+
+def model_selection_folds(data, n_folds=NUM_VAL_FOLDS):
+    return KFold(n_splits=n_folds, shuffle=True, random_state=FOLDS_SEED).split(data)
+
+def froc_folds(real_blobs, blobs, probs, folds):
+    frocs = []
+    for tr_idx, te_idx in folds:    
+        froc = eval.froc(real_blobs[te_idx], blobs[te_idx], probs[te_idx])
+        frocs.append(froc)
+
+    av_froc = eval.average_froc(frocs)
+    return av_froc
 
 if __name__ == '__main__':
     import jsrt
+    
     from sklearn.cross_validation import StratifiedKFold
     paths, locs, rads, subs, sizes, kinds = jsrt.jsrt(set='jsrt140')
 

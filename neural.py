@@ -10,7 +10,7 @@ import keras
 import gc
 
 from keras.layers import Input, merge, Dropout
-from keras.layers import Convolution2D, MaxPooling2D, AveragePooling2D
+from keras.layers import Conv2D, MaxPooling2D, AveragePooling2D
 from keras.layers import BatchNormalization, Flatten, Dense, Dropout, Activation, MaxoutDense
 from keras.layers import Input, merge
 from keras.models import Model, Sequential
@@ -19,7 +19,7 @@ from keras.layers.advanced_activations import LeakyReLU, PReLU
 
 from keras.optimizers import SGD, Adadelta, Adagrad, Adam
 from keras.utils import np_utils, generic_utils
-from keras.regularizers import WeightRegularizer
+from keras.regularizers import l1_l2
 from six.moves import range
 from sklearn.externals import joblib
 import util
@@ -30,6 +30,8 @@ from resnet import resnet_cifar10 as resnet
 # Layers
 from keras.engine import Layer
 from keras import backend as K
+
+from keras.callbacks import Callback, ModelCheckpoint
 
 class Softmax4D(Layer):
     def __init__(self, axis=-1,**kwargs):
@@ -54,7 +56,7 @@ def print_trainable_state(layers):
     for k in range(len(layers)):
         if isinstance(layers[k], Dense):
             print("Layer {} - {} trainable {} weight sample {}".format(k, layers[k].name, layers[k].trainable, layers[k].get_weights()[0][0][0]))
-        elif isinstance(layers[k], Convolution2D):
+        elif isinstance(layers[k], Conv2D):
             print("Layer {} - {} trainable {} weight sample {}".format(k, layers[k].name, layers[k].trainable, layers[k].get_weights()[0][0][0][0][0]))
     print("")
 
@@ -83,7 +85,7 @@ def get_optimizer(config):
 def convpool_block(inp, depth=2, nb_filters=64, nb_conv=3, nb_pool=2, init='orthogonal', activation='relu', batch_norm=False, regularizer=None, **junk):
     out = inp
     for i in range(depth):
-        out = Convolution2D(nb_filters, nb_conv, nb_conv, border_mode='same', init=init, W_regularizer=regularizer)(out)
+        out = Conv2D(nb_filters, (nb_conv, nb_conv), padding='same', kernel_initializer=init, kernel_regularizer=regularizer)(out)
         if batch_norm:
             out = BatchNormalization()(out)
         if activation == 'leaky_relu':
@@ -94,6 +96,7 @@ def convpool_block(inp, depth=2, nb_filters=64, nb_conv=3, nb_pool=2, init='orth
     return out
 
 def convpool_fs(inp, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], init='orthogonal', batch_norm=False, activation='relu', regularizer=None, dropout=0.25):
+
     assert nb_modules == len(nb_filters)
     layewise_dropout = type(dropout) == type([])
 
@@ -138,9 +141,9 @@ def convpool_fs_ldp(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_
 def allcnn_block(model, depth=2, nb_filters=64, nb_conv=3, subsample=2, init='orthogonal', input_shape=None, activation='relu', batch_norm=False, regularizer=None, **junk):
     for i in range(depth):
         if input_shape != None:
-            model.add(Convolution2D(nb_filters, nb_conv, nb_conv, border_mode='same', init=init, input_shape=input_shape, W_regularizer=regularizer))
+            model.add(Conv2D(nb_filters, nb_conv, nb_conv, padding='same', kernel_initializer=init, input_shape=input_shape, kernel_regularizer=regularizer))
         else:
-            model.add(Convolution2D(nb_filters, nb_conv, nb_conv, border_mode='same', init=init, W_regularizer=regularizer))
+            model.add(Conv2D(nb_filters, nb_conv, nb_conv, padding='same', kernel_initializer=init, kernel_regularizer=regularizer))
 
         if batch_norm:
             model.add(BatchNormalization())
@@ -150,7 +153,7 @@ def allcnn_block(model, depth=2, nb_filters=64, nb_conv=3, subsample=2, init='or
         else:
             model.add(Activation(activation))
 
-    model.add(Convolution2D(nb_filters, subsample, subsample, border_mode='valid', init=init, subsample=(subsample, subsample), W_regularizer=regularizer))
+    model.add(Conv2D(nb_filters, subsample, subsample, padding='valid', kernel_initializer=init, subsample=(subsample, subsample), kernel_regularizer=regularizer))
     if activation == 'leaky_relu':
         model.add(LeakyReLU(alpha=.333))
     else:
@@ -174,37 +177,37 @@ def allcnn_fs(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[
 def mlp_softmax(inp, nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', regularizer=None):
     out = inp
     for i in range(nb_dense):
-        out = Dense(dense_units[i], init=init, W_regularizer=regularizer)(out)
+        out = Dense(dense_units[i], kernel_initializer=init, kernel_regularizer=regularizer)(out)
         if activation == 'leaky_relu':
             out = LeakyReLU(alpha=.333)(out)
         else:
             out = Activation(activation)(out)
         out = Dropout(0.5)(out)
 
-    out = Dense(nb_classes, W_regularizer=regularizer)(out)
+    out = Dense(nb_classes, kernel_regularizer=regularizer)(out)
     out = Activation('softmax')(out)
     return out
 
 def nin_softmax(model, nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', regularizer=None):
     for i in range(nb_dense):
-        model.add(Dense(dense_units[i], init=init, W_regularizer=regularizer))
+        model.add(Dense(dense_units[i], kernel_initializer=init, kernel_regularizer=regularizer))
         if activation == 'leaky_relu':
             model.add(LeakyReLU(alpha=.333))
         else:
             model.add(Activation(activation))
         model.add(Dropout(0.5))
 
-    model.add(Dense(nb_classes, W_regularizer=regularizer))
+    model.add(Dense(nb_classes, kernel_regularizer=regularizer))
     model.add(Activation('softmax'))
 
 def maxout_softmax(inp, nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', nb_feature=2, regularizer=None):
     out = inp
     for i in range(nb_dense):
-        out = MaxoutDense(dense_units[i], init=init, nb_feature=nb_feature, W_regularizer=regularizer)(out)
+        out = MaxoutDense(dense_units[i], kernel_initializer=init, nb_feature=nb_feature, kernel_regularizer=regularizer)(out)
         out = Activation('linear')(out)
         out = Dropout(0.5)(out)
 
-    out = Dense(nb_classes, W_regularizer=regularizer)(out)
+    out = Dense(nb_classes, kernel_regularizer=regularizer)(out)
     out = Activation('softmax')(out)
 
 # Models 
@@ -212,10 +215,12 @@ def maxout_softmax(inp, nb_dense=1, dense_units=[512], nb_classes=2, init='ortho
 def standard_cnn(nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', regularizer=None):
     print "Input Shape {}".format(input_shape)
     inp = Input(shape=input_shape, dtype='float32', name='input_layer')   
+    print init
     out = convpool_fs(inp, nb_modules, module_depth,  nb_filters, conv_size, init, batch_norm, activation, regularizer=regularizer)
+    print type(out)
     out = Flatten()(out)
     out = mlp_softmax(out, nb_dense, dense_units, nb_classes, init, batch_norm, activation, regularizer=regularizer)
-    return Model(input=inp, output=out)
+    return Model(inputs=inp, outputs=out)
 
 def standard_cnn_ldp(nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', nb_dp=5, dp_init=0.15, dp_inc=0.05, regularizer=None):
     convpool_fs_ldp(model, nb_modules, module_depth,  nb_filters, conv_size, input_shape,  init, batch_norm, activation, nb_dp=nb_dp, dp_init=dp_init, dp_inc=dp_inc, regularizer=regularizer)
@@ -223,7 +228,7 @@ def standard_cnn_ldp(nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[
     mlp_softmax(model, nb_dense, dense_units, nb_classes, init, batch_norm, activation, regularizer=regularizer)
     return model
 
-class StageScheduler(keras.callbacks.Callback):
+class StageScheduler(Callback):
     def __init__(self, stages=[], decay=0.1):
         sorted(stages)
         self.stages = stages
@@ -240,38 +245,20 @@ class StageScheduler(keras.callbacks.Callback):
                 self.model.optimizer.lr.set_value(float(lr * self.decay))
                 self.idx += 1
 
-class LossHistory(keras.callbacks.Callback):
+class LossHistory(Callback):
     def on_train_begin(self, logs={}):
         self.losses = []
 
     def on_batch_end(self, batch, logs={}):
         self.losses.append(logs.get('loss'))
 
-class ModelCheckpoint(keras.callbacks.Callback):
-    def __init__(self, filepath, verbose=0, epoch_interval=5):
-        self.verbose = verbose
-        self.filepath = filepath
-        self.epoch_interval = epoch_interval
-        self.epoch = -1
-
-    def on_epoch_end(self, epoch, logs={}):
-        self.epoch = epoch
-        if (epoch + 1) % self.epoch_interval == 0:
-            if self.verbose > 0:
-                print('Epoch {}: saving model to {}'.format(epoch, self.filepath))
-            self.model.save_weights((self.filepath + ".epoch_{}_weights.h5").format(epoch + 1), overwrite=True)
-            
-    def on_train_end(self, logs={}):
-        self.epoch += self.epoch_interval
-        if self.verbose > 0:
-            print('Epoch %05d: saving model to %s' % (self.epoch, self.filepath))
-        print "params {} {}".format(self.filepath, self.epoch)
-        self.model.save_weights((self.filepath + ".epoch_{}_weights.h5").format(self.epoch + 1), overwrite=True)
-
 class NetModel: 
-    def __init__(self, network=None, training_params=None, augment_params=None, preproc_params=None):
-        self.network = network
+    def __init__(self, network, name, cropped_shape, training_params=None, augment_params=None, preproc_params=None):
+        # TODO: implement this
+        self.name = name
+        self.cropped_shape = cropped_shape
         self.training_params = training_params
+        self.network = network
         
         if augment_params != None:
             self.generator = ImageDataGenerator(**augment_params)
@@ -301,20 +288,27 @@ class NetModel:
         else:
             self.generator = ImageDataGenerator()
 
-        # Training params
-        if path.isfile('{}_tra.pkl'.format(name)):
-            self.training_params = joblib.load('{}_tra.pkl'.format(name))
+        # Other attributes
+        attribs = joblib.load('{}_attr.pkl'.format(name))
+        self.name = attribs['name'] 
+        self.cropped_shape = attribs['cropped_shape']
+        self.training_params = attribs['training_params']
 
     def save(self, name):
         json_string = self.network.to_json()
         open('{}_arch.json'.format(name), 'w').write(json_string)
         self.network.save_weights('{}_weights.h5'.format(name), overwrite=True)
 
-        joblib.dump(self.training_params, '{}_tra.pkl'.format(name))
         joblib.dump(self.preprocessor, '{}_pre.pkl'.format(name))
+
         joblib.dump(self.generator, '{}_gen.pkl'.format(name))
 
-    # DEPRECATED
+        attribs = dict()
+        attribs['name'] = self.name
+        attribs['cropped_shape'] = self.cropped_shape
+        attribs['training_params'] = self.training_params
+        joblib.dump(attribs, '{}_attr.pkl'.format(name))
+
     def preprocess_augment(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, disable_perturb=False):
         gc.collect()
         if streams:
@@ -386,8 +380,9 @@ class NetModel:
         print "End perturb ..."
 
 
-    def fit(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, checkpoint_prefix=None, checkpoint_interval=5, loss='categorical_crossentropy'):
+    def fit(self, X_train, Y_train, X_test=None, Y_test=None, streams=False, cropped_shape=None, checkpoint_interval=2, loss='categorical_crossentropy'):
 
+        print self.training_params
         batch_size = self.training_params['batch_size']
         nb_epoch = self.training_params['nb_epoch']
         data_shape = (len(X_train[0]),) + self.generator.output_shape
@@ -410,18 +405,19 @@ class NetModel:
 
         loss_bw_history = LossHistory()
         callbacks = [loss_bw_history]
-        if checkpoint_prefix != None:
-            checkpoint_cb = ModelCheckpoint(verbose=True, filepath=checkpoint_prefix, epoch_interval=checkpoint_interval)
-            callbacks.append(checkpoint_cb)
+
+        checkpoint_cb = ModelCheckpoint('data/' + self.name + '.weights.{epoch:02d}.hdf5', verbose=0, period=2)
+        callbacks.append(checkpoint_cb)
+
         if 'schedule' in self.training_params:
             lr_scheduler = StageScheduler(self.training_params['schedule'])
             callbacks.append(lr_scheduler)
 
         history = None
         if X_test is None:
-            history = self.network.fit_generator(train_gen, 2*len(X_train[1]), nb_epoch, verbose=1, callbacks=callbacks)
+            history = self.network.fit_generator(train_gen, 2*len(X_train[1])/batch_size, nb_epoch, verbose=1, callbacks=callbacks)
         else:
-            history = self.network.fit_generator(train_gen, 2*len(X_train[1]), nb_epoch, validation_data=test_gen, nb_val_samples=2*len(X_test[1]), verbose=1, callbacks=callbacks)
+            history = self.network.fit_generator(train_gen, 2*len(X_train[1])/batch_size, nb_epoch, validation_data=test_gen, validation_steps=2*len(X_test[1])/batch_size, verbose=1, callbacks=callbacks)
         gc.collect()
 
         print_trainable_state(self.network.layers)
@@ -473,7 +469,7 @@ def lnd_a_5p_do(input_shape):
     return network
 
 def lnd_a_5p_reg(input_shape, l1=0., l2=0.):
-    regularizer = WeightRegularizer(l1=l1, l2=l2) 
+    regularizer = l1_l2(l1=l1, l2=l2) 
     network = convpool_fs(nb_modules=5, module_depth=1, nb_filters=[32, 64, 96, 128, 160], conv_size=[3, 3, 3, 3, 3], input_shape=input_shape, init='orthogonal', activation='relu', regularizer=regularizer)
     network.add(Flatten())
     mlp_softmax(network, nb_dense=2, dense_units=[512, 512], nb_classes=2, init='orthogonal', activation='relu', regularizer=regularizer)
@@ -488,7 +484,7 @@ def lnd_a_6p(input_shape, repeats=1):
     out = convpool_fs(inp, nb_modules=6, module_depth=1, nb_filters=[32, 64, 96, 128, 160, 192], conv_size=[3, 3, 3, 3, 3,3], init='orthogonal', activation='leaky_relu')
     out = Flatten()(out)
     out = mlp_softmax(out, nb_dense=2, dense_units=[512, 512], nb_classes=2, init='orthogonal', activation='leaky_relu')
-    return Model(input=inp, output=out)
+    return Model(inputs=inp, outputs=out)
     '''
 
 def lnd_a_6p_thin(input_shape):
@@ -533,17 +529,17 @@ def lnd_3p(input_layer, activation, init, dropout):
     kernels = [32, 64, 96]
     nb_pool = 2
 
-    out = Convolution2D(kernels[0], 3, 3, border_mode='same', init=init)(input_layer)
+    out = Conv2D(kernels[0], 3, 3, padding='same', kernel_initializer=init)(input_layer)
     out = Activation(activation)(out)
-    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+    out = MaxPooling2D((nb_pool, nb_pool), padding='same')(out)
     out = Dropout(dropout)(out)
-    out = Convolution2D(kernels[1], 3, 3, border_mode='same', init=init)(out)
+    out = Conv2D(kernels[1], 3, 3, padding='same', kernel_initializer=init)(out)
     out = Activation(activation)(out)
-    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+    out = MaxPooling2D((nb_pool, nb_pool), padding='same')(out)
     out = Dropout(dropout)(out)
-    out = Convolution2D(kernels[2], 3, 3, border_mode='same', init=init)(out)
+    out = Conv2D(kernels[2], 3, 3, padding='same', kernel_initializer=init)(out)
     out = Activation(activation)(out)
-    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+    out = MaxPooling2D((nb_pool, nb_pool), padding='same')(out)
     out = Dropout(dropout)(out)
     out = Flatten()(out)
 
@@ -568,13 +564,13 @@ def lnd_a_3p_streams(input_shape, num_streams=3, late_fusion=False):
         outs2 = []
         outs3 = []
         for i in xrange(num_streams):
-            out = Dense(dense_units, init=init)(outs[i])
+            out = Dense(dense_units, kernel_initializer=init)(outs[i])
             out = Activation(activation)(out)
             out = Dropout(0.5)(out)
             outs2.append(out)
 
         for i in xrange(num_streams):
-            out = Dense(dense_units, init=init)(outs2[i])
+            out = Dense(dense_units, kernel_initializer=init)(outs2[i])
             out = Activation(activation)(out)
             out = Dropout(0.5)(out)
             outs3.append(out)
@@ -582,11 +578,11 @@ def lnd_a_3p_streams(input_shape, num_streams=3, late_fusion=False):
         out = merge(outs3, 'concat')
     else:
         out = merge(outs, 'concat')
-        out = Dense(dense_units, init=init)(out)
+        out = Dense(dense_units, kernel_initializer=init)(out)
         out = Activation(activation)(out)
         out = Dropout(0.5)(out)
 
-    out = Dense(dense_units, init=init)(out)
+    out = Dense(dense_units, kernel_initializer=init)(out)
     out = Activation(activation)(out)
     out = Dropout(0.5)(out)
 
@@ -609,39 +605,39 @@ def dxp(input_shape, detector=False, blocks=2, kernels=[32, 32]):
     inp = Input(shape=input_shape, dtype='float32', name='input')   
     for i in range(blocks):
         if i == 0:
-            out = Convolution2D(kernels[0], ksize, ksize, border_mode='same', init=init)(inp)
+            out = Conv2D(kernels[0], ksize, ksize, padding='same', kernel_initializer=init)(inp)
         else:
-            out = Convolution2D(kernels[0], ksize, ksize, border_mode='same', init=init)(out)
+            out = Conv2D(kernels[0], ksize, ksize, padding='same', kernel_initializer=init)(out)
         out = Activation(activation)(out)
-        out = Convolution2D(kernels[0], ksize, ksize, border_mode='same', init=init)(out)
+        out = Conv2D(kernels[0], ksize, ksize, padding='same', kernel_initializer=init)(out)
         out = Activation(activation)(out)
-        out = Convolution2D(kernels[0], ksize, ksize, border_mode='same', init=init)(out)
+        out = Conv2D(kernels[0], ksize, ksize, padding='same', kernel_initializer=init)(out)
         out = Activation(activation)(out)
-        out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+        out = MaxPooling2D((nb_pool, nb_pool), padding='same')(out)
         out = Dropout(dropout)(out)
 
     # Classification stage
     size = 32 / (2**blocks)
     if detector:
-        out = Convolution2D(dense_units, size, size, border_mode='same', init=init)(out)
+        out = Conv2D(dense_units, size, size, padding='same', kernel_initializer=init)(out)
         out = Activation(activation)(out)
-        out = Convolution2D(dense_units, 1, 1, border_mode='same', init=init)(out)
+        out = Conv2D(dense_units, 1, 1, padding='same', kernel_initializer=init)(out)
         out = Activation(activation)(out)
-        out = Convolution2D(nb_classes, 1, 1, border_mode='same', init=init)(out)
+        out = Conv2D(nb_classes, 1, 1, padding='same', kernel_initializer=init)(out)
         out = Softmax4D(axis=1,name="softmax")(out)
  
     else:
         out = Flatten()(out)
-        out = Dense(dense_units, init=init)(out)
+        out = Dense(dense_units, kernel_initializer=init)(out)
         out = Activation(activation)(out)
         out = Dropout(0.5)(out)
-        out = Dense(dense_units, init=init)(out)
+        out = Dense(dense_units, kernel_initializer=init)(out)
         out = Activation(activation)(out)
         out = Dropout(0.5)(out)
         out = Dense(nb_classes)(out)
         out = Activation('softmax')(out)
 
-    return Model(input=inp, output=out)
+    return Model(inputs=inp, outputs=out)
 
 def _3pnd(input_shape, activation='relu', init='orthogonal'):
     kernels = [32, 64, 96]
@@ -650,27 +646,27 @@ def _3pnd(input_shape, activation='relu', init='orthogonal'):
     nb_classes = 2
 
     inp = Input(shape=input_shape, dtype='float32', name='input')   
-    out = Convolution2D(kernels[0], 3, 3, border_mode='same', init=init)(inp)
+    out = Conv2D(kernels[0], 3, 3, padding='same', kernel_initializer=init)(inp)
     out = Activation(activation)(out)
-    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
-    out = Convolution2D(kernels[1], 3, 3, border_mode='same', init=init)(out)
+    out = MaxPooling2D((nb_pool, nb_pool), padding='same')(out)
+    out = Conv2D(kernels[1], 3, 3, padding='same', kernel_initializer=init)(out)
     out = Activation(activation)(out)
-    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
-    out = Convolution2D(kernels[2], 3, 3, border_mode='same', init=init)(out)
+    out = MaxPooling2D((nb_pool, nb_pool), padding='same')(out)
+    out = Conv2D(kernels[2], 3, 3, padding='same', kernel_initializer=init)(out)
     out = Activation(activation)(out)
-    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
+    out = MaxPooling2D((nb_pool, nb_pool), padding='same')(out)
     out = Flatten()(out)
 
-    out = Dense(dense_units, init=init)(out)
+    out = Dense(dense_units, kernel_initializer=init)(out)
     out = Activation(activation)(out)
     out = Dropout(0.5)(out)
-    out = Dense(dense_units, init=init)(out)
+    out = Dense(dense_units, kernel_initializer=init)(out)
     out = Activation(activation)(out)
     out = Dropout(0.5)(out)
     out = Dense(nb_classes)(out)
     out = Activation('softmax')(out)
 
-    return Model(input=inp, output=out)
+    return Model(inputs=inp, outputs=out)
 
 # https://arxiv.org/pdf/1611.06651.pdf
 def ct_a(input_shape, init='orthogonal'):
@@ -681,55 +677,55 @@ def ct_a(input_shape, init='orthogonal'):
     activation = 'relu'
 
     inp = Input(shape=input_shape, dtype='float32', name='input')   
-    out = Convolution2D(kernels[0], 7, 7, border_mode='valid', init=init)(inp)
-    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
-    out = Convolution2D(kernels[1], 7, 7, border_mode='valid', init=init)(out)
-    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
-    out = Convolution2D(kernels[2], 7, 7, border_mode='valid', init=init)(out)
+    out = Conv2D(kernels[0], 7, 7, padding='valid', kernel_initializer=init)(inp)
+    out = MaxPooling2D((nb_pool, nb_pool), padding='same')(out)
+    out = Conv2D(kernels[1], 7, 7, padding='valid', kernel_initializer=init)(out)
+    out = MaxPooling2D((nb_pool, nb_pool), padding='same')(out)
+    out = Conv2D(kernels[2], 7, 7, padding='valid', kernel_initializer=init)(out)
     out = Activation(activation)(out)
-    out = MaxPooling2D((nb_pool, nb_pool), border_mode='same')(out)
-    out = Convolution2D(kernels[3], 1, 1, border_mode='valid', init=init)(out)
+    out = MaxPooling2D((nb_pool, nb_pool), padding='same')(out)
+    out = Conv2D(kernels[3], 1, 1, padding='valid', kernel_initializer=init)(out)
     out = Flatten()(out)
     out = Activation('softmax')(out)
 
-    return Model(input=inp, output=out)
+    return Model(inputs=inp, outputs=out)
 
 def vgg16(mode='fc'):
     model = Sequential()
     model.add(ZeroPadding2D((1,1),input_shape=(3,224,224)))
-    model.add(Convolution2D(64, 3, 3, activation='relu'))
+    model.add(Conv2D(64, 3, 3, activation='relu'))
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(64, 3, 3, activation='relu'))
+    model.add(Conv2D(64, 3, 3, activation='relu'))
     model.add(MaxPooling2D((2,2), strides=(2,2)))
 
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(128, 3, 3, activation='relu'))
+    model.add(Conv2D(128, 3, 3, activation='relu'))
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(128, 3, 3, activation='relu'))
+    model.add(Conv2D(128, 3, 3, activation='relu'))
     model.add(MaxPooling2D((2,2), strides=(2,2)))
 
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(256, 3, 3, activation='relu'))
+    model.add(Conv2D(256, 3, 3, activation='relu'))
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(256, 3, 3, activation='relu'))
+    model.add(Conv2D(256, 3, 3, activation='relu'))
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(256, 3, 3, activation='relu'))
+    model.add(Conv2D(256, 3, 3, activation='relu'))
     model.add(MaxPooling2D((2,2), strides=(2,2)))
 
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(Conv2D(512, 3, 3, activation='relu'))
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(Conv2D(512, 3, 3, activation='relu'))
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(Conv2D(512, 3, 3, activation='relu'))
     model.add(MaxPooling2D((2,2), strides=(2,2)))
 
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(Conv2D(512, 3, 3, activation='relu'))
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(Conv2D(512, 3, 3, activation='relu'))
     model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(Conv2D(512, 3, 3, activation='relu'))
     model.add(MaxPooling2D((2,2), strides=(2,2)))
 
     model.add(Flatten())
@@ -763,8 +759,8 @@ def to_two_class_probs(y):
 
 # Utils
 
-def create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr,
-                            feats_test=None, pred_blobs_test=None, real_blobs_test=None,
+def create_train_test_sets(real_blobs_tr, pred_blobs_tr, feats_tr, 
+                            real_blobs_te, pred_blobs_te, feats_te,
                             streams='none', detector=False, dataset_type='numpy', container=None):
     nb_classes = 2
     X_train, tmp, y_train = [], [], []
@@ -773,33 +769,33 @@ def create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr,
         num_streams = len(feats_tr)
         for i in range(num_streams):
             if detector:
-                tmp, y_train = classify.create_training_set_for_detector(feats_tr[i], pred_blobs_tr, real_blobs_tr)
+                tmp, y_train = classify.create_training_set_for_detector(real_blobs_tr, pred_blobs_tr, feats_tr[i])
             else:
-                tmp, y_train = classify.create_training_set_from_feature_set(feats_tr[i], pred_blobs_tr, real_blobs_tr, dataset_type, container, 'train')
+                tmp, y_train = classify.create_training_set_from_feature_set(real_blobs_tr, pred_blobs_tr, feats_tr[i], dataset_type, container, 'train')
             X_train.append(tmp.astype('float32'))
     else:
         if detector: 
-            X_train, y_train = classify.create_training_set_for_detector(feats_tr, pred_blobs_tr, real_blobs_tr)
+            X_train, y_train = classify.create_training_set_for_detector(real_blobs_tr, pred_blobs_tr, feats_tr)
         else:
-            X_train, y_train = classify.create_training_set_from_feature_set(feats_tr, pred_blobs_tr, real_blobs_tr, dataset_type, container=container, suffix='train')
+            X_train, y_train = classify.create_training_set_from_feature_set(real_blobs_tr, pred_blobs_tr, feats_tr, dataset_type, container=container, suffix='train')
         #X_train = X_train.astype('float32')
 
     X_test, Y_test = None, None
-    if feats_test != None:
+    if feats_te is not None:
         X_test, y_test = [], []
         if streams != 'none':
-            num_streams = len(feats_test)
+            num_streams = len(feats_te)
             for i in range(num_streams):
                 if detector:
-                    tmp, y_test = classify.create_training_set_for_detector(feats_test[i], pred_blobs_test, real_blobs_test)
+                    tmp, y_test = classify.create_training_set_for_detector(real_blobs_te, pred_blobs_te, feats_te)
                 else:
-                    tmp, y_test = classify.create_training_set_from_feature_set(feats_test[i], pred_blobs_test, real_blobs_test, dataset_type, container, 'test')
+                    tmp, y_test = classify.create_training_set_from_feature_set(real_blobs_te, pred_blobs_te, feats_te, dataset_type, container, 'test')
                 X_test.append(tmp.astype('float32'))
         else:
             if detector:
-                X_test, y_test = classify.create_training_set_for_detector(feats_test, pred_blobs_test, real_blobs_test)
+                X_test, y_test = classify.create_training_set_for_detector(real_blobs_te, pred_blobs_te, feats_te)
             else:
-                X_test, y_test = classify.create_training_set_from_feature_set(feats_test, pred_blobs_test, real_blobs_test, dataset_type, container, 'test')
+                X_test, y_test = classify.create_training_set_from_feature_set(real_blobs_te, pred_blobs_te, feats_te, dataset_type, container, 'test')
             #X_test = X_test.astype('float32')
 
     if detector:
@@ -810,6 +806,52 @@ def create_train_test_sets(feats_tr, pred_blobs_tr, real_blobs_tr,
         Y_test = np_utils.to_categorical(y_test, nb_classes)
 
     return X_train, Y_train, X_test, Y_test
+
+''' 
+Predict 
+'''
+
+def adjacency_rule(blobs, probs):
+    MAX_DIST2 = 987.755
+    filtered_blobs = []
+    filtered_probs = []
+    for j in range(len(blobs)):
+        valid = True
+        for k in range(len(blobs)):
+            dist2 = (blobs[j][0] - blobs[k][0]) ** 2 + (blobs[j][1] - blobs[k][1]) ** 2
+            if dist2 < MAX_DIST2 and probs[j] + util.EPS < probs[k]:
+                valid = False
+                break
+
+        if valid:
+            filtered_blobs.append(blobs[j])
+            filtered_probs.append(probs[j])
+    return np.array(filtered_blobs), np.array(filtered_probs)
+
+def _predict_proba_one(network, blobs, rois):
+    probs = network.predict_proba(rois, self.streams != 'none')
+    probs = np.max(probs.T[1:], axis=0)
+    blobs = np.array(blobs)
+
+    blobs, probs = adjacency_rule(blobs, probs)
+    return blobs, probs
+
+def predict_proba(network, blob_set, roi_set):
+    data_blobs = []
+    data_probs = []
+
+    for i in range(len(roi_set)):
+        probs = network.predict_proba(roi_set[i])
+        probs = np.max(probs.T[1:], axis=0)
+        blobs, probs = adjacency_rule(blob_set[i], probs)
+
+        data_blobs.append(blobs) 
+        data_probs.append(probs)
+    return np.array(data_blobs), np.array(data_probs)
+
+'''
+Create network
+'''
 
 def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
     print 'Create model: {}'.format(model)
@@ -1051,7 +1093,7 @@ def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         augment_params = default_augment_params
         augment_params['intensity_shift_std'] = 0.5
-        net_model = NetModel(network, train_params, augment_params, default_preproc_params)
+        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
 
     elif model in {'3P-br40'}:
         network = lnd_a_3p(input_shape, base_filters=64)
