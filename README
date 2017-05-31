@@ -1,5 +1,5 @@
-##Cite
-'''
+## Cite
+```
 @Inbook{Bobadilla2017,
 author="Bobadilla, Julio Cesar Mendoza
 and Pedrini, Helio",
@@ -9,7 +9,7 @@ year="2017",
 publisher="Springer International Publishing",
 url="http://dx.doi.org/10.1007/978-3-319-52277-7_15"
 }
-'''
+```
 
 
 ##Usage
