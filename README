@@ -1,3 +1,19 @@
+##Cite
+'''
+@Inbook{Bobadilla2017,
+author="Bobadilla, Julio Cesar Mendoza
+and Pedrini, Helio",
+title="Lung Nodule Classification Based on Deep Convolutional Neural Networks",
+bookTitle="Progress in Pattern Recognition, Image Analysis, Computer Vision, and Applications: 21st Iberoamerican Congress, CIARP 2016, Lima, Peru, November 8--11, 2016, Proceedings",
+year="2017",
+publisher="Springer International Publishing",
+url="http://dx.doi.org/10.1007/978-3-319-52277-7_15"
+}
+'''
+
+
+##Usage
+
 usage: lnd.py [-h] [--preprocess-lung PREPROCESS_LUNG]
               [--preprocess-roi PREPROCESS_ROI] [-b BLOB_DETECTOR]
               [--eval-wmci] [-d DESCRIPTOR] [-c CLASSIFIER] [-r REDUCTOR]
