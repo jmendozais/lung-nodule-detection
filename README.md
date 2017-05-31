@@ -1,3 +1,6 @@
+# LND: Lung Nodule Detection
+
+LND is a basic framework to evaluate lung segmentation, candidate detection and false positive reduction (nodule classification) on x-ray images using JSRT and LIDC-IDRI datasets.
 
 ## Cite
 ```
