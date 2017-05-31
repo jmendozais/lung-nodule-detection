@@ -13,8 +13,9 @@ url="http://dx.doi.org/10.1007/978-3-319-52277-7_15"
 ```
 
 
-##Usage
+## Usage
 
+```bash
 usage: lnd.py [-h] [--preprocess-lung PREPROCESS_LUNG]
               [--preprocess-roi PREPROCESS_ROI] [-b BLOB_DETECTOR]
               [--eval-wmci] [-d DESCRIPTOR] [-c CLASSIFIER] [-r REDUCTOR]
@@ -99,3 +100,5 @@ optional arguments:
   --blob-rad BLOB_RAD   Radius used to extract blobs
   --epochs EPOCHS       Number of epochs for pretraining.
   --frocs-by-epoch      Generate a figure with froc curves every 5 epochs
+
+```
