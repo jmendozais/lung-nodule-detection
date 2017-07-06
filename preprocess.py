@@ -167,6 +167,7 @@ def sliding_band_filter(img, num_rays = 256, rad_range = (2, 22), band=5):
     cx, cy, cmagnitude = grad_to_center_filter((side, side))
     
     sbf = np.zeros(img.shape, dtype=np.double)
+    rad = np.zeros(img.shape, dtype=np.double)
     rows, cols = img.shape
 
     bx = cx[x_step + side/2, y_step + side/2]
@@ -198,9 +199,10 @@ def sliding_band_filter(img, num_rays = 256, rad_range = (2, 22), band=5):
         contrib_acc = np.add.accumulate(contrib, axis=1)
         acc = contrib_acc[:,band:] - contrib_acc[:,:-band] 
 
-        #argmax_band_by_angle = np.argmax(acc, axis=1)
+        argmax_band_by_angle = np.argmax(acc, axis=1)
         max_band_by_angle = np.max(acc, axis=1)
         sbf[i][j] = np.sum(max_band_by_angle)
+        rad[i][j] = np.mean(argmax_band_by_angle) + band * 0.5
 
         '''
         if j % 8 == 0 and i % 8 == 0 and i > 0 and j > 0 and i  > 22 and j > 22 and i < rows - 22 and j < cols - 22:
@@ -260,7 +262,7 @@ def sliding_band_filter(img, num_rays = 256, rad_range = (2, 22), band=5):
             util.imshow('roi2', roi2, display_shape=(256, 256))
         '''
 
-    return sbf 
+    return sbf, rad
 
 # Algorithms adapted from https://gist.github.com/shunsukeaihara/4603234 
 

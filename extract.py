@@ -10,9 +10,7 @@ import mahotas
 #import overfeat
 import matplotlib.pyplot as plt
 
-
 import util
-
 
 _ge = ['max_diam', 'x_fract', 'dist_perim']
 _in = ['max_value_in', 'mean_sep', 'contrast_1', 

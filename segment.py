@@ -2,16 +2,20 @@ import numpy as np
 from itertools import *
 from math import *
 import cv2
-import util
-import scr
 import argparse
 import os
 import pickle
 import jsrt
 import lidc
+import scr
+import util
+
+import pathos.multiprocessing as mp
 
 from skimage import draw
 from skimage.segmentation import find_boundaries
+import sklearn.metrics as metrics
+
 from sklearn.cross_validation import StratifiedKFold
 
 from collections import OrderedDict
@@ -164,27 +168,18 @@ def adaptive_distance_thold(img, blobs):
 
     return blobs, np.array(masks)
 
-''' 
-Lung segmentation utils
-'''
-
-def create_mask_from_landmarks(landmarks, mask_shape=(512, 512)):
-    mask = np.full(shape=mask_shape, fill_value=False, dtype=np.bool)
-    rr, cc = draw.polygon(landmarks.T[0], landmarks.T[1], shape=mask_shape)
-    '''
-    for it in rr:
-        print it,
-    print ''
-    '''
-    mask[rr, cc] = True
-
-    return mask
 
 ''' 
 Lung segmentation model base class 
 '''
 
 class SegmentationModel:
+
+    def create_mask_from_landmarks(self, landmarks, mask_shape=(512, 512)):
+        mask = np.full(shape=mask_shape, fill_value=False, dtype=np.bool)
+        rr, cc = draw.polygon(landmarks.T[0], landmarks.T[1], shape=mask_shape)
+        mask[rr, cc] = True
+        return mask
 
     def fit(self, images, landmarks):
         raise Exception('Fit method not implemented')
@@ -199,6 +194,10 @@ class SegmentationModel:
             for i in range(num_samples):
                 masks.append(self.transform_one_image(images[i]))
             return np.array(masks)
+            '''
+            pool = mp.Pool(5)     
+            return pool.map(self.transform_one_image, images)
+            '''
 
         elif len(images.shape) == 3:
             return self.transform_one_image(images)
@@ -207,9 +206,10 @@ class SegmentationModel:
 Use mean shape as predicted lung shape
 '''
 class MeanShape(SegmentationModel):
-    def __init__(self):
+    def __init__(self, join_masks=True):
         self.mean_shapes = None 
         self.image_shape = None
+        self.join_masks = join_masks
 
     def fit(self, images, landmarks):
         num_shapes = len(landmarks)
@@ -232,48 +232,55 @@ class MeanShape(SegmentationModel):
                 self.mean_shapes[s][j][0] /= num_samples
 
     def transform_one_image(self, image):
-        mask = create_mask_from_landmarks(self.mean_shapes[0])
-        for i in range(1, len(self.mean_shapes)):
-            mask = np.logical_or(mask, create_mask_from_landmarks(self.mean_shapes[i]))
-        return mask
+        masks = []
+        mask = np.zeros(shape=image.shape)
+        for i in range(0, len(self.mean_shapes)):
+            masks.append(self.create_mask_from_landmarks(self.mean_shapes[i]))
+            mask = np.logical_or(mask, masks[-1])
+        if self.join_masks:
+            return mask
+        else:
+            return masks
 
 '''
 Lung segmentation based on Active Appearance Models
 '''
 
-def normalize_for_amm(image):
-    mean = np.mean(image)
-    std = np.std(image)
-    image = (image - mean)/std
-    min_ = np.min(image)
-    max_ = np.max(image)
-    image = (image - min_)/(max_ - min_ + 1e-7)
-    return image
-
-def prepare_data_for_aam(images, landmarks):
-    images_aam = []
-    for i in range(len(images)):
-        images[i] = normalize_for_amm(images[i])
-        images_aam.append(Image(images[i]))
-        lmx = landmarks[0][i].T[0]
-        lmy = landmarks[0][i].T[1]
-        num_points = len(landmarks[0])
-        rmx = landmarks[1][i].T[0]
-        rmy = landmarks[1][i].T[1]
-        pc = PointCloud(points=np.vstack((np.array([lmy, lmx]).T, np.array([rmy, rmx]).T)))
-        lg = LandmarkGroup.init_from_indices_mapping(pc, 
-            OrderedDict({'left':range(len(landmarks[0][i])), 'right':range(len(landmarks[0][i]), len(landmarks[0][i]) + len(landmarks[1][i]))}))
-        lm = LandmarkManager()
-        lm.setdefault('left', lg)
-        images_aam[-1].landmarks = lm
-    return images_aam
-
 class ActiveAppearanceModel(SegmentationModel):
-    def __init__(self):
+
+    def __init__(self, join_masks=True):
         self.mean_shape = None 
         self.image_shape = None
         self.fitter = None
         self.num_landmarks_by_shape = None
+        self.join_masks = join_masks
+
+    def normalize(self, image):
+        mean = np.mean(image)
+        std = np.std(image)
+        image = (image - mean)/std
+        min_ = np.min(image)
+        max_ = np.max(image)
+        image = (image - min_)/(max_ - min_ + 1e-7)
+        return image
+
+    def prepare_data_for_aam(self, images, landmarks):
+        images_aam = []
+        for i in range(len(images)):
+            images[i] = self.normalize(images[i])
+            images_aam.append(Image(images[i]))
+            lmx = landmarks[0][i].T[0]
+            lmy = landmarks[0][i].T[1]
+            num_points = len(landmarks[0])
+            rmx = landmarks[1][i].T[0]
+            rmy = landmarks[1][i].T[1]
+            pc = PointCloud(points=np.vstack((np.array([lmy, lmx]).T, np.array([rmy, rmx]).T)))
+            lg = LandmarkGroup.init_from_indices_mapping(pc, 
+                OrderedDict({'left':range(len(landmarks[0][i])), 'right':range(len(landmarks[0][i]), len(landmarks[0][i]) + len(landmarks[1][i]))}))
+            lm = LandmarkManager()
+            lm.setdefault('left', lg)
+            images_aam[-1].landmarks = lm
+        return images_aam
 
     def fit(self, images, landmarks):
         num_samples = len(landmarks[0])
@@ -282,7 +289,7 @@ class ActiveAppearanceModel(SegmentationModel):
         for i in range(len(landmarks)):
             self.num_landmarks_by_shape.append(len(landmarks[i][0]))
         
-        aam_images = prepare_data_for_aam(images, landmarks)
+        aam_images = self.prepare_data_for_aam(images, landmarks)
         aam = PatchAAM(aam_images, group=None, patch_shape=[(15, 15), (23, 23)],
                          diagonal=150, scales=(0.5, 1.0), holistic_features=fast_dsift,
                          max_shape_components=20, max_appearance_components=150,
@@ -303,43 +310,38 @@ class ActiveAppearanceModel(SegmentationModel):
         for img in aam_images[:10]:
             fr = self.fitter.fit_from_shape(img, self.mean_shape, gt_shape=img.landmarks[None].lms) 
             fitting_results.append(fr)
-
     def transform_one_image(self, image):
-        image = Image(normalize_for_amm(image))
+        print 'init ...',
+        mask = np.zeros(shape=image.shape)
+        image = Image(self.normalize(image))
         fr = self.fitter.fit_from_shape(image, self.mean_shape) 
         pred_landmarks = fr.final_shape.points
 
         begin = 0
-        mask = create_mask_from_landmarks(pred_landmarks[begin:begin + self.num_landmarks_by_shape[0]])
-        begin += self.num_landmarks_by_shape[0]
+        masks = []
 
-        for i in range(1, len(self.num_landmarks_by_shape)):
-            mask = np.logical_or(mask, create_mask_from_landmarks(pred_landmarks[begin:begin + self.num_landmarks_by_shape[i]]))
+        for i in range(0, len(self.num_landmarks_by_shape)):
+            masks.append(self.create_mask_from_landmarks(pred_landmarks[begin:begin + self.num_landmarks_by_shape[i]]))
+            mask = np.logical_or(mask, masks[-1])
             begin += self.num_landmarks_by_shape[i]
-        return mask
+
+        print 'done'
+        if self.join_masks:
+            return mask
+        else:
+            return masks
 
 ''' 
 segment.py protocol functions
 '''
 
-def get_shape_model(model_name):
+def get_shape_model(model_name, **kwargs):
     if model_name == 'mean-shape':
-        return MeanShape()
+        return MeanShape(**kwargs)
     elif model_name.find('aam') != -1:
-        return ActiveAppearanceModel()
+        return ActiveAppearanceModel(**kwargs)
     else:
         raise Exception("{} not implemented yet!".format(model_name))
-
-def load_shape_models_by_fold(model_name, fold=0):
-    raise Exception("{} not implemented yet!".format(model_name))
-
-def load_masks_sets(model_name):
-    masks_sets = []
-    for i in range(len(masks_sets)): 
-        masks = np.load('data/{}-fold-{}'.format(model_name, i))
-        masks_sets.append(masks)
-
-    return masks_sets 
 
 def train_and_save(model, tr_images, tr_landmarks, te_images, model_name):
     print "Fit model ... tr {}, te {}".format(len(tr_images), len(te_images))
@@ -375,7 +377,7 @@ def train_with_method(model_name):
     for tr, val in tr_val_folds:    
         print "Fold {}".format(i)
         landmarks_tr = [landmarks[0][tr], landmarks[1][tr]]
-        model = get_shape_model(model_name)
+        model = get_shape_model(model_name, join_masks=False)
         train_and_save(model, images[tr], landmarks_tr, images[val], '{}-f{}-train'.format(model_name, i))
         i += 1
 
@@ -392,10 +394,17 @@ def train(model_name):
     landmarks = scr.load(set_name='jsrt140n')
     model = get_shape_model(model_name)
 
-    print('Training')
+    print 'Training model ...' 
     model.fit(images, landmarks)
 
-    '''
+    print 'Saving model ...'
+    model_file = open('data/{}-{}-model.pkl'.format(model_name, 'jsrt140n'), 'wb')
+    pickle.dump(model, model_file, -1)
+    model_file.close()
+
+def segment_datasets(model_name):
+    model = pickle.load(open('data/{}-{}-model.pkl'.format(model_name, 'jsrt140n'), 'rb'))
+
     print('Segment lidc')
     lidc_images, _ = lidc.load()
     pred_masks = model.transform(lidc_images)
@@ -405,46 +414,127 @@ def train(model_name):
     jsrt_images, _ = jsrt.load(set_name='jsrt140p')
     pred_masks = model.transform(jsrt_images)
     np.save('data/{}-{}-pred-masks'.format(model_name, 'jsrt140p'), np.array(pred_masks))
-    '''
 
+    '''
     print('Segment jsrt')
     jsrt_images, _ = jsrt.load(set_name='jsrt140')
     pred_masks = model.transform(jsrt_images)
     np.save('data/{}-{}-pred-masks'.format(model_name, 'jsrt140'), np.array(pred_masks))
-
-    '''
-    print('Save model')
-    model_file = open('data/{}-model.pkl'.format(model_name), 'wb')
-    pickle.dump(model, model_file, -1)
-    model_file.close()
     '''
 
-def segment(image, model_name, display=True):
+def segment_func(image, model_name, display=True):
     print("Loading model ...")
-    model = pickle.load(open('data/{}-model-f1.pkl'.format(model_name), 'rb'))
+    model = pickle.load(open('data/{}-jsrt140n-model.pkl'.format(model_name), 'rb'))
+    model.join_masks=True
 
     print("Segment input ...")
     image = cv2.resize(image, SEGMENTATION_IMAGE_SHAPE, interpolation=cv2.INTER_CUBIC)
-    mask = model.transform(image)
+    mask = model.transform(np.array([image]))
     if display:
-        boundaries = find_boundaries(mask)
+        boundaries = find_boundaries(mask)[0]
+        tmp = np.full(boundaries.shape, dtype=np.bool, fill_value=False)
+        b1 = np.array([boundaries, tmp, tmp])
+        b2 = np.array([boundaries, boundaries, boundaries])
+        b1 = np.swapaxes(b1, 0, 2)
+        b1 = np.swapaxes(b1, 0, 1)
+        b2 = np.swapaxes(b2, 0, 2)
+        b2 = np.swapaxes(b2, 0, 1)
+
+        util.imwrite_as_pdf('data/original', image)
+
+        image = cv2.cvtColor(image.copy(), cv2.COLOR_GRAY2BGR)
         max_value = np.max(image)
-        image[boundaries] = max_value
+        image[b2] = 0.0
+        image[b1] = max_value
+
+        util.imwrite_as_pdf('data/segmented', image)
         util.imshow('Segment with model {}'.format(model_name), image)
     return mask
 
+def eval_by_missed_nodules():
+    images, blobs = lidc.load()
+    masks = np.load('data/aam-lidc-pred-masks.npy')
+    p = 0
+    tp = 0
+    for i in range(len(images)):
+        assert masks[i].shape[:2] == images[i][0].shape[:2]
+        p += len(blobs[i])
+        for j in range(len(blobs[i])): 
+            if masks[i][blobs[i][j][0], blobs[i][j][1]] > 0:
+                tp += 1
+    print 'Total nodules {}, missed nodules {}'.format(p, p - tp)
+
+def iou(mask1, mask2):
+    mask2 = mask2.astype(np.uint64)
+    intersection = mask1 * mask2
+    intersection = np.sum(intersection)
+    union = mask1 + mask2
+    union[union > 0] = 1
+    union = np.sum(union)
+    return intersection*1.0/union
+                
+def eval_by_IOU(model_name, set_name, images_tr, landmarks_tr, images_te, masks_te):
+    model = get_shape_model(model_name, join_masks=False)
+
+    print 'Training model ...' 
+    model.fit(images_tr, landmarks_tr)
+
+    print 'Saving model ...'
+    model_file = open('data/{}-{}-model.pkl'.format(model_name, set_name), 'wb')
+    pickle.dump(model, model_file, -1)
+    model_file.close()
+
+    pred_masks = model.transform(images_te)
+    np.save('data/{}-{}-pred-masks'.format(model_name, set_name + '_inv'), np.array(pred_masks))
+    
+    ious = []
+    for i in range(len(masks_te)):
+        iou_l = iou(masks_te[i][0], pred_masks[i][0])
+        iou_r = iou(masks_te[i][1], pred_masks[i][1])
+        ious.append((iou_l + iou_r)/2.0)
+    return ious
+
+def eval(model_name):
+    images_tr, _ = jsrt.load(set_name='jsrt_od')
+    landmarks_tr = scr.load(set_name='jsrt_od')
+    masks_tr = jsrt.masks(set_name='jsrt_od', join_masks=False)
+    images_te, _ = jsrt.load(set_name='jsrt_ev')
+    landmarks_te = scr.load(set_name='jsrt_ev')
+    masks_te = jsrt.masks(set_name='jsrt_ev', join_masks=False)
+    
+    ious_ev = eval_by_IOU(model_name, 'jsrt_od', images_tr, landmarks_tr, images_te, masks_te)
+    ious_od = eval_by_IOU(model_name, 'jsrt_ev', images_te, landmarks_te, images_tr, masks_tr)
+
+    ious = ious_ev + ious_od
+    ious.sort()
+    ious = np.array(ious)
+    
+    q1 = len(ious)/4
+    med = len(ious)/2
+    q3 = med + q1
+    results = np.array([ious.mean(), ious.std(), ious.min(), ious[q1], ious[med], ious[q3], ious.max()])
+    results = np.round(results, decimals=3)
+    print results
+    np.savetxt(model_name + '_eval.txt', results)
+                
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='segment.py')
     parser.add_argument('file', nargs='?', default=os.getcwd())
     parser.add_argument('--train-jsrt', action='store_true')
     parser.add_argument('--train', action='store_true')
+    parser.add_argument('--segment', action='store_true')
     parser.add_argument('--method', default='aam')
+    parser.add_argument('--eval', action='store_true')
     args = parser.parse_args()
     
     if args.train:
         train(args.method)
+    if args.segment:
+        segment_datasets(args.method)
+    if args.eval:
+        eval(args.method)
     if args.train_jsrt:
         train_with_model(args.method)
     elif args.file != os.getcwd():
         image = np.load(args.file).astype('float32')
-        segment(image, args.method)
+        segment_func(image, args.method)

@@ -13,6 +13,9 @@ from sklearn.model_selection import KFold
 from sklearn.cross_validation import StratifiedShuffleSplit
 from skimage.segmentation import find_boundaries
 
+import argparse
+import os
+
 from preprocess import *
 font = {
 #       'family' : 'normal',
@@ -21,8 +24,8 @@ font = {
 
 matplotlib.rc('font', **font)
 
-#plt.switch_backend('agg')
-#plt.ioff()
+plt.switch_backend('agg')
+plt.ioff()
 
 import time
 import csv
@@ -33,6 +36,7 @@ Data utils
 EPS = 1e-9
 FOLDS_SEED = 113
 NUM_VAL_FOLDS = 5
+DETECTOR_FPPI_RANGE = np.linspace(0.0, 100.0, 101)
 
 def load_list(path, blob_type='rad'):
     detect_f = open(path, 'r+') 
@@ -118,6 +122,8 @@ def imshow(windowName,  _img, wait=True, display_shape=(1024, 1024)):
     print np.min(img), np.max(img)
     
     img = cv2.resize(img, display_shape, interpolation=cv2.INTER_CUBIC)
+    img = cv2.applyColorMap(img, cv2.COLORMAP_JET)
+    print 'shape {}'.format(img.shape)
     cv2.imshow(windowName, img)
     if wait:
         cv2.waitKey()
@@ -130,6 +136,21 @@ def imwrite(fname, _img):
 
     cv2.imwrite(fname, 255 * img)
 
+from skimage import io
+def imwrite_as_pdf(name, _img):
+    img = np.array(_img).astype(np.float64)
+    a = np.min(img)
+    b = np.max(img)
+    img = (img - a) / (b - a + EPS);
+
+    if len(img.shape) == 3:
+        tmp = img[:,:,0].copy()
+        img[:,:,0] = img[:,:,2]
+        img[:,:,2] = tmp
+    
+    print img.shape, np.min(img), np.max(img)
+    io.imsave(name + '.pdf', img)
+
 '''
 blob: tuple or list with (x, y, radius) values of the blob
 '''
@@ -140,9 +161,9 @@ def label_blob(img, blob, border='square', proba=-1, color=(255, 0, 0), margin=0
         ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
         img[ex, ey] = color 
     elif border == 'square':
-        for i in range(1):
-            coord_x = np.array([blob[0]-blob[2]+i, blob[0]-blob[2]+i, blob[0]+blob[2]+i, blob[0]+blob[2]+i])
-            coord_y = np.array([blob[1]-blob[2]+i, blob[1]+blob[2]+i, blob[1]+blob[2]+i, blob[1]-blob[2]+i])
+        for i in range(3):
+            coord_x = np.array([blob[0]-blob[2]-margin+i, blob[0]-blob[2]-margin+i, blob[0]+blob[2]+margin+i, blob[0]+blob[2]+margin+i])
+            coord_y = np.array([blob[1]-blob[2]-margin+i, blob[1]+blob[2]+margin+i, blob[1]+blob[2]+margin+i, blob[1]-blob[2]-margin+i])
             ex, ey = draw.polygon_perimeter(coord_x, coord_y)
             img[ex, ey] = color 
     if proba != -1:
@@ -156,6 +177,7 @@ def show_blobs(windowName, img, blobs):
         labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=-5)
     imshow(windowName, labeled)
 
+
 def show_blobs_with_proba(windowName, img, blobs, probs):
     labeled = np.array(img).astype(np.float32)
     maxima = np.max(labeled)
@@ -166,9 +188,12 @@ def show_blobs_with_proba(windowName, img, blobs, probs):
 def imwrite_with_blobs(fname, img, blobs):
     labeled = np.array(img).astype(np.float32)
     maxima = np.max(labeled)
+    print len(blobs)
+    print len(blobs[0])
     for blob in blobs:
-        labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=-5)
-    imwrite(fname, labeled)
+        print blob
+        labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=5)
+    imwrite_as_pdf(fname, labeled)
 
 def show_blobs_real_predicted(img, idx, res1, res2):
     resized_img = cv2.resize(img, (512, 512), interpolation=cv2.INTER_CUBIC)
@@ -359,6 +384,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
 
     plt.savefig('{}.pdf'.format(name))
     plt.clf()
+    np.save(name + '.npy', ops)
 
 def auc(ops, range):
     ops = ops.T
@@ -573,7 +599,65 @@ def froc_folds(real_blobs, blobs, probs, folds):
     av_froc = eval.average_froc(frocs)
     return av_froc
 
+def join_frocs(listname, bpiname, outname, max_fppi):
+    print listname, bpiname
+    frocf = open(listname, 'r')
+    froc_lines = [line for line in frocf]
+    bpif = open(bpiname, 'r')
+    bpi_lines = [line for line in bpif]
+
+    frocs = []
+    names = []
+
+    for i in range(len(froc_lines)):
+        toks = froc_lines[i].strip().split(',')
+        frocs.append(np.load(toks[0]).T)
+        names.append(toks[1])
+        toks = bpi_lines[i].strip().split(',')
+        names[-1] += ', ABPI={:.2f}'.format(float(np.loadtxt(toks[0])))
+        
+    util.save_froc(np.array(frocs), outname, names, fppi_max=max_fppi)
+
+def plot_abpi(listname, outname, maxy):
+    f = open(listname, 'r')
+    abpi = []
+    names = []
+    for line in f:
+        toks = line.strip().split(',')
+        print np.loadtxt(toks[0])
+        abpi.append(np.loadtxt(toks[0]))
+        names.append(toks[1])
+
+    index = np.arange(len(names))
+    bar_width = 0.35
+    opacity = 0.4
+    rects1 = plt.bar(index, abpi, bar_width,
+                 alpha=opacity,
+                 color='b')
+
+    plt.xlabel('Threshold')
+    plt.ylabel('Average False Positive per Image')
+    plt.xticks(index + bar_width / 2, names)
+    plt.savefig('{}.pdf'.format(outname))
+    plt.clf()
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(prog='util.py')
+    parser.add_argument('file', nargs='?', default=os.getcwd())
+    parser.add_argument('--list', default=None, type=str)
+    parser.add_argument('--bpif', default=None, type=str)
+    parser.add_argument('--out', default=None, type=str)
+    parser.add_argument('--max', default=10.0, type=int)
+    parser.add_argument('--froc', action='store_true')
+    parser.add_argument('--abpi', action='store_true')
+    args = parser.parse_args()
+    
+    if args.froc == True:
+        join_frocs(args.list, args.bpif, args.out, args.max)
+    elif args.abpi == True:
+        plot_abpi(args.list, args.out, args.max)
+ 
+    '''
     import jsrt
     
     from sklearn.cross_validation import StratifiedKFold
@@ -587,3 +671,4 @@ if __name__ == '__main__':
 
     for tr, val, te in folds:
         print tr, val, te
+    '''

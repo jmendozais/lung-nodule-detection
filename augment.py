@@ -420,8 +420,8 @@ class ImageDataGenerator:
 
     def centering_crop(self, X):
         assert len(X) > 0
-
         new_X = []
+        print 'centering crop input shape {}'.format(X.shape)
         tform_centering = self.build_centering_transform(X[0][0].shape, self.output_shape)
         for i in range(len(X)):
             new_x = []
@@ -636,7 +636,7 @@ class DataGenerator:
                 util.imshow('roi n', batch_input[k][self.step + i][0], display_shape=(256, 256))
                 '''
 
-        print 'batch p:  mm {:.4f}, ms {:.4f} ss {:.4f}, n: mm {:.4f}, ms {:.4f}, ss {:.4f}'.format(np.mean(mean[0]), np.mean(std[0]), np.std(std[0]), np.mean(mean[1]), np.mean(std[1]), np.std(std[1]))
+        #print 'batch p:  mm {:.4f}, ms {:.4f} ss {:.4f}, n: mm {:.4f}, ms {:.4f}, ss {:.4f}'.format(np.mean(mean[0]), np.mean(std[0]), np.std(std[0]), np.mean(mean[1]), np.mean(std[1]), np.std(std[1]))
 
         return batch_input, batch_output 
 

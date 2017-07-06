@@ -5,7 +5,8 @@ import gc
 
 from skimage.exposure import equalize_hist
 from skimage.restoration import denoise_nl_means
-from sklearn.cross_validation import KFold
+from skimage import draw
+from sklearn.model_selection import KFold
 #import matplotlib.pyplot as plt
 
 import preprocess
@@ -16,6 +17,9 @@ import util
 
 import lidc
 import jsrt
+
+from operator import itemgetter
+from menpo.image import Image
 
 def preprocess_rois(rois, methods):
     assert methods != 'none'
@@ -39,7 +43,7 @@ def preprocess_rois(rois, methods):
 
     return np.array(result)
 
-def create_rois(imgs, masks, blob_set, args, save=False):
+def create_rois(imgs, masks, blob_set, args, save=False, real_blobs=None, paths=None):
     pad_size = 1.15
     dsize = (int(args.roi_size * pad_size), int(args.roi_size * pad_size))
 
@@ -71,6 +75,7 @@ def create_rois(imgs, masks, blob_set, args, save=False):
         if i % 10 == 0:
             print 'extract rois {}'.format(i)
 
+        #blob_set[i] = real_blobs[i]
         rois = []
         for j in range(len(blob_set[i])):
             x, y, _ = blob_set[i][j]
@@ -90,8 +95,8 @@ def create_rois(imgs, masks, blob_set, args, save=False):
                 roi.append(tmp)
                 
             rois.append(roi)
-        rois = np.array(rois)
 
+        rois = np.array(rois)
         if save:
             rois = args.file.create_dataset('tmp_{}'.format(i), data=rois)
 
@@ -117,39 +122,95 @@ def create_rois(imgs, masks, blob_set, args, save=False):
             tmp[3][i] = np.std(roi_set[i]) if len(roi_set[i]) > 0 else 0
 
         print("norm rois: min {}, max {}, mean {}, std {}".format(np.mean(tmp[0]), np.mean(tmp[1]), np.mean(tmp[2]), np.mean(tmp[3])))
+
+    print '> in create rois ', len(rois), len(rois[0]), len(rois[0][0]), len(rois[0][0][0])
     return np.array(roi_set)
+
+def save_rois(args):
+    imgs_tr, blobs_tr = lidc.load(pts=False)
+    pred_blobs_tr = detect.read_blobs('data/sbf-aam-lidc-pred-blobs.pkl')
+    masks_tr = np.load('data/aam-lidc-pred-masks.npy')
+
+    imgs_te, blobs_te = jsrt.load(set_name='jsrt140p')
+    pred_blobs_te = detect.read_blobs('data/sbf-aam-jsrt140p-pred-blobs.pkl')
+    masks_te = np.load('data/aam-jsrt140p-pred-masks.npy')
+
+    rois_tr = create_rois(imgs_tr, masks_tr, pred_blobs_tr, args, real_blobs=blobs_tr)
+    rois_te = create_rois(imgs_te, masks_te, pred_blobs_te, args, real_blobs=blobs_te)
+    X_tr, Y_tr, X_te, Y_te = neural.create_train_test_sets(blobs_tr, pred_blobs_tr, rois_tr, blobs_te, pred_blobs_te, rois_te)
+    X_tr, Y_tr = util.split_data_pos_neg(X_tr, Y_tr)
+    X_te, Y_te = util.split_data_pos_neg(X_te, Y_te)
+
+    X_pos = X_tr[0]
+    idx = np.random.randint(0, len(X_tr[1]), len(X_pos))
+    X_neg = X_tr[1][idx]
+
+    print len(X_pos), len(X_neg)
+    for i in  range(len(X_pos)):
+        util.imwrite('data/lidc/roi{}p.jpg'.format(i), X_pos[i][0])
+        np.save('data/lidc/roi{}p.npy'.format(i), X_pos[i])
+        util.imwrite('data/lidc/roi{}n.jpg'.format(i), X_neg[i][0])
+        np.save('data/lidc/roi{}n.npy'.format(i), X_neg[i])
+    
+    X_pos = X_te[0]
+    idx = np.random.randint(0, len(X_te[1]), len(X_pos))
+    X_neg = X_te[1][idx]
+
+    print len(X_pos), len(X_neg)
+    for i in  range(len(X_pos)):
+        util.imwrite('data/jsrt140/roi{}p.jpg'.format(i), X_pos[i][0])
+        np.save('data/jsrt140/roi{}p.npy'.format(i), X_pos[i])
+        util.imwrite('data/jsrt140/roi{}n.jpg'.format(i), X_neg[i][0])
+        np.save('data/jsrt140/roi{}n.npy'.format(i), X_neg[i])
 
 def evaluate_model(model, real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, pred_blobs_te, rois_te):
     X_tr, Y_tr, X_te, Y_te= neural.create_train_test_sets(real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, pred_blobs_te, rois_te)
     history = model.fit(X_tr, Y_tr, X_te, Y_te)
+    model.save('data/' + model.name)
     pred_blobs_te, probs_te = neural.predict_proba(model, pred_blobs_te, rois_te)
     return eval.froc(real_blobs_te, pred_blobs_te, probs_te)
 
 def model_selection(model_name, args):
-    '''
-    imgs, blobs = lidc.load()
-    pred_blobs = detect.read_blobs('data/wmci-aam-lidc-pred-blobs.pkl')
-    masks = np.load('data/aam-lidc-pred-masks.npy')
-    '''
-    imgs, blobs = jsrt.load(set_name='jsrt140')
-    pred_blobs = detect.read_blobs('data/wmci-aam-jsrt140-pred-blobs.pkl')
-    masks = np.load('data/aam-jsrt140-pred-masks.npy')
-    folds = util.model_selection_folds(imgs)
+    imgs, blobs, paths = lidc.load(pts=True, set_name=args.ds_tr)
+    _, blobs_val,_  = lidc.load(pts=True, set_name=args.ds_val)
 
-    #gt_rois = create_rois(imgs, masks, blobs, args)
-    rois = create_rois(imgs, masks, pred_blobs, args)
-    '''
-    for i in range(len(blobs)):
-        for j in range(len(blobs[i])):
-            print blobs[i][j]
-            print rois[i][j].shape
-            print rois[i][j].shape
-            util.imshow("img", imgs[i][0], display_shape=(400, 400))
-            util.imshow("gt ROI", gt_rois[i][j][0], display_shape=(200, 200))
-            for k in range(len(pred_blobs[i])):
-                if ((blobs[i][j][0] - pred_blobs[i][k][0])**2 + (blobs[i][j][1] - pred_blobs[i][k][1])**2)**.5 < 31.43:
-                    util.imshow("candidate ROI", rois[i][k][0], display_shape=(200, 200))
-    '''
+    pred_blobs = detect.read_blobs('data/{}-lidc-pred-blobs.pkl'.format(args.detector))
+    masks = np.load('data/aam-lidc-pred-masks.npy')
+
+    assert len(imgs) == len(masks) and len(pred_blobs) == len(masks)
+    
+    folds = util.model_selection_folds(imgs)
+    rois = create_rois(imgs, masks, pred_blobs, args, real_blobs=blobs)
+    rois_val = create_rois(imgs, masks, pred_blobs, args, real_blobs=blobs_val)
+
+    frocs = []
+    legends = ['Fold {}'.format(i + 1) for i in range(util.NUM_VAL_FOLDS)] 
+
+    fold_idx = 0
+    for tr, te in folds:
+        model = neural.create_network(model_name, (1, args.roi_size, args.roi_size)) 
+        model.name = model.name + '.fold-{}'.format(fold_idx + 1)
+        froc = evaluate_model(model, blobs[tr], pred_blobs[tr], rois[tr], blobs_val[te], pred_blobs[te], rois_val[te])
+        frocs.append(froc)
+
+        current_frocs = [eval.average_froc([froc_i]) for froc_i in frocs]
+        util.save_froc(current_frocs, 'data/{}-{}-folds-froc'.format(model_name, args.detector), legends[:len(frocs)], with_std=False)
+        model.save('data/' + model.name)
+        fold_idx += 1
+
+    legends = ['Val FROC (LIDC-IDRI)']
+    average_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
+    util.save_froc([average_froc], 'data/{}-{}-val-froc'.format(model_name, args.detector), legends, with_std=True)
+
+def model_selection_unsup(model_name, args):
+    imgs, blobs, paths = lidc.load(pts=True)
+    pred_blobs = detect.read_blobs('data/{}-lidc-pred-blobs.pkl'.format(args.detector))
+    masks = np.load('data/aam-lidc-pred-masks.npy')
+
+    assert len(imgs) == len(masks) and len(pred_blobs) == len(masks)
+    
+    folds = util.model_selection_folds(imgs)
+    rois = create_rois(imgs, masks, pred_blobs, args, real_blobs=blobs)
 
     frocs = []
     legends = ['Fold {}'.format(i + 1) for i in range(util.NUM_VAL_FOLDS)] 
@@ -162,35 +223,61 @@ def model_selection(model_name, args):
         frocs.append(froc)
 
         current_frocs = [eval.average_froc([froc_i]) for froc_i in frocs]
-        util.save_froc(current_frocs, 'data/{}-folds-froc'.format(model_name), legends[:len(frocs)], with_std=False)
+        util.save_froc(current_frocs, 'data/{}-{}-folds-froc'.format(model_name, args.detector), legends[:len(frocs)], with_std=False)
         model.save('data/' + model.name)
         fold_idx += 1
 
     legends = ['Val FROC (LIDC-IDRI)']
     average_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
-    util.save_froc([average_froc], 'data/{}-val-froc'.format(model_name), legends, with_std=True)
+    util.save_froc([average_froc], 'data/{}-{}-val-froc'.format(model_name, args.detector), legends, with_std=True)
 
 def model_evaluation(model_name, args):
     imgs_tr, blobs_tr = lidc.load()
-    pred_blobs_tr = detect.read_blobs('data/wmci-aam-lidc-pred-blobs.pkl')
+    pred_blobs_tr = detect.read_blobs('data/{}-lidc-pred-blobs.pkl'.format(args.detector))
     masks_tr = np.load('data/aam-lidc-pred-masks.npy')
     imgs_te, blobs_te = jsrt.load(set_name='jsrt140p')
-    pred_blobs_te = detect.read_blobs('data/wmci-aam-jsrt140p-pred-blobs.pkl')
+    pred_blobs_te = detect.read_blobs('data/{}-jsrt140p-pred-blobs.pkl'.format(args.detector))
     masks_te = np.load('data/aam-jsrt140p-pred-masks.npy')
 
     rois_tr = create_rois(imgs_tr, masks_tr, pred_blobs_tr, args)
     rois_te = create_rois(imgs_te, masks_te, pred_blobs_te, args)
 
     model = neural.create_network(model_name, (1, args.roi_size, args.roi_size)) 
+    model.name += '-lidc'
     froc = evaluate_model(model, blobs_tr, pred_blobs_tr, rois_tr, blobs_te, pred_blobs_te, rois_te)
     froc = eval.average_froc([froc])
 
     legends = ['Test FROC (JSRT positives)']
     util.save_froc([froc], 'data/{}-jsrt140p-froc'.format(model_name), legends, with_std=False)
 
+def model_evaluation2(model_name, args):
+    imgs, blobs= jsrt.load(set_name='jsrt140p')
+    pred_blobs = detect.read_blobs('data/{}-jsrt140p-pred-blobs.pkl'.format(args.detector))
+    masks = np.load('data/aam-jsrt140p-pred-masks.npy')
+    rois = create_rois(imgs, masks, pred_blobs, args)
+    folds = KFold(n_splits=5, shuffle=True, random_state=util.FOLDS_SEED).split(imgs)
+
+    fold_idx = 0
+    frocs = []
+    legends = ['Fold {}'.format(i + 1) for i in range(5)] 
+    for tr, te in folds:
+        model = neural.create_network(model_name, (1, args.roi_size, args.roi_size)) 
+        model.name = model.name + '.fold-{}'.format(fold_idx + 1)
+        froc = evaluate_model(model, blobs[tr], pred_blobs[tr], rois[tr], blobs[te], pred_blobs[te], rois[te])
+        frocs.append(froc)
+
+        current_frocs = [eval.average_froc([froc_i]) for froc_i in frocs]
+        util.save_froc(current_frocs, 'data/{}-{}-pr2-folds'.format(model_name, args.detector), legends[:len(frocs)], with_std=False)
+        model.save('data/' + model.name)
+        fold_idx += 1
+
+    froc = eval.average_froc(frocs)
+    legends = ['Test FROC (JSRT positives)']
+    util.save_froc([froc], 'data/{}-{}-pr2'.format(model_name, args.detector), legends, with_std=True)
+
 def eval_trained_model(model_name, args):
     imgs, blobs = lidc.load()
-    pred_blobs = detect.read_blobs('data/wmci-aam-lidc-pred-blobs.pkl')
+    pred_blobs = detect.read_blobs('data/{}-lidc-pred-blobs.pkl'.format(args.detector))
     masks = np.load('data/aam-lidc-pred-masks.npy')
 
     folds = util.model_selection_folds(imgs)
@@ -228,27 +315,63 @@ def eval_trained_model(model_name, args):
         legends.append('Val FROC (LIDC-IDRI), epoch {}'.format(epoch))
         i += 1
 
-    util.save_froc(froc_history, 'data/{}-val-froc-by-epoch'.format(model_name), legends, with_std=False)
+    util.save_froc(froc_history, 'data/{}-{}-val-froc-by-epoch'.format(model_name, detector), legends, with_std=False)
+
+# TODO: name of model to load
+def classify(image, args):
+    image = preprocess.antialiasing_dowsample(image, downsample=True)
+    image = np.array([image])
+    blobs, probs, mask = detect.detect_func(image[0], 'sbf', 'aam', 0.5) 
+    rois = create_rois([image], mask, [blobs], args)
+    model = neural.create_network(args.model, (1, args.roi_size, args.roi_size)) 
+    model.name += '-lidc'
+    model.load('data/' + model.name)
+    blobs, probs = neural.predict_proba(model, [blobs], rois)
+    blobs, probs = blobs[0], probs[0]
+    entries = [[blobs[i], probs[i]] for i in range(len(blobs))]
+    entries = list(reversed(sorted(entries, key=itemgetter(1))))
+    top_blobs = []
+    top_probs = []
+    for i in range(args.fppi):
+        top_blobs.append(entries[i][0])
+        top_probs.append([entries[i][1]])
+
+    util.imwrite_with_blobs('data/classified', image[0], top_blobs)
+    return blobs, probs, mask
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='lnd.py')
-
+    parser.add_argument('file', nargs='?', default=None, type=str)
+    parser.add_argument('--save-blobs', help='Use the detector and segmentator to generate blobs', action='store_true')
     parser.add_argument('--model', help='Evaluate convnet.', default='none')
     parser.add_argument('--model-selection', help='Perform model selection protocol', action='store_true') 
     parser.add_argument('--model-selection-detailed', help='Perform model selection protocol', action='store_true') 
     parser.add_argument('--model-evaluation', help='Perform model evaluation protocol', action='store_true') 
+    parser.add_argument('--model-evaluation2', help='Perform model evaluation protocol', action='store_true') 
     
     parser.add_argument('--roi-size', help='Size of ROIs after scaling', default=32, type=int)
     parser.add_argument('--blob-rad', help='Radius used to extract blobs', default=32, type=int)
 
     parser.add_argument('--preprocess-roi', help='Preproc ROIs with a given method', default='norm')
-    parser.add_argument('-b', '--blob-detector', help='Options: wmci-mean-shape, wmci-aam.', default='wmci-aam')
+    parser.add_argument('--save-rois', help='Perform model evaluation protocol', action='store_true') 
+    parser.add_argument('--detector', help='Detector', default='sbf-aam')
+    parser.add_argument('--ds-tr', help='Detector', default='lidc-idri-npy')
+    parser.add_argument('--ds-val', help='Detector', default='lidc-idri-npy')
+    parser.add_argument('--fppi', help='False positives per image', default=4)
 
     args = parser.parse_args() 
+    print args
 
-    if args.model_selection_detailed:
+    if args.file:
+        image = np.load(args.file).astype('float32')
+        classify(image, args)
+    elif args.model_selection_detailed:
         eval_trained_model(args.model, args)
-    if args.model_selection:
+    elif args.model_selection:
         model_selection(args.model, args)
-    if args.model_evaluation:
+    elif args.model_evaluation:
         model_evaluation(args.model, args)
+    elif args.model_evaluation2:
+        model_evaluation2(args.model, args)
+    elif args.save_rois:
+        save_rois(args)

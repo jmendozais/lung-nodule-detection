@@ -192,7 +192,7 @@ def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random):
 ISSUE: We cant compare a multi-object FROC curve and a single-object one straighforwardly
 '''
 
-def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False, verbose=True):
+def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False, verbose=True, distance=31.43):
     img_set = []
     if data != None:
         for i in range(len(data)):
@@ -213,6 +213,7 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
     pred_blob_idx = 0
     
     num_imgs_with_nods = len(real)
+    blob_rads = []
     for i in range(n):
         # Remove
         if data != None:
@@ -222,7 +223,11 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
             num_imgs_with_nods -= 1
 
         for j in range(len(real[i])):
-            dist = np.linalg.norm(pred[i][:,:2] - real[i][j][:2], axis=1)
+            if len(pred[i]) > 0:
+                dist = np.linalg.norm(pred[i][:,:2] - real[i][j][:2], axis=1)
+            else:
+                dist = np.array([])
+
             entry = []
             entry.append(probs[i])
             entry.append(dist)
@@ -234,6 +239,7 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
 
             entries = np.append(entries, np.array(entry).T, axis=0)
             p += 1
+            blob_rads.append(real[i][j][2]/2)
 
         pred_blob_idx += len(pred[i])
     
@@ -272,7 +278,12 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
 
         if not seen_pred_blob[pred_blob_idx]:
             seen_pred_blob[pred_blob_idx] = True
-            if entries[i][1] < 31.43 and not seen_blob[blob_idx]:
+
+            threshold = distance
+            if distance == 'rad':
+                threshold = blob_rads[blob_idx]
+
+            if entries[i][1] < threshold and not seen_blob[blob_idx]:
                 seen_blob[blob_idx] = True
                 tp += 1
             else:
@@ -401,10 +412,13 @@ DEFAULT_FPPI_RANGE = np.linspace(0.0, 10.0, 101)
 def average_froc(frocs, fppi_range=DEFAULT_FPPI_RANGE):
     av_sen = []
 
+    print 'whole {}'.format(len(frocs))
     for i in range(len(frocs)):
         x = frocs[i].T
+        print 'av froc {} -> {}'.format(i, x.shape)
         f = interp1d(x[0], x[1], kind='linear', fill_value=0.0, bounds_error=False)
         sen = f(fppi_range)
+        print 'fppi range {}, sen {}'.format(fppi_range, sen.shape)
         av_sen.append(sen)
 
     av_sen = np.array(av_sen)
@@ -454,6 +468,7 @@ def sublety_stratified_kfold(y, sublety):
     pfolds = [x for x in pfolds]
     nfolds = [x for x in nfolds]
     folds = []
+
     for i in range(len(pfolds)):
         tr = np.concatenate(pfolds[i][0], nfolds[i][0])
         te = np.concatenate(pfolds[i][1], nfolds[i][1])

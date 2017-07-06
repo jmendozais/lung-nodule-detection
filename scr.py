@@ -90,20 +90,7 @@ def load(set_name='jsrt140'):
     scr_landmarks[0] = np.array(scr_landmarks[0])/2
     scr_landmarks[1] = np.array(scr_landmarks[1])/2
 
-    '''
-    TODO: implement mask reading
-    paths = get_paths(root=SCR_MASKS_DIR, suffix='bmp')
-    scr_masks = []
-    for path in paths:
-        print path
-        point_sets = read_pfs(path)
-        print "keys {}".format(point_sets.keys())
-        entry = []
-        for label in DATASET_LABELS:
-            entry.append(point_sets[label])
-            print "label {} len {}".format(label, len(point_sets[label]))
-        scr_masks.append(entry)
-    '''
+    #TODO: implement mask reading
 
     print ("landmarks 1-d {}, 2-n-d {}".format(len(scr_landmarks), scr_landmarks[0].shape))
     return scr_landmarks

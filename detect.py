@@ -2,8 +2,10 @@ import sys
 import os
 import numpy as np
 from math import sqrt
-from skimage.feature import blob_dog, blob_log, blob_doh, peak_local_max
+from skimage.feature import peak_local_max
 from skimage.segmentation import find_boundaries
+
+
 from sklearn.cross_validation import StratifiedKFold
 from itertools import *
 import cv2
@@ -11,6 +13,7 @@ from util import *
 #TODO: add detection thinning
 import skimage.io as io
 import argparse
+from operator import itemgetter
 
 import preprocess
 import jsrt
@@ -20,14 +23,19 @@ import eval
 import util
 import neural
 import pickle
-import segment
-from segment import MeanShape
+from segment import segment_func
+from blob import *
+
 from jsrt import DataProvider
+import time
 FOLDS_SEED = 113
+
+from menpo.image import Image
 
 ''' 
 Detection utils 
 '''
+DETECTOR_FPPI_RANGE = np.linspace(0.0, 100.0, 101)
 def read_blobs(fname):
     fileh = open(fname, 'rb')
     blobs = pickle.load(fileh)
@@ -103,6 +111,7 @@ def filter_by_size(blobs, lower=4, upper=32):
     return np.array(ans)
 
 def filter_by_masks(blobs, mask):
+    print mask.shape
     ans = []
     for blob in blobs:
         x, y, r = blob
@@ -120,25 +129,39 @@ def filter_by_margin(blobs, mask, margin=30):
             ans.append(blob)
     return np.array(ans)
 
-'''
-Scikit-image blob detectors
-'''
+def filter_blobs(blobs, probs, mask, size_range=(4, 32), margin=30):
+    filtered_blobs = []
+    filtered_probs = []
+    shape = mask.shape
 
-def log_(img, mask, threshold=0.001, proba=False):
-    blobs_log = blob_log(img, min_sigma=4,  max_sigma=32, num_sigma=10, log_scale=True, threshold=threshold, overlap=0.5)
-    if len(blobs_log) > 0:
-        blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
-    return filter_by_margin(filter_by_size(filter_by_masks(blobs_log, mask)), mask)
+    for i in range(len(blobs)):
+        x, y, r = blobs[i]
+        in_range = (r >= size_range[0]) and (r <= size_range[1])
+        in_margin = x > margin and y > margin and x < (shape[0] - margin) and y < (shape[1] - margin)
 
-def dog(img, mask, threshold=0.05, proba=False):
-    blobs_dog = blob_dog(img, max_sigma=20, threshold=threshold)
-    if len(blobs_dog) > 0:
-        blobs_dog[:, 2] = blobs_dog[:, 2] * sqrt(2)
-    return filter_by_margin(filter_by_size(filter_by_masks(blobs_dog, mask)), mask)
+        if in_range and in_margin and mask[x][y] != 0:
+            filtered_blobs.append(blobs[i])
+            filtered_probs.append(probs[i])
 
-def doh(img, mask, threshold=0.0005, proba=False):
-    blobs_doh = blob_doh(1 - img, min_sigma=4, num_sigma=10, max_sigma=30, threshold=threshold)
-    return filter_by_margin(filter_by_size(filter_by_masks(blobs_doh, mask)), mask)
+    return np.array(filtered_blobs), np.array(filtered_probs)
+
+def log_(img, mask, threshold=0.001):
+    blobs, probs = blob_log(img, min_sigma=4,  max_sigma=32, num_sigma=10, log_scale=True, threshold=threshold, overlap=0.5)
+    if len(blobs) > 0:
+        blobs[:, 2] = blobs[:, 2] * sqrt(2)
+    return filter_blobs(blobs, probs, mask)
+
+def dog(img, mask, threshold=0.05):
+    blobs, probs = blob_dog(img, max_sigma=20, threshold=threshold)
+    if len(blobs) > 0:
+        blobs[:, 2] = blobs[:, 2] * sqrt(2)
+    return filter_blobs(blobs, probs, mask)
+
+def doh(img, mask, threshold=0.0005):
+    blobs, probs = blob_doh(1 - img, min_sigma=4, num_sigma=10, max_sigma=30, threshold=threshold)
+    if len(blobs) > 0:
+        blobs[:, 2] = blobs[:, 2] * sqrt(2)
+    return filter_blobs(blobs, probs, mask)
 
 '''
 Convergence index based detectors
@@ -177,15 +200,18 @@ def wmci_proba(img, mask, threshold=0.5):
 
 def sbf(img, mask, threshold=0.5):
     min_distance = 7
-    ans = preprocess.sliding_band_filter(img); 
-    #print 'sbf stats min {}, max {}, mean {}, std {}'.format(ans.min(), ans.max(), ans.mean(), ans.std())
+    SBF_RANGE = (0, 1200)
+    ans, rads = preprocess.sliding_band_filter(img); 
+    print 'sbf stats min {}, max {}, mean {}, std {}'.format(ans.min(), ans.max(), ans.mean(), ans.std())
     coords = peak_local_max(ans, min_distance)
+    threshold = SBF_RANGE[0] + threshold * (SBF_RANGE[1] - SBF_RANGE[0])
+    print threshold
 
     blobs = []
     proba = []
     for coord in coords:
         if ans[coord[0], coord[1]] >= threshold:
-            blobs.append((coord[0], coord[1], 25))
+            blobs.append((coord[0], coord[1], rads[coord[0], coord[1]]))
 
     blobs = np.array(blobs)
     blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
@@ -452,6 +478,11 @@ def eval_network_by_epoch(model_instance, network_name, save_history=True):
 Detect function for LIDC-JSRT !
 '''
 
+def detect_blobs_(image, mask, threshold, method):
+    lce = preprocess.lce(image)
+    blobs, ci, proba = generic_detect_blobs(lce, mask, threshold, method)
+    return blobs, proba
+
 def detect_blobs(images, masks, threshold=0.5, real_blobs=None, method='wmci'):
     assert len(images) == len(masks)
     blob_set = []
@@ -460,54 +491,27 @@ def detect_blobs(images, masks, threshold=0.5, real_blobs=None, method='wmci'):
     print "detect blobs with probs ..."
     print '[',
 
-    mins = []
-    maxs = []
-    stds = []
-    means = []
-
-    real_cis = []
-    pred_cis = []
-
-    p = 0
-    tp = 0
-
-    fppi = np.full((len(images),), fill_value=0, dtype=float)
     for i in range(len(images)):
         if i % (len(images)/10) == 0:
             print ".",
             sys.stdout.flush()
         
         lce = preprocess.lce(images[i][0])
-
         blobs, ci, proba = generic_detect_blobs(lce, masks[i], threshold, method)
-
-        mins.append(np.min(ci))
-        maxs.append(np.max(ci))
-        stds.append(np.std(ci))
-        means.append(np.mean(ci))
-        '''
-        util.imshow('wmci ...', ci)
-        util.show_blobs('wmci & blobs ...', ci, real_blobs[i])
-        util.show_blobs('img & blobs ...', images[i][0], real_blobs[i])
-        '''
+        print ci.min(), ci.max(), ci.mean(), ci.std()
 
         blob_set.append(blobs)
         prob_set.append(proba)
-
-        print "real blobs {}".format(real_blobs[i])
-
-        for prob in proba:
-            pred_cis.append(prob)
-        for blob in real_blobs[i]:
-            real_cis.append(ci[blob[0], blob[1]])
-
+    '''
+    fppi = np.full((len(images),), fill_value=0, dtype=float)
+    p = 0
+    tp = 0
+    for i in range(len(images)):
         p += len(real_blobs[i])
-
         tmp = tp
-
         for real_blob in real_blobs[i]:
             found = False
-            for pred_blob in blobs:
+            for pred_blob in blob_set[i]:
                 dist = ((real_blob[0] - pred_blob[0]) ** 2 + (real_blob[1] - pred_blob[1]) ** 2)**0.5
                 if dist < 31.43:
                     found = True
@@ -515,8 +519,7 @@ def detect_blobs(images, masks, threshold=0.5, real_blobs=None, method='wmci'):
                 tp += 1
 
         print "{} -> # nodules {}, # missed nodules {}".format(i, len(real_blobs[i]), len(real_blobs[i]) - (tp - tmp))
-
-        for pred_blob in blobs:
+        for pred_blob in blob_set[i]:
             found = False
             for real_blob in real_blobs[i]:
                 dist = ((real_blob[0] - pred_blob[0]) ** 2 + (real_blob[1] - pred_blob[1]) ** 2)**0.5
@@ -526,6 +529,7 @@ def detect_blobs(images, masks, threshold=0.5, real_blobs=None, method='wmci'):
                 fppi[i] += 1 
 
     print "sensitivity {} {} {}".format(tp, p, tp * 1.0 / p)
+    '''
 
     '''
     plt.violinplot(np.array([np.array(real_cis), np.array(pred_cis)]), showmeans=True, showmedians=True)
@@ -536,7 +540,7 @@ def detect_blobs(images, masks, threshold=0.5, real_blobs=None, method='wmci'):
     '''
 
     print ']'
-    print '-> average of min, max, mean, std on ci imgs {}, {}, {}, {}'.format(np.mean(mins), np.mean(maxs), np.mean(means), np.mean(stds))
+    #print '-> average of min, max, mean, std on ci imgs {}, {}, {}, {}'.format(np.mean(mins), np.mean(maxs), np.mean(means), np.mean(stds))
 
     return np.array(blob_set), np.array(prob_set)
 
@@ -547,60 +551,66 @@ Generic blob detection function function
 def generic_detect_blobs(img, lung_mask, threshold=0.5, method='wmci'):
     sampled, lce, norm = preprocess.preprocess_hardie(img, lung_mask)
     blobs = None
-    proba = None
+    probs = np.array([])
     ci = norm
+    lce = lce.astype(np.float64)
     if method == 'wmci':
-        blobs, ci, proba = wmci_proba(lce, lung_mask, threshold)
-    if method == 'sbf':
-        blobs, ci, proba = sbf(lce, lung_mask, threshold)
+        blobs, ci, probs = wmci_probs(lce, lung_mask, threshold)
+    elif method == 'sbf':
+        print lce.min(), lce.max(), lce.mean(), lce.std()
+        blobs, ci, probs = sbf(lce, lung_mask, threshold)
     elif method == 'log':
-        blobs, proba = log_(lce, lung_mask, threshold, proba=True)
+        blobs, probs = log_(lce, lung_mask, threshold)
     elif method == 'dog':
-        blobs, proba = dog(lce, lung_mask, threshold, proba=True)
+        blobs, probs = dog(lce, lung_mask, threshold)
     elif method == 'doh':
-        blobs, proba = doh(lce, lung_mask, threshold, proba=True)
+        blobs, probs = doh(lce, lung_mask, threshold)
     else:
         raise Exception("Undefined detection method")
-    #return blobs, norm, lce, ci, proba
-    return blobs, ci, proba
+    return blobs, ci, probs
 
-
-def save_blobs(method):
-    images, blobs = jsrt.load(set_name='jsrt140')
-    masks = jsrt.masks(set_name='jsrt140')
-    pred_blobs, proba = detect_blobs(images, masks, real_blobs=blobs, method=method)
-    write_blobs(pred_blobs, 'data/{}-aam-jsrt140-pred-blobs.pkl'.format(method))
-    print('Average blobs per image JSRT {}'.format(average_bppi(pred_blobs)))
-
+def save_blobs(method, args):
     images, blobs = lidc.load()
     masks = np.load('data/aam-lidc-pred-masks.npy')
-    pred_blobs, probs = detect_blobs(images, masks, 0.5, real_blobs=blobs)
-    '''
-    idx = lidc.idx_excluding_hard_cases()
-    images, blobs = images[idx], blobs[idx]
-    masks = masks[idx]
-    '''
-    write_blobs(pred_blobs, 'data/{}-aam-lidc-pred-blobs.pkl'.format(method))
-    froc = eval.froc(blobs, pred_blobs, probs)
-    util.save_froc([froc], 'data/{}-lidc-blobs-froc'.format(method), ['{} FROC on LIDC dataset'.format(method)])
-    print('Average blobs per image LIDC {}'.format(average_bppi(pred_blobs)))
+    pred_blobs, probs = detect_blobs(images, masks, args.threshold, real_blobs=blobs, method=method)
+    write_blobs(pred_blobs, 'data/{}-{}-aam-lidc-pred-blobs.pkl'.format(method, args.threshold))
+
+    froc = eval.froc(blobs, pred_blobs, probs, distance='rad')
+    #froc = eval.froc(blobs, pred_blobs, probs, distance=9.14)
+    #froc = eval.froc(blobs, pred_blobs, probs)
+    froc = eval.average_froc([froc], DETECTOR_FPPI_RANGE)
+    abpi = average_bppi(pred_blobs)
+
+    util.save_froc([froc], 'data/{}-{}-lidc-blobs-froc'.format(method, args.threshold), ['{} FROC on LIDC dataset'.format(method)], fppi_max=100)
+    np.savetxt('data/{}-{}-lidc-blobs-abpi.txt'.format(method, args.threshold), np.array([abpi]))
+    print('Average blobs per image LIDC {}'.format(abpi))
 
     images, blobs = jsrt.load(set_name='jsrt140p')
     masks = np.load('data/aam-jsrt140p-pred-masks.npy')
-    pred_blobs, probs = detect_blobs(images, masks, 0.5, real_blobs=blobs)
-    write_blobs(pred_blobs, 'data/{}-aam-jsrt140p-pred-blobs.pkl'.format(method))
-    froc = eval.froc(blobs, pred_blobs, probs)
-    util.save_froc([froc], 'data/{}-jsrt140p-blobs-froc'.format(method), ['{} FROC on JSRT140 positives dataset'.format(method)])
-    print('Average blobs per image JSRT positives {}'.format(average_bppi(pred_blobs)))
+    pred_blobs, probs = detect_blobs(images, masks, args.threshold, real_blobs=blobs, method=method) 
+    write_blobs(pred_blobs, 'data/{}-{}-aam-jsrt140p-pred-blobs.pkl'.format(method, args.threshold))
 
-def detect(image, detector, segmentator, display=True):
-    raise Exception("Not implemented yet")
+    froc = eval.froc(blobs, pred_blobs, probs)
+    froc = eval.average_froc([froc], DETECTOR_FPPI_RANGE)
+    abpi = average_bppi(pred_blobs)
+
+    util.save_froc([froc], 'data/{}-{}-jsrt140p-blobs-froc'.format(method, args.threshold), ['{} FROC on JSRT140 positives dataset'.format(method)], fppi_max=100)
+    np.savetxt('data/{}-{}-jsrt140p-blobs-abpi.txt'.format(method, args.threshold), np.array([abpi]))
+    print('Average blobs per image JSRT positives {}'.format(abpi))
+
+def detect_func(image, detector, segmentator, threshold):
+    mask = segment_func(image, segmentator, display=False)
+    blobs, probs = detect_blobs_(image, mask[0], threshold, detector)
+    image = cv2.resize(image, (512, 512), interpolation=cv2.INTER_CUBIC)
+    imwrite_with_blobs('data/detected', image, blobs)
+    return blobs, probs, mask
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='detect.py')
     parser.add_argument('file', nargs='?', default=None, type=str)
     parser.add_argument('--save-blobs', help='Use the detector and segmentator to generate blobs', action='store_true')
     parser.add_argument('--detector', help='Method used to extract candidates', type=str, default='sbf')
+    parser.add_argument('--threshold', help='threshold', default=0.5, type=float)
     parser.add_argument('--segmentator', help='Method used to segment lung area used on candidate filtering', type=str, default='aam')
     parser.add_argument('--mode', help='', default='models', type=str)
     parser.add_argument('--roi-size', help='Roi size', default=32, type=int)
@@ -623,13 +633,15 @@ if __name__ == '__main__':
                    'd1p_c', 'd2p_c', 'd3p_c']
     '''
 
+    t = time.time()
     network_set = ['d2p_a']
-    if args.save_blobs:
-        save_blobs(args.detector)
+    if args.file:
+        image = np.load(args.file).astype('float32')
+        detect_func(image, args.detector, args.segmentator, args.threshold)
+    elif args.save_blobs:
+        save_blobs(args.detector, args)
     elif args.mode == 'models':
         eval_models(model_instance, network_set)
     elif args.mode == 'epochs':
         eval_network_by_epoch(model_instance, network_set[0])
-    elif args.file:
-        image = np.load(args.file).astype('float32')
-        detect(image, args.detector, args.segmentator)
+    print 'finished in {:.2f} secs'.format(time.time() - t)

@@ -91,6 +91,13 @@ def set_index(paths, set_name=None):
                 if paths[i].find(tok) != -1 or paths[i].find('LN') != -1:
                     valid = False
                     break
+        elif set_name == 'jsrt_od':
+            if i%2 == 1:
+                valid = False
+        elif set_name == 'jsrt_ev':
+            if i%2 == 0:
+                valid = False
+
         if valid:
             index.append(i)
     return np.array(index)
@@ -110,7 +117,7 @@ def jsrt(set=None):
     sizes = []
     kinds = []
 
-    idx = set_index(set)
+    idx = set_index(paths, set)
     
     for i in idx:
         count = 1 if siz[i][0] != -1 else 0
@@ -135,37 +142,22 @@ def jsrt(set=None):
             sizes.append(0)
             kinds.append(0)
     
+    print len(npaths), len(diam)
     return np.array(npaths), np.array(nloc), np.array(diam), np.array(subs), np.array(sizes), np.array(kinds)
 
 def left_lung(set=None):
     f = open(LMPATH)
     paths = []
-    for line in f:
-        if set=='jsrt140':
-            valid = True
-            for tok in overlapped:
-                if line.find(tok) != -1:
-                    valid = False
-                    break
-            if not valid:
-                continue
-        paths.append(line.rstrip())
-    return np.array(paths)
+    lines = np.array([line for line in f])
+    idx = set_index(lines, set)
+    return lines[idx]
 
 def right_lung(set=None):
     f = open(RMPATH)
     paths = []
-    for line in f:
-        if set=='jsrt140':
-            valid = True
-            for tok in overlapped:
-                if line.find(tok) != -1:
-                    valid = False
-                    break
-            if not valid:
-                continue
-        paths.append(line.rstrip())
-    return np.array(paths)
+    lines = np.array([line for line in f])
+    idx = set_index(lines, set)
+    return lines[idx]
 
 def images_from_paths(paths, dsize=(512, 512)): 
     imgs = []
@@ -194,20 +186,28 @@ def load(set_name=None, dsize=(512, 512)):
     imgs = np.array(imgs)
     return imgs.reshape((imgs.shape[0],) + (1,) + imgs.shape[1:]), np.array(blobs)
 
-def masks(set_name=None, dsize=(512, 512)):
+def masks(set_name=None, dsize=(512, 512), join_masks=True):
     ll_paths = left_lung(set_name)
     lr_paths = right_lung(set_name)
 
     resp = []
     for i in range(len(ll_paths)):
-        ll_mask = cv2.imread(ll_paths[i])
-        lr_mask = cv2.imread(lr_paths[i])
-        lung_mask = ll_mask + lr_mask
-        lung_mask = cv2.resize(lung_mask, dsize, interpolation=cv2.INTER_CUBIC)
-        lung_mask = cv2.cvtColor(lung_mask, cv2.COLOR_BGR2GRAY)
-        lung_mask = (lung_mask > 0).astype(np.uint8)
-        resp.append(lung_mask)
-
+        ll_mask = cv2.imread(ll_paths[i].rstrip())
+        lr_mask = cv2.imread(lr_paths[i].rstrip())
+        if join_masks:
+            lung_mask = ll_mask + lr_mask
+            lung_mask = cv2.resize(lung_mask, dsize, interpolation=cv2.INTER_CUBIC)
+            lung_mask = cv2.cvtColor(lung_mask, cv2.COLOR_BGR2GRAY)
+            lung_mask = (lung_mask > 0).astype(np.uint8)
+            resp.append(lung_mask)
+        else:
+            ll_mask = cv2.resize(ll_mask, dsize, interpolation=cv2.INTER_CUBIC)
+            ll_mask = cv2.cvtColor(ll_mask, cv2.COLOR_BGR2GRAY)
+            ll_mask = (ll_mask > 0).astype(np.uint8)
+            lr_mask = cv2.resize(lr_mask, dsize, interpolation=cv2.INTER_CUBIC)
+            lr_mask = cv2.cvtColor(lr_mask, cv2.COLOR_BGR2GRAY)
+            lr_mask = (lr_mask > 0).astype(np.uint8)
+            resp.append([lr_mask, ll_mask])
     return resp
 
 class DataProvider:
@@ -238,13 +238,85 @@ class DataProvider:
 
 import matplotlib.pyplot as plt
 
-if __name__ == '__main__':
+def subtlety_by_size():
+    set_name = 'jsrt'
+    paths, loc, diams, subs, sizes, kinds = jsrt(set=set_name)
+    sizes = [0, 10, 15, 20, 25, 30, 60]
+    num_itv = len(sizes) - 1
+    num_subs = 5
+    
+    tab = np.zeros(shape=(6, 7))
+    for i in range(len(paths)):
+        if subs[i] == 0:
+            continue
+
+        diams[i] *= (PIXEL_SPACING * 4)
+        col = 0
+        for k in range(num_itv):
+            if diams[i] > sizes[k] and diams[i] <= sizes[k + 1]:
+                col = k
+        tab[subs[i] - 1][col] += 1
+
+    for i in range(num_subs):
+        tab[i][num_itv] = np.sum(tab[i,:])
+
+    for i in range(num_itv):
+        tab[num_subs][i] = np.sum(tab[:,i])
+
+    tab[num_subs][num_itv] = np.sum(tab[:num_subs,:num_itv])
+
+def subtlety_by_size():
+    set_name = 'jsrt'
+    paths, loc, diams, subs, sizes, kinds = jsrt(set=set_name)
+    sizes = [0, 10, 15, 20, 25, 30, 60]
+    num_itv = len(sizes) - 1
+    num_subs = 5
+    
+    tab = np.zeros(shape=(6, 7))
+    for i in range(len(paths)):
+        if subs[i] == 0:
+            continue
+
+        diams[i] *= (PIXEL_SPACING * 4)
+        col = 0
+        for k in range(num_itv):
+            if diams[i] > sizes[k] and diams[i] <= sizes[k + 1]:
+                col = k
+        tab[subs[i] - 1][col] += 1
+
+    for i in range(num_subs):
+        tab[i][num_itv] = np.sum(tab[i,:])
+
+    for i in range(num_itv):
+        tab[num_subs][i] = np.sum(tab[:,i])
+
+    tab[num_subs][num_itv] = np.sum(tab[:num_subs,:num_itv])
+
+def save_samples_by_subt():
+    import util
+
+    set_name = 'jsrt'
+    paths, loc, diams, subs, sizes, kinds = jsrt(set=set_name)
+    idxs_by_sub = [[],[],[],[],[]]
+    for i in range(len(paths)): 
+        if subs[i] == 0:
+            continue
+        idxs_by_sub[subs[i] - 1].append(i)
+    for i in range(5):
+        print len(idxs_by_sub[i])
+        idx = np.random.randint(0, len(idxs_by_sub[i]))
+        idx = idxs_by_sub[i][idx]
+        img = np.load(paths[idx])
+        blob = (loc[idx][0], loc[idx][1], diams[idx])
+        roi = util.extract_roi(img, blob)
+        util.imwrite_as_pdf('data/sub_{}_{}'.format(i + 1, idx), roi)
+
+def test_show_blobs():
     import util
     import detect
     import preprocess
     set_name = 'jsrt140'
     imgs, blobs = load(set_name=set_name)
-    print len(imgs), len(blobs)
     pred_blobs = detect.read_blobs('data/wmci-aam-jsrt140-blobs-gt.pkl')
 
     for i in range(len(imgs)):
@@ -252,4 +324,6 @@ if __name__ == '__main__':
         img = util.label_blob(imgs[i].astype(np.float32), list(blobs[i][0]), color=(max_intensity, 0, 0))
         plt.hist(np.array(img).ravel(), 256, range=(0,4096)); 
         plt.show()
-        #util.imshow('jsrt', img)
+
+if __name__ == '__main__':
+    save_samples_by_subt()

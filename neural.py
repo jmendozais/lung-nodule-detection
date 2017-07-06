@@ -441,7 +441,6 @@ class NetModel:
             X = self.preprocessor.transform(X)
             return self.network.predict(X)
 
-
 ''' 
 Configurations
 '''
