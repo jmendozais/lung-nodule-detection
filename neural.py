@@ -456,7 +456,7 @@ def lnd_a_4p(input_shape, repeats):
     network = standard_cnn(nb_modules=4, module_depth=repeats, nb_filters=[32, 64, 96, 128], conv_size=[3, 3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal')
     return network
 
-def lnd_a_5p(input_shape, repeats, base_filters=32):
+def lnd_a_5p(input_shape, repeats=1, base_filters=32):
     nb_filters = (np.array(range(5)) + 1) * base_filters
     network = standard_cnn(nb_modules=5, module_depth=repeats, nb_filters=nb_filters, conv_size=[3, 3, 3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal', activation='leaky_relu')
     return network
@@ -915,13 +915,6 @@ def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
-    elif model == '3P-imagenet':
-        network = lnd_a_3p((1, 32, 32), nb_classes=2)
-        schedule=[15, 36, 36]
-        train_params = {'schedule':schedule, 'nb_epoch':35, 'batch_size':32, 
-                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
-        net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
-
     elif model == '3P-B':
         network = lnd_a_3p((1, 32, 32), 2)
         schedule=[30, 40, 40]
@@ -964,16 +957,26 @@ def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
-    elif model == '5P-A':
-        network = lnd_a_5p(input_shape, 1)
-        schedule=[58, 75, 75]
-        train_params = {'schedule':schedule, 'nb_epoch':75, 'batch_size':32, 
+    elif model == '5P-base':
+        network = lnd_a_5p(input_shape, base_filters=100)
+        schedule=[70, 70, 70]
+        train_params = {'schedule':schedule, 'nb_epoch':70, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
-        net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
+        augment_params = default_augment_params
+        augment_params['intensity_shift_std'] = 0.5
+        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
 
     elif model == '5P-A-wide':
         input_shape = (128, 128)
         network = lnd_a_5p(input_shape, 1, base_filters=64)
+        schedule=[65, 65, 65]
+        train_params = {'schedule':schedule, 'nb_epoch':65, 'batch_size':32, 
+                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
+
+    elif model == '5P-A':
+        input_shape = (64, 64)
+        network = lnd_a_5p(input_shape, 1, base_filters=100)
         schedule=[65, 65, 65]
         train_params = {'schedule':schedule, 'nb_epoch':65, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
@@ -1086,7 +1089,6 @@ def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
 
     elif model in {'3P-bt0.1', '3P-bt0.2', '3P-bt0.3', '3P-bt0.4', '3P-data0.1', '3P-data0.2', '3P-data0.3', '3P-data0.4', '3P-br32-aam', '3P-br32-meanshape', '3P-br32', '3P-br32-is0.5', '3P-br32-is0.3', '3P-br32-is0.2', '3P-br32-is0.1', '3P-br32-is0.0', '3P-br32-uar24-rpi500', '3P-br32-uar24-rpi1000', '3p-br32-uar24-rpi1000-bal'}:
         network = lnd_a_3p(input_shape, base_filters=64)
-        #schedule=[50, 70, 70]
         schedule=[70, 70, 70]
         train_params = {'schedule':schedule, 'nb_epoch':70, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}

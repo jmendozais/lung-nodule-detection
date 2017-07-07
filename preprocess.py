@@ -399,21 +399,8 @@ def preprocess_with_method(method, **kwargs):
 PREPROCESS_METHODS_WITH_MIN_MAX = ['stretch', 'max_white', 'grey_world', 'retinex', 'retinex_adjust']
 
 if __name__ == '__main__':
-    '''
-    for i in range(50):
-        try:
-            print 'home/juliomb/dbs/lidc-idri-npy/LIDC{:04d}.npy'.format(i+1)
-            image = np.load('/home/juliomb/dbs/lidc-idri-npy/LIDC{:04d}.npy'.format(i+1))
-            rois = np.load('/home/juliomb/dbs/lidc-idri-npy/LIDC{:04d}-rois.npy'.format(i+1))
-            util.show_blobs('blobs', image, rois)
-        except: 
-            print 'Exception'
-    '''
-    image = np.load('/home/juliomb/dbs/lidc-idri-npy/LIDC0014.npy')
-    rois = np.load('/home/juliomb/dbs/lidc-idri-npy/LIDC0014-rois.npy')
-    #util.show_blobs('blobs', image, rois)
-    #image = image[50:250, 250:450]
+    image = np.load('../dbs/lidc-idri-npy/LIDC0014.npy')
+    rois = np.load('../dbs/lidc-idri-npy/LIDC0014-rois.npy')
     util.imshow('roi', image, display_shape=(256, 256))
-
     sbf = sliding_band_filter(image, num_rays=256, rad_range=(2,21), band=3)
     util.imshow('SBF image', sbf, display_shape=(256, 256))

@@ -16,11 +16,11 @@ from matplotlib import pyplot as plt
 import util
 import preprocess
 
-LIDC_XML_PATH='/home/juliomb/dbs/lidc-idri/LIDC-XML-only/tcia-lidc-xml'
-LIDC_PATH = '/home/juliomb/dbs/lidc-idri/DOI'
-LIDC_NPY_PATH = '/home/juliomb/dbs/lidc-idri-npy-r1-r2'
-LIDC_NOD_SIZES = '/home/juliomb/dbs/lidc-idri/nodule-sizes.csv'
-LIDC_SMALL_NON_NODULES = '/home/juliomb/dbs/lidc-idri/small-or-non-nodules.csv'
+LIDC_XML_PATH='../dbs/lidc-idri/LIDC-XML-only/tcia-lidc-xml'
+LIDC_PATH = '../dbs/lidc-idri/DOI'
+LIDC_NPY_PATH = '../dbs/lidc-idri-npy-r1-r2'
+LIDC_NOD_SIZES = '../dbs/lidc-idri/nodule-sizes.csv'
+LIDC_SMALL_NON_NODULES = '../dbs/lidc-idri/small-or-non-nodules.csv'
 LIDC_IMAGE_SIZE = 400 # 400 milimeters
 LIDC_EXCLUDED_CASES = ['LIDC-IDRI-0115', 'LIDC-IDRI-0103', 'LIDC-IDRI-0036', 'LIDC-IDRI-0034']
 

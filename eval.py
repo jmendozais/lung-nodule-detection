@@ -412,13 +412,10 @@ DEFAULT_FPPI_RANGE = np.linspace(0.0, 10.0, 101)
 def average_froc(frocs, fppi_range=DEFAULT_FPPI_RANGE):
     av_sen = []
 
-    print 'whole {}'.format(len(frocs))
     for i in range(len(frocs)):
         x = frocs[i].T
-        print 'av froc {} -> {}'.format(i, x.shape)
         f = interp1d(x[0], x[1], kind='linear', fill_value=0.0, bounds_error=False)
         sen = f(fppi_range)
-        print 'fppi range {}, sen {}'.format(fppi_range, sen.shape)
         av_sen.append(sen)
 
     av_sen = np.array(av_sen)

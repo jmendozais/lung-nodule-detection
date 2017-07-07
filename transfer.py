@@ -12,7 +12,7 @@ def transfer_with_imagenet(network_name):
         horizontal_flip=True)
 
     train_generator = train_datagen.flow_from_directory(
-        '/home/juliomb/dbs/ILSVRC2012_img_train',
+        '../dbs/ILSVRC2012_img_train',
         target_size=(32, 32), 
         color_mode='grayscale',
         class_mode='categorical',

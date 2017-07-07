@@ -297,6 +297,7 @@ def save_samples_by_subt():
 
     set_name = 'jsrt'
     paths, loc, diams, subs, sizes, kinds = jsrt(set=set_name)
+    print 'max, min coords', np.max(loc), np.min(loc)
     idxs_by_sub = [[],[],[],[],[]]
     for i in range(len(paths)): 
         if subs[i] == 0:
@@ -307,9 +308,20 @@ def save_samples_by_subt():
         idx = np.random.randint(0, len(idxs_by_sub[i]))
         idx = idxs_by_sub[i][idx]
         img = np.load(paths[idx])
-        blob = (loc[idx][0], loc[idx][1], diams[idx])
-        roi = util.extract_roi(img, blob)
-        util.imwrite_as_pdf('data/sub_{}_{}'.format(i + 1, idx), roi)
+        print img.shape
+        blob = (4*loc[idx][0], 4*loc[idx][1], 4*diams[idx])
+        roi = util.extract_roi(img, blob, dsize=(128, 128))
+        util.imwrite_as_pdf('data/sub_{}'.format(i + 1, idx), roi)
+
+    # Overlaped sample
+    overlapped = ['LN060','LN065','LN105','LN108','LN112','LN113','LN115','LN126','LN130','LN133','LN136','LN149','LN151','LN152']
+    ovlp_idxs = [59, 64, 104, 107, 111, 112, 114, 125, 129, 132, 135, 148, 150, 151]
+    for i in range(len(ovlp_idxs)):
+        idx = ovlp_idxs[i]
+        img = np.load(paths[idx])
+        blob = (4*loc[idx][0], 4*loc[idx][1], 4*diams[idx])
+        roi = util.extract_roi(img, blob, dsize=(128, 128))
+        util.imwrite_as_pdf('data/over_{}'.format(idx), roi)
 
 def test_show_blobs():
     import util

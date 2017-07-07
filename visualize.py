@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 
-LIDC_ROIS_PATH = '/home/juliomb/lung-nodule-detection/data/lidc'
-JSRT_ROIS_PATH = '/home/juliomb/lung-nodule-detection/data/jsrt140'
+LIDC_ROIS_PATH = '../lung-nodule-detection/data/lidc'
+JSRT_ROIS_PATH = '../lung-nodule-detection/data/jsrt140'
 
 def get_paths(root, suffix = '.npy'):
     paths = []

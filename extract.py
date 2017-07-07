@@ -1029,7 +1029,7 @@ class Set3Extractor:
 
 class OverfeatExtractor:
     def __init__(self, mode=None):
-        #overfeat.init('/home/juliomb/lnd-env/OverFeat/data/default/net_weight_0', 0)
+        #overfeat.init('../lnd-env/OverFeat/data/default/net_weight_0', 0)
         self.mode = mode
 
     def extract(self, norm, lce, wmci, lung_mask, blobs, nod_masks):
