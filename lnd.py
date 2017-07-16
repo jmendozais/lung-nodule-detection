@@ -44,7 +44,7 @@ def preprocess_rois(rois, methods):
     return np.array(result)
 
 def create_rois(imgs, masks, blob_set, args, save=False, real_blobs=None, paths=None):
-    pad_size = 1.15
+    pad_size = 1.3
     dsize = (int(args.roi_size * pad_size), int(args.roi_size * pad_size))
 
     print 'Preprocess images: # images {}'.format(len(imgs))
@@ -75,11 +75,13 @@ def create_rois(imgs, masks, blob_set, args, save=False, real_blobs=None, paths=
         if i % 10 == 0:
             print 'extract rois {}'.format(i)
 
-        #blob_set[i] = real_blobs[i]
         rois = []
         for j in range(len(blob_set[i])):
-            x, y, _ = blob_set[i][j]
-            r = args.blob_rad
+            x, y, r = blob_set[i][j]
+            if args.blob_rad > 0:
+                r = args.blob_rad
+            else:
+                r *= 1.5
             r = int(r * pad_size)
 
             shift = 0 
@@ -105,8 +107,6 @@ def create_rois(imgs, masks, blob_set, args, save=False, real_blobs=None, paths=
 
     if args.preprocess_roi != 'none':
         print 'Preprocess rois: {}'.format(args.preprocess_roi)
-        # stats
-        tmp = np.full((4, len(roi_set)), fill_value=0, dtype=np.float)
         for i in range(len(roi_set)):
             if i % 10 == 0: 
                 print 'preprocess rois {} '.format(i)
@@ -116,14 +116,6 @@ def create_rois(imgs, masks, blob_set, args, save=False, real_blobs=None, paths=
             else:
                 roi_set[i] = preprocess_rois(roi_set[i], args.preprocess_roi)
 
-            tmp[0][i] = np.min(roi_set[i]) if len(roi_set[i]) > 0 else 0
-            tmp[1][i] = np.max(roi_set[i]) if len(roi_set[i]) > 0 else 0
-            tmp[2][i] = np.mean(roi_set[i])if len(roi_set[i]) > 0 else 0
-            tmp[3][i] = np.std(roi_set[i]) if len(roi_set[i]) > 0 else 0
-
-        print("norm rois: min {}, max {}, mean {}, std {}".format(np.mean(tmp[0]), np.mean(tmp[1]), np.mean(tmp[2]), np.mean(tmp[3])))
-
-    print '> in create rois ', len(rois), len(rois[0]), len(rois[0][0]), len(rois[0][0][0])
     return np.array(roi_set)
 
 def save_rois(args):
@@ -188,19 +180,19 @@ def model_selection(model_name, args):
 
     fold_idx = 0
     for tr, te in folds:
-        model = neural.create_network(model_name, (1, args.roi_size, args.roi_size)) 
+        model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
         model.name = model.name + '.fold-{}'.format(fold_idx + 1)
         froc = evaluate_model(model, blobs[tr], pred_blobs[tr], rois[tr], blobs_val[te], pred_blobs[te], rois_val[te])
         frocs.append(froc)
 
         current_frocs = [eval.average_froc([froc_i]) for froc_i in frocs]
-        util.save_froc(current_frocs, 'data/{}-{}-folds-froc'.format(model_name, args.detector), legends[:len(frocs)], with_std=False)
+        util.save_froc(current_frocs, 'data/{}-{}-folds-froc'.format(model.name[:-7], args.detector), legends[:len(frocs)], with_std=False)
         model.save('data/' + model.name)
         fold_idx += 1
 
     legends = ['Val FROC (LIDC-IDRI)']
     average_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
-    util.save_froc([average_froc], 'data/{}-{}-val-froc'.format(model_name, args.detector), legends, with_std=True)
+    util.save_froc([average_froc], 'data/{}-{}-val-froc'.format(model.name[:-7], args.detector), legends, with_std=True)
 
 def model_selection_unsup(model_name, args):
     imgs, blobs, paths = lidc.load(pts=True)
@@ -217,7 +209,7 @@ def model_selection_unsup(model_name, args):
 
     fold_idx = 0
     for tr, te in folds:
-        model = neural.create_network(model_name, (1, args.roi_size, args.roi_size)) 
+        model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
         model.name = model.name + '.fold-{}'.format(fold_idx + 1)
         froc = evaluate_model(model, blobs[tr], pred_blobs[tr], rois[tr], blobs[te], pred_blobs[te], rois[te])
         frocs.append(froc)
@@ -242,7 +234,7 @@ def model_evaluation(model_name, args):
     rois_tr = create_rois(imgs_tr, masks_tr, pred_blobs_tr, args)
     rois_te = create_rois(imgs_te, masks_te, pred_blobs_te, args)
 
-    model = neural.create_network(model_name, (1, args.roi_size, args.roi_size)) 
+    model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
     model.name += '-lidc'
     froc = evaluate_model(model, blobs_tr, pred_blobs_tr, rois_tr, blobs_te, pred_blobs_te, rois_te)
     froc = eval.average_froc([froc])
@@ -261,7 +253,7 @@ def model_evaluation2(model_name, args):
     frocs = []
     legends = ['Fold {}'.format(i + 1) for i in range(5)] 
     for tr, te in folds:
-        model = neural.create_network(model_name, (1, args.roi_size, args.roi_size)) 
+        model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
         model.name = model.name + '.fold-{}'.format(fold_idx + 1)
         froc = evaluate_model(model, blobs[tr], pred_blobs[tr], rois[tr], blobs[te], pred_blobs[te], rois[te])
         frocs.append(froc)
@@ -288,7 +280,7 @@ def eval_trained_model(model_name, args):
 
     fold_idx = 0
     
-    model = neural.create_network(model_name, (1, args.roi_size, args.roi_size)) 
+    model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
     model_name = model.name
 
     epochs = model.training_params['nb_epoch']
@@ -306,16 +298,22 @@ def eval_trained_model(model_name, args):
 
     frocs = np.array(frocs)
     froc_history = []
+    aucs_history = []
     legends = []
 
     i = 0
     for epoch in range(1, epochs + 1, 2):
         frocs_by_epoch = frocs[:,i]
         froc_history.append(eval.average_froc(np.array(frocs_by_epoch), np.linspace(0.0, 10.0, 101)))
+        aucs_history.append([])
+        aucs_history[-1].append(util.auc(froc_history[-1], range(2, 4)))
+        aucs_history[-1].append(util.auc(froc_history[-1], range(0, 5)))
+        aucs_history[-1].append(util.auc(froc_history[-1], range(0, 10)))
         legends.append('Val FROC (LIDC-IDRI), epoch {}'.format(epoch))
         i += 1
 
-    util.save_froc(froc_history, 'data/{}-{}-val-froc-by-epoch'.format(model_name, detector), legends, with_std=False)
+    util.save_froc(froc_history, 'data/{}-val-froc-by-epoch'.format(model_name), legends, with_std=False)
+    util.save_aucs(list(range(1, epochs + 1, 2)), aucs_history, 'data/{}-val-aucs'.format(model_name), ['AUC between 2-4', 'AUC between 0-5', 'AUC between 0-10'])
 
 # TODO: name of model to load
 def classify(image, args):
@@ -323,7 +321,7 @@ def classify(image, args):
     image = np.array([image])
     blobs, probs, mask = detect.detect_func(image[0], 'sbf', 'aam', 0.5) 
     rois = create_rois([image], mask, [blobs], args)
-    model = neural.create_network(args.model, (1, args.roi_size, args.roi_size)) 
+    model = neural.create_network(args.model, args, (1, args.roi_size, args.roi_size)) 
     model.name += '-lidc'
     model.load('data/' + model.name)
     blobs, probs = neural.predict_proba(model, [blobs], rois)
@@ -344,20 +342,30 @@ if __name__ == '__main__':
     parser.add_argument('file', nargs='?', default=None, type=str)
     parser.add_argument('--save-blobs', help='Use the detector and segmentator to generate blobs', action='store_true')
     parser.add_argument('--model', help='Evaluate convnet.', default='none')
+
+    # Protocols
     parser.add_argument('--model-selection', help='Perform model selection protocol', action='store_true') 
     parser.add_argument('--model-selection-detailed', help='Perform model selection protocol', action='store_true') 
     parser.add_argument('--model-evaluation', help='Perform model evaluation protocol', action='store_true') 
     parser.add_argument('--model-evaluation2', help='Perform model evaluation protocol', action='store_true') 
-    
+
+    # Model params
     parser.add_argument('--roi-size', help='Size of ROIs after scaling', default=32, type=int)
     parser.add_argument('--blob-rad', help='Radius used to extract blobs', default=32, type=int)
-
     parser.add_argument('--preprocess-roi', help='Preproc ROIs with a given method', default='norm')
     parser.add_argument('--save-rois', help='Perform model evaluation protocol', action='store_true') 
-    parser.add_argument('--detector', help='Detector', default='sbf-aam')
+    parser.add_argument('--detector', help='Detector', default='sbf-0.7-aam')
     parser.add_argument('--ds-tr', help='Detector', default='lidc-idri-npy')
     parser.add_argument('--ds-val', help='Detector', default='lidc-idri-npy')
     parser.add_argument('--fppi', help='False positives per image', default=4)
+    
+    # Network params
+    parser.add_argument('--lr', help='Learning rate', default=0.001, type=float)
+    parser.add_argument('--epochs', help='Number of epochs', default=70, type=int)
+    parser.add_argument('--da-rot', help='Rotation range in data augmentation', default=5, type=int)
+    parser.add_argument('--da-tr', help='Translation range in data augmentation', default=0.05, type=float)
+    parser.add_argument('--da-zoom', help='Zoom upper bound data augmentation', default=1.2, type=float)
+    parser.add_argument('--da-is', help='Intesity shift data augmentation', default=0.5, type=float)
 
     args = parser.parse_args() 
     print args

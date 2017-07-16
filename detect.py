@@ -168,7 +168,7 @@ Convergence index based detectors
 '''
 
 def wmci(img, mask, threshold=0.5):
-    min_distance = 7
+    min_distance = 7.143
     ans = preprocess.wmci(img, mask, threshold); 
     coords = peak_local_max(ans, min_distance)
 
@@ -503,6 +503,7 @@ def detect_blobs(images, masks, threshold=0.5, real_blobs=None, method='wmci'):
         blob_set.append(blobs)
         prob_set.append(proba)
     '''
+    # Measure tp, av fp per image
     fppi = np.full((len(images),), fill_value=0, dtype=float)
     p = 0
     tp = 0
@@ -576,8 +577,6 @@ def save_blobs(method, args):
     write_blobs(pred_blobs, 'data/{}-{}-aam-lidc-pred-blobs.pkl'.format(method, args.threshold))
 
     froc = eval.froc(blobs, pred_blobs, probs, distance='rad')
-    #froc = eval.froc(blobs, pred_blobs, probs, distance=9.14)
-    #froc = eval.froc(blobs, pred_blobs, probs)
     froc = eval.average_froc([froc], DETECTOR_FPPI_RANGE)
     abpi = average_bppi(pred_blobs)
 
@@ -590,7 +589,7 @@ def save_blobs(method, args):
     pred_blobs, probs = detect_blobs(images, masks, args.threshold, real_blobs=blobs, method=method) 
     write_blobs(pred_blobs, 'data/{}-{}-aam-jsrt140p-pred-blobs.pkl'.format(method, args.threshold))
 
-    froc = eval.froc(blobs, pred_blobs, probs)
+    froc = eval.froc(blobs, pred_blobs, probs, distance='rad')
     froc = eval.average_froc([froc], DETECTOR_FPPI_RANGE)
     abpi = average_bppi(pred_blobs)
 

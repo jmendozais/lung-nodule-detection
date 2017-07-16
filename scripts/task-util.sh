@@ -17,13 +17,20 @@ close babbage $1
 close prim $1
 close phong $1
 close minsky $1
+close voronoi $1
 }
 
 function qall {
+read -p "Are you sure you want to abort ALL SESSIONS? (y/n): " -n 1 -r
+echo    # (optional) move to a new line
+if [[ $REPLY =~ ^[Yy]$ ]]
+then
 user=$(whoami)
 ssh bezier "killall --user ${user} screen"
 ssh babbage "killall --user ${user} screen"
 ssh prim "killall --user ${user} screen"
 ssh phong "killall --user ${user} screen"
 ssh minsky "killall --user ${user} screen"
+ssh voronoi "killall --user ${user} screen"
+fi
 }

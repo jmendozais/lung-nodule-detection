@@ -318,7 +318,7 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
 
     for i in range(len(froc_ops)):
         ops = np.array(froc_ops[i]).T
-        plt.plot(ops[0], ops[1] * 0.9091, line_format[i%28], marker='x', markersize=3)
+        plt.plot(ops[0], ops[1] * 0.9091, line_format[i%28], marker='x')
         idx += 1
         legend.append(froc_legend[i])
 
@@ -330,13 +330,24 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     plt.ylim([0, 1.00])
     plt.ylabel('Sensitivity')
     plt.xlabel('Average FPs per Image')
-    plt.legend(legend, loc=4, fontsize='small', numpoints=1)
+    plt.legend(legend, loc=4, numpoints=1, prop={'size':4})
 
     print("Saving at {}_sota.pdf".format(name))
     plt.savefig('{}_sota.pdf'.format(name))
     plt.clf()
 
 def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True, fppi_max=10.0, with_auc=True):
+    """ Save the plot of the FROC curves in a pdf file and the interpolated operating points (n, 3, 101) for the 'n' FROC curves in a numpy array file.
+
+    Parameters
+    ----------
+    op_set : a list of arrays of shape (3, 101) containing the operating points of each the FROC curves
+
+    name : a string with the name pdf file
+
+    legend : a list of strings with the lengend names for the FROC curves
+    """
+
     if legend != None:
         assert len(legend) == len(op_set)
     legend = list(legend)
@@ -350,6 +361,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
                                  'b.--', 'g.--', 'r.--', 'c.--', 'm.--', 'y.--', 'k.--',
                                  'b.-.', 'g.-.', 'r.-.', 'c.-.', 'm.-.', 'y.-.', 'k.-.',
                                  'b.:', 'g.:', 'r.:', 'c.:', 'm.:', 'y.:', 'k.:']
+
     if use_markers == True:
         markers = ['o', 's', '8', 'v', 'p', '*', 'h', 'H', 'D', 'd', '^', '<', '>']
     else:
@@ -377,7 +389,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
     plt.ylabel('Sensitivity')
 
     if legend != None:
-        plt.legend(legend, loc=4, fontsize='x-small', numpoints=1)
+        plt.legend(legend, loc=4, prop={'size':6}, numpoints=1)
 
     if not unique:
         name='{}-{}'.format(name, time.clock())
@@ -400,6 +412,19 @@ def save_auc(epochs, aucs, name):
     plt.xlabel('Epoch')
     plt.ylabel('AUC')
     plt.savefig('{}.pdf'.format(name))
+    plt.clf()
+
+def save_aucs(epochs, auc_history, name, legend):
+    auc_history = np.array(auc_history).T
+    ax = plt.gca()
+    ax.grid(True)
+    for i in range(len(auc_history)):
+        plt.plot(epochs, auc_history[i], label=legend[i])
+
+    plt.xlabel('Epoch')
+    plt.ylabel('AUC')
+    plt.savefig('{}.pdf'.format(name))
+    np.savez('{}.npz'.format(name), np.array(epochs), np.array(auc_history), np.array(legend))
     plt.clf()
 
 class MidpointNormalize(Normalize):
@@ -614,9 +639,15 @@ def join_frocs(listname, bpiname, outname, max_fppi):
         frocs.append(np.load(toks[0]).T)
         names.append(toks[1])
         toks = bpi_lines[i].strip().split(',')
-        names[-1] += ', ABPI={:.2f}'.format(float(np.loadtxt(toks[0])))
+        #names[-1] += ', ABPI={:.2f}'.format(float(np.loadtxt(toks[0])))
         
     util.save_froc(np.array(frocs), outname, names, fppi_max=max_fppi)
+
+def single_froc(modelname, legendname, max_fppi):
+    print '->>>>>>>>>>>>>>>>> data/' + modelname + '-sbf-aam-val-froc.npy'
+    valname = 'data/' + modelname + '-sbf-aam-val-froc'
+    froc = np.load(valname + '.npy').T
+    util.save_froc(np.array([froc]), valname, np.array([legendname]), fppi_max=max_fppi)
 
 def plot_abpi(listname, outname, maxy):
     f = open(listname, 'r')
@@ -650,10 +681,18 @@ if __name__ == '__main__':
     parser.add_argument('--max', default=10.0, type=int)
     parser.add_argument('--froc', action='store_true')
     parser.add_argument('--abpi', action='store_true')
+    parser.add_argument('--single-froc', action='store_true')
+
+    parser.add_argument('--model', default=None, type=str)
+    #@parser.add_argument('--legend', default=None, type=str)
+
     args = parser.parse_args()
     
     if args.froc == True:
         join_frocs(args.list, args.bpif, args.out, args.max)
+    elif args.single_froc == True:
+        print '>>>>>>>>>>>>>>: ', args.model
+        single_froc(args.model, args.model, args.max)
     elif args.abpi == True:
         plot_abpi(args.list, args.out, args.max)
  

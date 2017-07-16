@@ -95,32 +95,15 @@ def convpool_block(inp, depth=2, nb_filters=64, nb_conv=3, nb_pool=2, init='orth
     out = MaxPooling2D(pool_size=(nb_pool, nb_pool))(out)
     return out
 
-def convpool_fs(inp, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], init='orthogonal', batch_norm=False, activation='relu', regularizer=None, dropout=0.25):
-
+def convpool_fs(inp, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], init='orthogonal', activation='relu', regularizer=None, dropout=None):
     assert nb_modules == len(nb_filters)
-    layewise_dropout = type(dropout) == type([])
+    assert isinstance(dropout, list)
+    assert nb_modules == len(dropout)
 
     out = inp
-    prevent_coadapt = dropout == 0.5
-    if prevent_coadapt:
-        print "prevent co-adaptation with dropout ..."
-        out = Dropout(0.2)(out)
-
     for i in range(nb_modules):
-        if i == 0:
-            if prevent_coadapt:
-                out = convpool_block(out, module_depth, nb_filters[i], nb_conv=conv_size[i], init=init, activation=activation, regularizer=regularizer)
-            else:
-                out = convpool_block(out, module_depth, nb_filters[i], nb_conv=conv_size[i], init=init, activation=activation, regularizer=regularizer)
-        else:
-            out = convpool_block(out, module_depth, nb_filters[i], nb_conv=conv_size[i], activation=activation, regularizer=regularizer)
-
-        if batch_norm is False:
-            if layewise_dropout:
-                out = Dropout(dropout[i])(out)
-            else:
-                out = Dropout(dropout)(out)
-
+        out = convpool_block(out, module_depth, nb_filters[i], nb_conv=conv_size[i], activation=activation, regularizer=regularizer)
+        out = Dropout(dropout[i])(out)
     return out
 
 def convpool_fs_ldp(model, nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64),  init='orthogonal', batch_norm=False, activation='relu', nb_dp=5, dp_init=0.15, dp_inc=0.05, regularizer=None):
@@ -211,13 +194,10 @@ def maxout_softmax(inp, nb_dense=1, dense_units=[512], nb_classes=2, init='ortho
     out = Activation('softmax')(out)
 
 # Models 
-
-def standard_cnn(nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', regularizer=None):
+def standard_cnn(nb_modules=1, module_depth=2,  nb_filters=[64], conv_size=[3], input_shape=(3, 64, 64), nb_dense=1, dense_units=[512], nb_classes=2, init='orthogonal', batch_norm=False, activation='relu', regularizer=None, dropout=None):
     print "Input Shape {}".format(input_shape)
     inp = Input(shape=input_shape, dtype='float32', name='input_layer')   
-    print init
-    out = convpool_fs(inp, nb_modules, module_depth,  nb_filters, conv_size, init, batch_norm, activation, regularizer=regularizer)
-    print type(out)
+    out = convpool_fs(inp, nb_modules, module_depth,  nb_filters, conv_size, init, activation, regularizer=regularizer, dropout=dropout)
     out = Flatten()(out)
     out = mlp_softmax(out, nb_dense, dense_units, nb_classes, init, batch_norm, activation, regularizer=regularizer)
     return Model(inputs=inp, outputs=out)
@@ -448,6 +428,33 @@ Configurations
 default_augment_params = {'output_shape':(64, 64), 'ratio':1, 'batch_size':32, 'rotation_range':(-5, 5), 'translation_range':(-0.05, 0.05), 'flip':True, 'intensity_shift_std':0.5, 'mode':'balance_batch', 'zoom_range':(1.0, 1.2)}
 default_preproc_params = {'zmuv':True}
 
+
+def convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1):
+    nb_filters = []
+    for i in range(conv_layers):
+        nb_filters.append((i+1) * filters)
+    dense_neurons = 512
+    dense_units = []
+    for i in range(fc_layers):
+        dense_units.append(dense_neurons)
+    dp_list = []
+    if isinstance(dropout, list):
+        assert len(dropout) == conv_layers
+        dp_list = dropout
+    elif isinstance(dropout, tuple):
+        assert len(dropout) == 2
+        for i in range(conv_layers):
+            dp_list.append(dropout[0] + i * dropout[1])
+    else:
+        for i in range(conv_layers):
+            dp_list.append(dropout)
+    conv_size = []
+    for i in range(conv_layers):
+        conv_size.append(3)
+
+    network = standard_cnn(nb_modules=conv_layers, module_depth=1, nb_filters=nb_filters, conv_size=conv_size, nb_dense=fc_layers, dense_units=dense_units, input_shape=input_shape, init='orthogonal', activation='leaky_relu', nb_classes=2, dropout=dp_list)
+    return network
+    
 def lnd_a_3p(input_shape, repeats=1, nb_classes=2, base_filters=32):
     network = standard_cnn(nb_modules=3, module_depth=repeats, nb_filters=[base_filters, 2*base_filters, 3*base_filters], conv_size=[3, 3, 3], nb_dense=2, dense_units=[512, 512], input_shape=input_shape, init='orthogonal', nb_classes=2)
     return network
@@ -852,7 +859,7 @@ def predict_proba(network, blob_set, roi_set):
 Create network
 '''
 
-def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
+def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=False):
     print 'Create model: {}'.format(model)
     print 'Network input shape: {}, use streams? {} '.format(input_shape, streams)
     net_model = None
@@ -911,7 +918,7 @@ def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
     elif model == '3PND':
         network = _3pnd(input_shape)
         schedule=[50, 50, 50]
-        train_params = {'schedule':schedule, 'nb_epoch':50, 'batch_size':32, 
+        train_params = {'-lrschedule':schedule, 'nb_epoch':50, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
@@ -956,15 +963,6 @@ def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
         train_params = {'schedule':schedule, 'nb_epoch':56, 'batch_size':32, 
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
-
-    elif model == '5P-base':
-        network = lnd_a_5p(input_shape, base_filters=100)
-        schedule=[70, 70, 70]
-        train_params = {'schedule':schedule, 'nb_epoch':70, 'batch_size':32, 
-                        'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
-        augment_params = default_augment_params
-        augment_params['intensity_shift_std'] = 0.5
-        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
 
     elif model == '5P-A-wide':
         input_shape = (128, 128)
@@ -1379,15 +1377,6 @@ def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
         preproc_params = {}
         net_model = NetModel(network, train_params, default_augment_params, preproc_params)
 
-    elif model == '5P':   
-        network = lnd_a_5p(input_shape)
-        schedule=[50, 50, 50]
-        train_params = {'schedule':schedule, 'nb_epoch':45, 'batch_size':32, 'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
-
-        augment_params = default_augment_params
-        augment_params['output_shape'] = (128, 128)
-        net_model = NetModel(network, train_params, augment_params)
-
     elif model == '6P':   
         network = lnd_a_6p(input_shape)
         schedule=[25, 60, 60]
@@ -1560,6 +1549,98 @@ def create_network(model, input_shape=(1, 32, 32), streams=-1, detector=False):
                         'lr':0.001, 'momentum':0.9, 'nesterov':True, 'decay':0}
         net_model = NetModel(network, train_params, default_augment_params, default_preproc_params)
 
+    # New try: Extract rois with diameters related to its sbf rad
+    elif model == '5P-sbf-rad':
+        model += '-lr{}-br{}'.format(args.lr, args.blob_rad)
+        #network = lnd_a_5p(input_shape, base_filters=64)
+        network = convnet(input_shape, conv_layers=5, filters=64, dropout=.25, fc_layers=2)
+        schedule=[args.epochs]
+        train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
+                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['intensity_shift_std'] = 0.5
+        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
+
+
+    # Exp 1 & 2. Full training baseline, lr, receptive field
+    elif model == '5P':
+        model += '-lr{}-br{}'.format(args.lr, args.blob_rad)
+        #network = lnd_a_5p(input_shape, base_filters=64)
+        network = convnet(input_shape, conv_layers=5, filters=64, dropout=.25, fc_layers=2)
+        schedule=[args.epochs]
+        train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
+                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['intensity_shift_std'] = 0.5
+        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
+
+    elif model == '5P-var-rf':
+        model += '-lr{}-br{}'.format(args.lr, args.blob_rad)
+        network = convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1)
+        schedule=[args.epochs]
+        train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
+                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['intensity_shift_std'] = 0.0
+        augment_params['zoom_range'] = (1.0, 1.0)
+        augment_params['translation_range'] = (.0, .0)
+        augment_params['rotation_range'] = (.0, .0)
+        augment_params['flip'] = False
+        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
+
+    # Exp 3: Data aug
+    elif model == '5P-da':
+        model += '-is{}-zm{}-tr{}-rr{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot)
+        network = convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1)
+        schedule=[args.epochs]
+        train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
+                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['intensity_shift_std'] = args.da_is
+        augment_params['zoom_range'] = (1.0, args.da_zoom)
+        augment_params['translation_range'] = (args.da_tr, args.da_tr)
+        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
+
+    elif model == '5P-no-da':
+        model += '-lr{}-br{}'.format(args.lr, args.blob_rad)
+        network = convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1)
+        schedule=[args.epochs]
+        train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
+                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['intensity_shift_std'] = 0.0
+        augment_params['zoom_range'] = (1.0, 1.0)
+        augment_params['translation_range'] = (.0, .0)
+        augment_params['rotation_range'] = (.0, .0)
+        augment_params['flip'] = False
+        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
+
+    elif model == '5P-mid-da':
+        model += '-is{}-zm{}-tr{}-rr{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot)
+        network = convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1)
+        schedule=[args.epochs]
+        train_params = {'schedule':schedule, 'nb_epoch':70, 'batch_size':32, 
+                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['intensity_shift_std'] = args.da_is
+        augment_params['zoom_range'] = (1.0, args.da_zoom)
+        augment_params['translation_range'] = (args.da_tr, args.da_tr)
+        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
+
+    elif model == '5P-full-da':
+        model += '-is{}-zm{}-tr{}-rr{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot)
+        network = convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1)
+        schedule=[args.epochs]
+        train_params = {'schedule':schedule, 'nb_epoch':70, 'batch_size':32, 
+                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['intensity_shift_std'] = args.da_is
+        augment_params['zoom_range'] = (1.0, args.da_zoom)
+        augment_params['translation_range'] = (args.da_tr, args.da_tr)
+        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
     else:
         raise Exception("Model config not found.")
     

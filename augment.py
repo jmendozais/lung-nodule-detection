@@ -421,7 +421,6 @@ class ImageDataGenerator:
     def centering_crop(self, X):
         assert len(X) > 0
         new_X = []
-        print 'centering crop input shape {}'.format(X.shape)
         tform_centering = self.build_centering_transform(X[0][0].shape, self.output_shape)
         for i in range(len(X)):
             new_x = []
@@ -690,21 +689,23 @@ class DataGeneratorOnMemory:
 # Test
 if __name__ == '__main__':
     fname = 'grid2.jpg'
-    #fname = '501.49_roi.jpg' 
 
     import cv2
     img = cv2.imread(fname)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = np.array([img])
+    factor = 1.4
+    util.imwrite('or_{}'.format(fname), img[0])
 
-    augment_params = {'output_shape':(50, 50), 'ratio':1, 'batch_size':32, 'rotation_range':(-5, 5), 'translation_range':(-0.05, 0.05), 'flip':True, 'mode':'balance_batch', 'zoom_range':(1.0, 1.2)}
+    augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-15, 15), 'translation_range':(-0.1, 0.1), 'flip':True, 'intensity_shift_std':0.5, 'mode':'balance_batch', 'zoom_range':(1.0, 1.2)}
     gen = ImageDataGenerator(**augment_params)
-    for i in range(10):
-        print 'rnd_{}_{}'.format(i, fname)
-        rnd_img = random_transform(img.astype("float32"), 15, 0.1, 0.1, True, False)
+    gen.intensity_shift_range = (-0.1, 0.1)
+
+    for i in range(20):
+        print 'neg_{}_{}'.format(i, fname)
+        #rnd_img = random_transform(img.astype("float32"), 15, 0.1, 0.1, True, False)
         rnd_img = gen.perturb(img)
         util.imwrite('neg_{}_{}'.format(i, fname), rnd_img[0])
 
     ans = gen.centering_crop([img])
     util.imwrite('pos_{}'.format(fname), ans[0][0])
-

@@ -1,14 +1,5 @@
 . task-util.sh
 
-function dog_hp_start {
-start bezier dog1 "python detect.py --detector dog --threshold 0.1 --save-blobs"
-start babbage dog2 "python detect.py --detector dog --threshold 0.4 --save-blobs"
-start prim dog3 "python detect.py --detector dog --threshold 0.7 --save-blobs"
-start phong dog4 "python detect.py --detector dog --threshold 1.0 --save-blobs"
-start minsky dog5 "python detect.py --detector dog --threshold 1.3 --save-blobs"
-start voronoi dog6 "python detect.py --detector dog --threshold 1.6 --save-blobs"
-}
-
 function froc {
 methods=$1
 labels=$2
@@ -46,6 +37,15 @@ done
 python util.py --froc --list ${tmp1} --bpif ${tmp2} --out data/${method}-froc --max 100
 python util.py --abpi --list ${tmp2} --out data/${method}-lidc-abpi --max 200
 python util.py --abpi --list ${tmp3} --out data/${method}-jsrt-abpi --max 200
+}
+
+function dog_hp_start {
+start bezier dog1 "python detect.py --detector dog --threshold 0.1 --save-blobs"
+start babbage dog2 "python detect.py --detector dog --threshold 0.4 --save-blobs"
+start prim dog3 "python detect.py --detector dog --threshold 0.7 --save-blobs"
+start phong dog4 "python detect.py --detector dog --threshold 1.0 --save-blobs"
+start minsky dog5 "python detect.py --detector dog --threshold 1.3 --save-blobs"
+start voronoi dog6 "python detect.py --detector dog --threshold 1.6 --save-blobs"
 }
 
 function dog_hp_froc {
@@ -118,8 +118,8 @@ hp_froc sbf SBF ${ts}
 function cmp_froc {
 #methods=('dog-1.5' 'log-0.5' 'doh-0.1' 'wmci-0.5' 'sbf-0.4')
 #labels=('DoG 1.5' 'LoG 0.5' 'DoH 0.1' 'WMCI 0.5' 'SBF 0.4')
-methods=('dog-1.0' 'log-0.4' 'doh-0.1' 'sbf-0.4')
-labels=('DoG 1.0' 'LoG 0.4' 'DoH 0.1' 'SBF 0.4')
+methods=('dog-1.0' 'log-0.4' 'doh-0.1' 'wmci-0.5' 'sbf-0.4')
+labels=('DoG' 'LoG' 'DoH' 'WMCI' 'SBF')
 froc ${methods} ${labels}
 }
 
