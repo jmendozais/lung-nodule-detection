@@ -1,19 +1,5 @@
 . task-util.sh
-
-function froc {
-methods=$1
-labels=$2
-tmp1=/tmp/${RANDOM}.txt
-tmp2=/tmp/${RANDOM}.txt
-touch ${tmp1}
-touch ${tmp2}
-
-for ((i=0; i <${#methods[@]}; ++i)); do
-    echo "data/${methods[i]}-lidc-blobs-froc.npy,${labels[i]}" >> ${tmp1}
-    echo "data/${methods[i]}-lidc-blobs-abpi.txt,${labels[i]}" >> ${tmp2}
-done
-python util.py --froc --list ${tmp1} --bpif ${tmp2} --out data/cmp-froc --max 100
-}
+. lnd-util.sh
 
 function hp_froc {
 method=$1
@@ -118,12 +104,20 @@ hp_froc sbf SBF ${ts}
 function cmp_froc {
 #methods=('dog-1.5' 'log-0.5' 'doh-0.1' 'wmci-0.5' 'sbf-0.4')
 #labels=('DoG 1.5' 'LoG 0.5' 'DoH 0.1' 'WMCI 0.5' 'SBF 0.4')
-methods=('dog-1.0' 'log-0.4' 'doh-0.1' 'wmci-0.5' 'sbf-0.4')
+methods=('dog-1.0-lidc-blobs' 'log-0.4-lidc-blobs' 'doh-0.1-lidc-blobs' 'wmci-0.5-lidc-blobs' 'sbf-0.7-lidc-blobs')
 labels=('DoG' 'LoG' 'DoH' 'WMCI' 'SBF')
-froc ${methods} ${labels}
+froc-detect ${methods} ${labels}
 }
 
-if [ "$1" = "dog-start" ]; then
+# Main
+function help() # Show a list of functions
+{
+    grep "^function" $0
+}
+
+if [ "_$1" = "_" ]; then
+    help
+elif [ "$1" = "dog-start" ]; then
     dog_hp_start
 elif [ "$1" = "dog-froc" ]; then
     dog_hp_froc

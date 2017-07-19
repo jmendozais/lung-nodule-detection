@@ -44,7 +44,7 @@ def preprocess_rois(rois, methods):
     return np.array(result)
 
 def create_rois(imgs, masks, blob_set, args, save=False, real_blobs=None, paths=None):
-    pad_size = 1.3
+    pad_size = 1.4
     dsize = (int(args.roi_size * pad_size), int(args.roi_size * pad_size))
 
     print 'Preprocess images: # images {}'.format(len(imgs))
@@ -306,9 +306,9 @@ def eval_trained_model(model_name, args):
         frocs_by_epoch = frocs[:,i]
         froc_history.append(eval.average_froc(np.array(frocs_by_epoch), np.linspace(0.0, 10.0, 101)))
         aucs_history.append([])
-        aucs_history[-1].append(util.auc(froc_history[-1], range(2, 4)))
-        aucs_history[-1].append(util.auc(froc_history[-1], range(0, 5)))
-        aucs_history[-1].append(util.auc(froc_history[-1], range(0, 10)))
+        aucs_history[-1].append(util.auc(froc_history[-1], np.linspace(0.2, 4.0, 101))**2)
+        aucs_history[-1].append(util.auc(froc_history[-1], np.linspace(0.0, 5.0, 101))**2)
+        aucs_history[-1].append(util.auc(froc_history[-1], np.linspace(0.0, 10.0, 101))**2)
         legends.append('Val FROC (LIDC-IDRI), epoch {}'.format(epoch))
         i += 1
 
@@ -355,7 +355,7 @@ if __name__ == '__main__':
     parser.add_argument('--preprocess-roi', help='Preproc ROIs with a given method', default='norm')
     parser.add_argument('--save-rois', help='Perform model evaluation protocol', action='store_true') 
     parser.add_argument('--detector', help='Detector', default='sbf-0.7-aam')
-    parser.add_argument('--ds-tr', help='Detector', default='lidc-idri-npy')
+    parser.add_argument('--ds-tr', help='Detector', default='lidc-idri-npy-r1-r2')
     parser.add_argument('--ds-val', help='Detector', default='lidc-idri-npy')
     parser.add_argument('--fppi', help='False positives per image', default=4)
     
@@ -366,6 +366,7 @@ if __name__ == '__main__':
     parser.add_argument('--da-tr', help='Translation range in data augmentation', default=0.05, type=float)
     parser.add_argument('--da-zoom', help='Zoom upper bound data augmentation', default=1.2, type=float)
     parser.add_argument('--da-is', help='Intesity shift data augmentation', default=0.5, type=float)
+    parser.add_argument('--dp', help='fixed dp for conv layers, slope on variable dp', default=0.5, type=float)
 
     args = parser.parse_args() 
     print args

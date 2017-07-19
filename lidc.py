@@ -228,11 +228,13 @@ def rois_by_dcm_map(path, min_agreement=3):
 
             #print roi_ids
             valid_roi_ids = []
+            subt = []
             for k in roi_ids:
                 conf_sum = np.sum(conf_by_roi[k])
-                subt_mean = 1e10
+                subt_mean = -1
                 if k in subt_by_roi.keys():
                     subt_mean = np.mean(subt_by_roi[k])
+            
 
                 min_cf = min(min_cf, conf_sum)
                 max_cf = max(max_cf, conf_sum)
@@ -241,9 +243,9 @@ def rois_by_dcm_map(path, min_agreement=3):
                 if conf_sum < 8:
                     continue 
 
-                # Exclude rois with subtlety mean < 2
+                # Exclude rois with subtlety mean < 2, allow rois with 
                 print subt_mean
-                if subt_mean < 2:
+                if subt_mean != -1 and subt_mean < 2:
                     continue
 
                 if len(pts_by_roi[k]) >= min_agreement:
@@ -256,8 +258,9 @@ def rois_by_dcm_map(path, min_agreement=3):
                     '''
                     valid_roi_ids.append(k)
                     pos.append(medoid(pts_by_roi[k]))
+                    subt.append(subt_mean)
 
-            rois_by_dcm[dcm_ids[i]] = (valid_roi_ids, pos)
+            rois_by_dcm[dcm_ids[i]] = (valid_roi_ids, pos, subt)
 
     '''
     print 'cf: ', min_cf, max_cf
@@ -337,19 +340,21 @@ def paths_and_rois(root = LIDC_PATH, min_agreement=3):
                     best_dcm_file = valid_dcms[0][1]
                     best_coords = []
                     best_roi_ids = []
+                    best_subts = []
                     max_rois = -1
                     for i in range(len(valid_dcms)):
                         dcm, dcm_file = valid_dcms[i]
                         if dcm.SOPInstanceUID in rois_by_dcm.keys():
-                            roi_ids, coords = rois_by_dcm[dcm.SOPInstanceUID]
+                            roi_ids, coords, subts = rois_by_dcm[dcm.SOPInstanceUID]
                             if len(coords) > max_rois:
                                 max_rois = len(coords)
                                 best_dcm_file = dcm_file
                                 best_coords = coords
                                 best_roi_ids = roi_ids
+                                best_subts = subts
                             
                     #print 'append', best_dcm_file, best_roi_ids, best_coords
-                    paths.append((best_dcm_file, best_roi_ids, best_coords))
+                    paths.append((best_dcm_file, best_roi_ids, best_coords, best_subts))
 
     return paths
 
@@ -365,10 +370,11 @@ def generate_npy_dataset():
     size_map = size_by_case_and_noid_map()
     small_or_nn = small_or_non_nod_cases()
     lidc_rois = []
+    lidc_subts = []
     for i in range(len(paths_and_rois_)):
-        dcm_path, roi_ids, roi_coords = paths_and_rois_[i]
+        dcm_path, roi_ids, roi_coords, roi_subts = paths_and_rois_[i]
 
-        print '>', type(roi_ids), type(roi_coords), '<'
+        print '->', type(roi_ids), type(roi_coords), '<'
 
         case_id_pos = dcm_path.find('LIDC-IDRI-')
         case_id = dcm_path[case_id_pos:case_id_pos + 14]
@@ -392,6 +398,7 @@ def generate_npy_dataset():
             img = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2GRAY)
 
         rois = []
+        subts = []
         for j in range(len(roi_ids)):
             key = lidc_nod_id(case_id, roi_ids[j])
             print 'Nod ID: {}'.format(key)
@@ -399,8 +406,10 @@ def generate_npy_dataset():
             if key in size_map.keys():
                 size = int(float(size_map[key]) * 1.0 /pixel_spacing)
             rois.append(np.append(roi_coords[j], size))
+            subts.append(roi_subts[j])
 
         rois = np.array(rois)
+        subts = np.array(subts)
 
         '''
         tmp = img
@@ -460,10 +469,12 @@ def generate_npy_dataset():
         #plt.hist(np.array(img).ravel(), 256, range=(0,4096)); 
         #plt.show()
 
-        #np.save('{}/{}.npy'.format(LIDC_NPY_PATH, case_id), img)
-        #np.save('{}/{}-rois.npy'.format(LIDC_NPY_PATH, case_id), resized_rois)
+        #np.save('{}/{}2.npy'.format(LIDC_NPY_PATH, case_id), img)
+        #np.save('{}/{}-rois2.npy'.format(LIDC_NPY_PATH, case_id), resized_rois)
+        np.save('{}/{}-subts.npy'.format(LIDC_NPY_PATH, case_id), np.array(subts))
          
         lidc_rois.append(resized_rois)
+        lidc_subts.append(subts)
         print resized_rois
 
     sizes = []
@@ -472,10 +483,10 @@ def generate_npy_dataset():
             sizes.append(roi[2])
 
     sizes.sort()
-    print 'average rad {}, median rad {}'.format(np.mean(sizes), sizes[int(len(sizes)/2)])
     plt.hist(np.array(sizes).ravel(), 60, range=(0, 60)); 
     plt.show()
 
+    print 'average rad {}, median rad {}'.format(np.mean(sizes), sizes[int(len(sizes)/2)])
     print 'av min, av max, min, max {} {} {} {}'.format(np.mean(mins), np.mean(maxs), np.min(mins), np.max(maxs))
     print 'multi {}, single {}, no nods {}, total rois {}'.format(multiple_nodules, single_nodule, no_nodules, roi_counter)
 
@@ -492,23 +503,59 @@ def get_paths(root = LIDC_NPY_PATH, suffix = '-rois.npy'):
     paths = sorted(paths)
     return np.array(paths)
 
-def load(pts=False, set_name='lidc-idri-npy-r1-r2'):
+def load(set_name='lidc-idri-npy-r1-r2', pts=False, subt=False):
     idx = LIDC_NPY_PATH.find('lidc-idri-npy')
     path = LIDC_NPY_PATH[:idx] + set_name
     paths = get_paths(root=path)
     images = []
     blobs = []
+    subts = []
 
     for i in range(len(paths)):
         blobs_path = paths[i][:len(paths[i])-4] + '-rois.npy'
+        subts_path = paths[i][:len(paths[i])-4] + '-subts.npy'
         images.append(np.load(paths[i]))
         blobs.append(np.load(blobs_path))
+        if subt:
+            subts.append(np.load(subts_path))
 
     images = np.array(images)
+    images = images.reshape((images.shape[0],) + (1,) + images.shape[1:])
+    result = [images, np.array(blobs)]
     if pts:
-        return images.reshape((images.shape[0],) + (1,) + images.shape[1:]), np.array(blobs), paths
-    else:
-        return images.reshape((images.shape[0],) + (1,) + images.shape[1:]), np.array(blobs)
+        result.append(paths)
+    if subt:
+        result.append(subts)
+
+    return tuple(result)
+
+'''
+def subtlety_by_size():
+    imgs, blobs, paths, subts = load(pts=True, subt=True)
+    sizes = [0, 10, 15, 20, 25, 30, 60]
+    num_itv = len(sizes) - 1
+    num_subs = 5
+    
+    tab = np.zeros(shape=(6, 7))
+    for i in range(len(paths)):
+        if subs[i] == 0:
+            continue
+
+        diams[i] *= (PIXEL_SPACING * 4)
+        col = 0
+        for k in range(num_itv):
+            if diams[i] > sizes[k] and diams[i] <= sizes[k + 1]:
+                col = k
+        tab[subs[i] - 1][col] += 1
+
+    for i in range(num_subs):
+        tab[i][num_itv] = np.sum(tab[i,:])
+
+    for i in range(num_itv):
+        tab[num_subs][i] = np.sum(tab[:,i])
+
+    tab[num_subs][num_itv] = np.sum(tab[:num_subs,:num_itv])
+'''
 
 if __name__ == '__main__':
     #plt.switch_backend('Qt4Agg')

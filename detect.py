@@ -35,7 +35,7 @@ from menpo.image import Image
 ''' 
 Detection utils 
 '''
-DETECTOR_FPPI_RANGE = np.linspace(0.0, 100.0, 101)
+DETECTOR_FPPI_RANGE = np.linspace(0.0, 200.0, 101)
 def read_blobs(fname):
     fileh = open(fname, 'rb')
     blobs = pickle.load(fileh)

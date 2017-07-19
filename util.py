@@ -625,11 +625,11 @@ def froc_folds(real_blobs, blobs, probs, folds):
     return av_froc
 
 def join_frocs(listname, bpiname, outname, max_fppi):
-    print listname, bpiname
     frocf = open(listname, 'r')
     froc_lines = [line for line in frocf]
-    bpif = open(bpiname, 'r')
-    bpi_lines = [line for line in bpif]
+    if bpiname != None:
+        bpif = open(bpiname, 'r')
+        bpi_lines = [line for line in bpif]
 
     frocs = []
     names = []
@@ -638,8 +638,9 @@ def join_frocs(listname, bpiname, outname, max_fppi):
         toks = froc_lines[i].strip().split(',')
         frocs.append(np.load(toks[0]).T)
         names.append(toks[1])
-        toks = bpi_lines[i].strip().split(',')
-        #names[-1] += ', ABPI={:.2f}'.format(float(np.loadtxt(toks[0])))
+        if bpiname != None:
+            toks = bpi_lines[i].strip().split(',')
+            names[-1] += ', ABPI={:.2f}'.format(float(np.loadtxt(toks[0])))
         
     util.save_froc(np.array(frocs), outname, names, fppi_max=max_fppi)
 

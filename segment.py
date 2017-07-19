@@ -259,6 +259,7 @@ class ActiveAppearanceModel(SegmentationModel):
         mean = np.mean(image)
         std = np.std(image)
         image = (image - mean)/std
+        # FIX:
         min_ = np.min(image)
         max_ = np.max(image)
         image = (image - min_)/(max_ - min_ + 1e-7)
