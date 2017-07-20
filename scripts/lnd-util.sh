@@ -1,4 +1,18 @@
 . task-util.sh
+# Variables
+update_salle="source ~/juliomb/.bashrc; cd ~/juliomb/lung-nodule-detection; git pull origin master"
+salle1="THEANO_FLAGS=mode=FAST_RUN,device=gpu0,floatX=float32,optimizer_including=cudnn"
+salle2="THEANO_FLAGS=mode=FAST_RUN,device=gpu1,floatX=float32,optimizer_including=cudnn"
+salle3="THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn"
+
+# Functions
+function start-liv {
+    start $1 $2 "cd lung-nodule-detection; ${3}"
+}
+function start-aqp {
+    start $1 $2 "source ~/juliomb/.bashrc"
+    run $1 $2 "cd ~/juliomb/lung-nodule-detection; ${3}"
+}
 
 function froc-detect {
 methods=$1
@@ -26,3 +40,5 @@ for ((i=0; i <${#methods[@]}; ++i)); do
 done
 python util.py --froc --list ${tmp1} --out data/${out} --max 10
 }
+
+

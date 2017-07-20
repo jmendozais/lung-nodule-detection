@@ -359,7 +359,7 @@ if __name__ == '__main__':
     parser.add_argument('--save-rois', help='Perform model evaluation protocol', action='store_true') 
     parser.add_argument('--detector', help='Detector', default='sbf-0.7-aam')
     parser.add_argument('--ds-tr', help='Detector', default='lidc-idri-npy-r1-r2')
-    parser.add_argument('--ds-val', help='Detector', default='lidc-idri-npy')
+    parser.add_argument('--ds-val', help='Detector', default='lidc-idri-npy-r1-r2')
     parser.add_argument('--fppi', help='False positives per image', default=4)
     
     # Network params
@@ -369,6 +369,7 @@ if __name__ == '__main__':
     parser.add_argument('--da-tr', help='Translation range in data augmentation', default=0.05, type=float)
     parser.add_argument('--da-zoom', help='Zoom upper bound data augmentation', default=1.2, type=float)
     parser.add_argument('--da-is', help='Intesity shift data augmentation', default=0.5, type=float)
+    parser.add_argument('--da-flip', help='Intesity shift data augmentation', default=1, type=int)
     parser.add_argument('--dp', help='fixed dp for conv layers, slope on variable dp', default=0.5, type=float)
 
     args = parser.parse_args() 
