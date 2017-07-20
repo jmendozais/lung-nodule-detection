@@ -78,6 +78,8 @@ def create_rois(imgs, masks, blob_set, args, save=False, real_blobs=None, paths=
         rois = []
         for j in range(len(blob_set[i])):
             x, y, r = blob_set[i][j]
+            x = int(x)
+            y = int(y)
             if args.blob_rad > 0:
                 r = args.blob_rad
             else:
@@ -91,6 +93,7 @@ def create_rois(imgs, masks, blob_set, args, save=False, real_blobs=None, paths=
             nbr = (min(img.shape[1], br[0]), min(img.shape[2], br[1]))
 
             roi = []
+
             for k in range(img.shape[0]):
                 tmp = img[k][ntl[0]:nbr[0], ntl[1]:nbr[1]]
                 tmp = cv2.resize(tmp, dsize, interpolation=cv2.INTER_CUBIC)
