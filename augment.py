@@ -605,19 +605,19 @@ class DataGenerator:
             pos = self.input[k][0][pos_idx]
             neg = self.input[k][1][self.offset:(self.offset + self.step)]
             for i in range(self.step):
-                #input_[i] = self.perturb_func(pos[i])
+                input_[i] = self.perturb_func(pos[i])
+                '''
+                # print perturbs
                 input_[i] = self.perturb_func(pos[0])
                 util.imwrite('pos{}-ptb.jpg'.format(i), input_[i][0])
-
                 tmp = pos[0].copy()
                 diff = tmp[0].shape[0] - input_[i][0].shape[0]
                 isize = tmp[0].shape[0]
                 osize = input_[i][0].shape[0]
-
                 tmp = tmp[0][diff/2:diff/2 + osize,diff/2:diff/2 + osize]
                 assert tmp.shape[0] == osize, '{}'.format((tmp.shape, osize))
                 util.imwrite('pos{}.jpg'.format(i), tmp)
-
+                '''
             for i in range(self.step):
                 input_[self.step + i] = self.perturb_func(neg[i])
             batch_input[k] = input_

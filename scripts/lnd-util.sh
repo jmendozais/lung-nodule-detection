@@ -1,6 +1,6 @@
 . task-util.sh
 # Variables
-update_salle="source ~/juliomb/.bashrc; cd ~/juliomb/lung-nodule-detection; git pull origin master"
+update_salle="source ~/juliomb/.bashrc; cd ~/juliomb/lung-nodule-detection; git pull --rebase origin master"
 salle1="THEANO_FLAGS=mode=FAST_RUN,device=gpu0,floatX=float32,optimizer_including=cudnn"
 salle2="THEANO_FLAGS=mode=FAST_RUN,device=gpu1,floatX=float32,optimizer_including=cudnn"
 salle3="THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn"
