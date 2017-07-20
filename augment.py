@@ -594,6 +594,7 @@ class DataGenerator:
         self.offset = 0
 
     def next(self):
+        print('call data aug next')
         if self.offset + self.step > self.len_neg: 
             self.offset = 0
 
@@ -604,7 +605,19 @@ class DataGenerator:
             pos = self.input[k][0][pos_idx]
             neg = self.input[k][1][self.offset:(self.offset + self.step)]
             for i in range(self.step):
-                input_[i] = self.perturb_func(pos[i])
+                #input_[i] = self.perturb_func(pos[i])
+                input_[i] = self.perturb_func(pos[0])
+                util.imwrite('pos{}-ptb.jpg'.format(i), input_[i][0])
+
+                tmp = pos[0].copy()
+                diff = tmp[0].shape[0] - input_[i][0].shape[0]
+                isize = tmp[0].shape[0]
+                osize = input_[i][0].shape[0]
+
+                tmp = tmp[0][diff/2:diff/2 + osize,diff/2:diff/2 + osize]
+                assert tmp.shape[0] == osize, '{}'.format((tmp.shape, osize))
+                util.imwrite('pos{}.jpg'.format(i), tmp)
+
             for i in range(self.step):
                 input_[self.step + i] = self.perturb_func(neg[i])
             batch_input[k] = input_
@@ -620,6 +633,7 @@ class DataGenerator:
         self.offset += self.step
 
         # Show blobs and histograms here ! 
+        '''
         mean = [[], []]
         std = [[], []]
         for k in self.input:
@@ -630,12 +644,13 @@ class DataGenerator:
                 std[0].append(np.std(pos))
                 mean[1].append(np.mean(neg))
                 std[1].append(np.std(neg))
-                '''
-                util.imshow('roi p', batch_input[k][i][0], display_shape=(256, 256))
-                util.imshow('roi n', batch_input[k][self.step + i][0], display_shape=(256, 256))
-                '''
+                util.imshow('input p', batch_input[k][i][0], display_shape=(256, 256))
+                util.imshow('perturbed p', batch_input[k][i][0], display_shape=(256, 256))
+                util.imshow('input n', batch_input[k][self.step + i][0], display_shape=(256, 256))
+                util.imshow('perturbed n', batch_input[k][self.step + i][0], display_shape=(256, 256))
 
         #print 'batch p:  mm {:.4f}, ms {:.4f} ss {:.4f}, n: mm {:.4f}, ms {:.4f}, ss {:.4f}'.format(np.mean(mean[0]), np.mean(std[0]), np.std(std[0]), np.mean(mean[1]), np.mean(std[1]), np.std(std[1]))
+        '''
 
         return batch_input, batch_output 
 
@@ -692,12 +707,14 @@ if __name__ == '__main__':
 
     import cv2
     img = cv2.imread(fname)
+    #print img.shape
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = np.array([img])
     factor = 1.4
     util.imwrite('or_{}'.format(fname), img[0])
 
-    augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-15, 15), 'translation_range':(-0.1, 0.1), 'flip':True, 'intensity_shift_std':0.5, 'mode':'balance_batch', 'zoom_range':(1.0, 1.2)}
+    #augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-15, 15), 'translation_range':(-0.1, 0.1), 'flip':True, 'intensity_shift_std':0.5, 'mode':'balance_batch', 'zoom_range':(1.0, 1.2)}
+    augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-0, 0), 'translation_range':(-0.1, 0.1), 'flip':True, 'intensity_shift_std':0.0, 'mode':'balance_batch', 'zoom_range':(1.0, 1.0)}
     gen = ImageDataGenerator(**augment_params)
     gen.intensity_shift_range = (-0.1, 0.1)
 

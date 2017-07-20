@@ -1596,7 +1596,7 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
 
     # Exp 3: Data aug
     elif model == '5P-da':
-        model += '-is{}-zm{}-tr{}-rr{}-fl{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot, args.da_flip)
+        model += '-is{}-zm{}-tr{}-rr{}-fl{}-lr{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot, args.da_flip, args.lr)
         network = convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1)
         schedule=[args.epochs]
         train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
