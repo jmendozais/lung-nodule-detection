@@ -3,9 +3,16 @@ machine=$1
 session=$2 
 cmd=$3
 ssh $machine "/usr/bin/screen -S ${session} -dm bash;"
-ssh $machine "/usr/bin/screen -S ${session} -X stuff \"cd lung-nodule-detection;\"^M"
 ssh $machine "/usr/bin/screen -S ${session} -X stuff \"${cmd}\"^M"
 }
+
+function run {
+machine=$1
+session=$2 
+cmd=$3
+ssh $machine "/usr/bin/screen -S ${session} -X stuff \"${cmd}\"^M"
+}
+
 
 function close {
 ssh $1 screen -X -S $2 quit
