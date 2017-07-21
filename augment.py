@@ -594,7 +594,6 @@ class DataGenerator:
         self.offset = 0
 
     def next(self):
-        print('call data aug next')
         if self.offset + self.step > self.len_neg: 
             self.offset = 0
 
