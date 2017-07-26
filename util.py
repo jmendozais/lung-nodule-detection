@@ -12,6 +12,7 @@ from sklearn.cross_validation import StratifiedKFold
 from sklearn.model_selection import KFold
 from sklearn.cross_validation import StratifiedShuffleSplit
 from skimage.segmentation import find_boundaries
+from scipy.interpolate import interp1d
 
 import argparse
 import os
@@ -23,6 +24,8 @@ font = {
         'size'   : 15}
 
 matplotlib.rc('font', **font)
+matplotlib.rcParams['text.usetex'] = True
+matplotlib.rcParams['text.latex.unicode'] = True
 
 plt.switch_backend('agg')
 plt.ioff()
@@ -336,7 +339,22 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     plt.savefig('{}_sota.pdf'.format(name))
     plt.clf()
 
-def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True, fppi_max=10.0, with_auc=True):
+
+def subsample_operating_points(ops, num_fppi):
+    print np.min(ops[0]), np.max(ops[0]), num_fppi
+    fppi_range = np.linspace(np.min(ops[0]), np.max(ops[0]), num_fppi)
+    f1 = interp1d(ops[0], ops[1], kind='cubic', fill_value=0.0, bounds_error=False)
+    sen = f1(fppi_range)
+
+    if len(ops) == 2:
+        return (fppi_range, sen)
+    elif len(ops) == 3:
+        f2 = interp1d(ops[0], ops[2], kind='cubic', fill_value=0.0, bounds_error=False)
+        err = f2(fppi_range)
+        return (fppi_range, sen, err)
+    
+
+def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True, fppi_max=10.0, with_auc=True, size='normal'):
     """ Save the plot of the FROC curves in a pdf file and the interpolated operating points (n, 3, 101) for the 'n' FROC curves in a numpy array file.
 
     Parameters
@@ -350,17 +368,25 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
 
     if legend != None:
         assert len(legend) == len(op_set)
+        
     legend = list(legend)
+
+    # Size params
+    legend_size = 12
+    marker_size = 6
+    line_width = 2
+    num_fppi = 25
 
     print "save froc params {} {} {}, {}, {} {}".format(len(op_set), op_set[0].shape, op_set[0].dtype, name, len(legend), type(legend))
 
     ax = plt.gca()
     ax.grid(True)
 
-    line_format = ['b.-', 'g.-', 'r.-', 'c.-', 'm.-', 'y.-', 'k.-', 
-                                 'b.--', 'g.--', 'r.--', 'c.--', 'm.--', 'y.--', 'k.--',
-                                 'b.-.', 'g.-.', 'r.-.', 'c.-.', 'm.-.', 'y.-.', 'k.-.',
-                                 'b.:', 'g.:', 'r.:', 'c.:', 'm.:', 'y.:', 'k.:']
+    line_format = [
+        'k.-', 'm.-', 'b.-', 'c.-', 'g.-', 'y.-', 'r.-', 
+        'k.--', 'm.--', 'b.--', 'c.--', 'g.--', 'y.--', 'r.--', 
+        'k.-.', 'm.-.', 'b.-.', 'c.-.', 'g.-.', 'y.-.', 'r.-.', 
+        'k.:', 'm.:', 'b.:', 'c.:', 'g.:', 'y.:', 'r.:']
 
     if use_markers == True:
         markers = ['o', 's', '8', 'v', 'p', '*', 'h', 'H', 'D', 'd', '^', '<', '>']
@@ -369,15 +395,16 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
         
     for i in range(len(op_set)):
         ops = np.array(op_set[i]).T
-        if with_std and len(ops) > 2:
-            plt.plot(ops[0], ops[1], line_format[i%28], marker=markers[i%13], markersize=3, fillstyle='none')
-            plt.fill_between(ops[0], ops[1] - ops[2], ops[1] + ops[2], facecolor=line_format[i%13][0], alpha=0.3)  
+        sops = subsample_operating_points(ops, num_fppi)
+        if with_std and len(sops) > 2:
+            plt.plot(sops[0], sops[1], line_format[i%28], marker=markers[i%13], markersize=marker_size, fillstyle='none', linewidth=line_width, mew=line_width)
+            plt.fill_between(sops[0], sops[1] - sops[2], sops[1] + sops[2], facecolor=line_format[i%13][0], alpha=0.3)  
         else:
-            plt.plot(ops[0], ops[1], line_format[i%28], marker=markers[i%13], markersize=3, fillstyle='none')
+            plt.plot(sops[0], sops[1], line_format[i%28], marker=markers[i%13], markersize=marker_size, fillstyle='none', linewidth=line_width, mew=line_width)
 
         if legend != None and with_auc:
             auc_ = auc(np.array(op_set[i]), range=(0.0, fppi_max))
-            legend[i] = '{}, AUC = {:.2f}'.format(legend[i], auc_)
+            legend[i] = r'{}, AUC = {:.2f}'.format(legend[i], auc_)
 
     x_ticks = np.linspace(0.0, fppi_max, 11)
     y_ticks = np.linspace(0.0, 1.0, 11)
@@ -389,14 +416,19 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
     plt.ylabel('Sensitivity')
 
     if legend != None:
-        plt.legend(legend, loc=4, prop={'size':6}, numpoints=1)
+        plt.legend(legend, loc=4, prop={'size':legend_size}, numpoints=1)
 
     if not unique:
         name='{}-{}'.format(name, time.clock())
 
-    plt.savefig('{}.pdf'.format(name))
-    plt.clf()
     np.save(name + '.npy', ops)
+    print 'save fig'
+    try: 
+        plt.savefig('{}.pdf'.format(name))
+    except :
+        print "Error saving froc image."
+
+    plt.clf()
 
 def auc(ops, range):
     ops = ops.T
@@ -635,18 +667,18 @@ def join_frocs(listname, bpiname, outname, max_fppi):
     names = []
 
     for i in range(len(froc_lines)):
-        toks = froc_lines[i].strip().split(',')
+        toks = froc_lines[i].strip().split(';')
         frocs.append(np.load(toks[0]).T)
         names.append(toks[1])
         if bpiname != None:
-            toks = bpi_lines[i].strip().split(',')
+            toks = bpi_lines[i].strip().split(';')
             names[-1] += ', ABPI={:.2f}'.format(float(np.loadtxt(toks[0])))
         
     util.save_froc(np.array(frocs), outname, names, fppi_max=max_fppi)
 
 def single_froc(modelname, legendname, max_fppi):
-    print '->>>>>>>>>>>>>>>>> data/' + modelname + '-sbf-aam-val-froc.npy'
-    valname = 'data/' + modelname + '-sbf-aam-val-froc'
+    print '->>>>>>>>>>>>>>>>> data/' + modelname + '-sbf-0.7-aam-val-froc.npy'
+    valname = 'data/' + modelname + '-sbf-0.7-aam-val-froc'
     froc = np.load(valname + '.npy').T
     util.save_froc(np.array([froc]), valname, np.array([legendname]), fppi_max=max_fppi)
 

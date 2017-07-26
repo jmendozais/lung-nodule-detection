@@ -526,6 +526,7 @@ if __name__ == '__main__':
     parser.add_argument('--segment', action='store_true')
     parser.add_argument('--method', default='aam')
     parser.add_argument('--eval', action='store_true')
+
     args = parser.parse_args()
     
     if args.train:

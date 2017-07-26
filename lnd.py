@@ -158,10 +158,20 @@ def save_rois(args):
         util.imwrite('data/jsrt140/roi{}n.jpg'.format(i), X_neg[i][0])
         np.save('data/jsrt140/roi{}n.npy'.format(i), X_neg[i])
 
-def evaluate_model(model, real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, pred_blobs_te, rois_te):
-    X_tr, Y_tr, X_te, Y_te= neural.create_train_test_sets(real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, pred_blobs_te, rois_te)
-    history = model.fit(X_tr, Y_tr, X_te, Y_te)
+def evaluate_model(model, real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, pred_blobs_te, rois_te, load_model=True):
+    X_tr, Y_tr, X_te, Y_te = neural.create_train_test_sets(real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, pred_blobs_te, rois_te)
+
+    if load_model == True:
+        print 'load weights {}'.format(model.name)
+        model.network.load_weights('data/{}_weights.h5'.format(model.name))
+        # FIX: remove and add zmuv mean and zmuv std no Preprocessor augment.py
+        if not hasattr(model.preprocessor, 'zmuv_mean'):
+            model.preprocessor.fit(X_tr, Y_tr)
+    else:
+        _ = model.fit(X_tr, Y_tr, X_te, Y_te)
+
     model.save('data/' + model.name)
+
     pred_blobs_te, probs_te = neural.predict_proba(model, pred_blobs_te, rois_te)
     return eval.froc(real_blobs_te, pred_blobs_te, probs_te)
 
@@ -185,7 +195,10 @@ def model_selection(model_name, args):
     for tr, te in folds:
         model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
         model.name = model.name + '.fold-{}'.format(fold_idx + 1)
-        froc = evaluate_model(model, blobs[tr], pred_blobs[tr], rois[tr], blobs_val[te], pred_blobs[te], rois_val[te])
+        if args.load_model:
+            model.load('data/' + model.name)
+
+        froc = evaluate_model(model, blobs[tr], pred_blobs[tr], rois[tr], blobs_val[te], pred_blobs[te], rois_val[te], args.load_model)
         frocs.append(froc)
 
         current_frocs = [eval.average_froc([froc_i]) for froc_i in frocs]
@@ -345,12 +358,13 @@ if __name__ == '__main__':
     parser.add_argument('file', nargs='?', default=None, type=str)
     parser.add_argument('--save-blobs', help='Use the detector and segmentator to generate blobs', action='store_true')
     parser.add_argument('--model', help='Evaluate convnet.', default='none')
+    parser.add_argument('--load-model', action='store_true')
 
     # Protocols
     parser.add_argument('--model-selection', help='Perform model selection protocol', action='store_true') 
     parser.add_argument('--model-selection-detailed', help='Perform model selection protocol', action='store_true') 
     parser.add_argument('--model-evaluation', help='Perform model evaluation protocol', action='store_true') 
-    parser.add_argument('--model-evaluation2', help='Perform model evaluation protocol', action='store_true') 
+    parser.add_argument('--model-eval-jsrt', help='Perform model evaluation protocol', action='store_true') 
 
     # Model params
     parser.add_argument('--roi-size', help='Size of ROIs after scaling', default=32, type=int)
@@ -370,7 +384,12 @@ if __name__ == '__main__':
     parser.add_argument('--da-zoom', help='Zoom upper bound data augmentation', default=1.2, type=float)
     parser.add_argument('--da-is', help='Intesity shift data augmentation', default=0.5, type=float)
     parser.add_argument('--da-flip', help='Intesity shift data augmentation', default=1, type=int)
-    parser.add_argument('--dp', help='fixed dp for conv layers, slope on variable dp', default=0.5, type=float)
+
+    parser.add_argument('--dropout', help='fixed dp for conv layers, slope on variable dp', default=0.5, type=float)
+    parser.add_argument('--lidp', help='Linear increasing dropout', action='store_true')
+
+    parser.add_argument('--fc', help='Number of fully connected layers', default=1, type=int)
+    parser.add_argument('--conv', help='Number of convolutional layers', default=1, type=int)
 
     args = parser.parse_args() 
     print args

@@ -265,6 +265,7 @@ class NetModel:
         # Preprocessor
         if path.isfile('{}_pre.pkl'.format(name)):
             self.preprocessor = joblib.load('{}_pre.pkl'.format(name))
+            print self.preprocessor
         else:
             self.preprocessor = Preprocessor()
 
@@ -1623,30 +1624,25 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
         augment_params['flip'] = False
         net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
 
-    elif model == '5P-mid-da':
-        model += '-is{}-zm{}-tr{}-rr{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot)
-        network = convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1)
-        schedule=[args.epochs]
-        train_params = {'schedule':schedule, 'nb_epoch':70, 'batch_size':32, 
-                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
-        augment_params = default_augment_params
-        augment_params['intensity_shift_std'] = args.da_is
-        augment_params['zoom_range'] = (1.0, args.da_zoom)
-        augment_params['translation_range'] = (args.da_tr, args.da_tr)
-        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
-        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
+    elif model == '5P-dp':
+        model += '-is{}-zm{}-tr{}-rr{}-fl{}-lr{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot, args.da_flip, args.lr)
 
-    elif model == '5P-full-da':
-        model += '-is{}-zm{}-tr{}-rr{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot)
-        network = convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1)
+        if args.lidp:
+            model += 'lidp-{}'.format(args.dropout)
+            args.dropout = (0, arg.dropout)
+        else:
+            model += 'dp-{}'.format(args.dropout)
+
+        network = convnet(input_shape, conv_layers=5, filters=64, dropout=args.dropout, fc_layers=1)
         schedule=[args.epochs]
-        train_params = {'schedule':schedule, 'nb_epoch':70, 'batch_size':32, 
+        train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
                         'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
         augment_params = default_augment_params
         augment_params['intensity_shift_std'] = args.da_is
         augment_params['zoom_range'] = (1.0, args.da_zoom)
         augment_params['translation_range'] = (args.da_tr, args.da_tr)
         augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        augment_params['flip'] = bool(args.da_flip)
         net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
     else:
         raise Exception("Model config not found.")

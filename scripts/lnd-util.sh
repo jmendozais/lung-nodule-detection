@@ -1,4 +1,7 @@
 . task-util.sh
+# No broke string with spaces in bash arrays
+IFS=$'\n' 
+
 # Variables
 update_salle="source ~/juliomb/.bashrc; cd ~/juliomb/lung-nodule-detection; git pull --rebase origin master"
 salle1="THEANO_FLAGS=mode=FAST_RUN,device=gpu0,floatX=float32,optimizer_including=cudnn"
@@ -36,7 +39,7 @@ labels=$3
 tmp1=/tmp/${RANDOM}.txt
 touch ${tmp1}
 for ((i=0; i <${#methods[@]}; ++i)); do
-    echo "data/${methods[i]}-froc.npy,${labels[i]}" >> ${tmp1}
+    echo "data/${methods[i]}-froc.npy;${labels[i]}" >> ${tmp1}
 done
 python util.py --froc --list ${tmp1} --out data/${out} --max 10
 }

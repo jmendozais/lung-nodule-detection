@@ -17,6 +17,7 @@ import cv2
 import h5py
 import util
 import time
+import math
 
 import matplotlib.pyplot as plt
 
@@ -382,11 +383,13 @@ class ImageDataGenerator:
         return img
 
     def perturb(self, x):
-        shape = x[0].shape
+        assert self.translation_range[1] >= 0
 
-        if abs(self.translation_range[0]) < 1.:
+        shape = x[0].shape
+        if self.translation_range[1]< 1.:
             side = max(shape)
             self.translation_range = (self.translation_range[0] * side, self.translation_range[1] * side)
+            self.translation_range = (math.ceil(self.translation_range[0]), math.ceil(self.translation_range[1]))
 
         tform_centering = self.build_centering_transform(shape, self.output_shape)
         tform_center, tform_ucenter = self.build_center_uncenter_transforms(shape)
@@ -569,6 +572,8 @@ class ImageDataGenerator:
 
     def fit(self, X):
         assert isinstance(X, np.ndarray), "Perturbation object fit function only supports numpy arrays"
+        # TODO: std should be only on the crop area (tr prove to be perjudicial)
+
         std = np.std(X)
         self.intensity_shift_range = (-self.intensity_shift_std*std, self.intensity_shift_std*std)
 
@@ -706,14 +711,14 @@ if __name__ == '__main__':
 
     import cv2
     img = cv2.imread(fname)
-    #print img.shape
+    print img.shape
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = np.array([img])
     factor = 1.4
     util.imwrite('or_{}'.format(fname), img[0])
 
     #augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-15, 15), 'translation_range':(-0.1, 0.1), 'flip':True, 'intensity_shift_std':0.5, 'mode':'balance_batch', 'zoom_range':(1.0, 1.2)}
-    augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-0, 0), 'translation_range':(-0.1, 0.1), 'flip':True, 'intensity_shift_std':0.0, 'mode':'balance_batch', 'zoom_range':(1.0, 1.0)}
+    augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-0, 0), 'translation_range':(-0.001, 0.001), 'flip':True, 'intensity_shift_std':0.0, 'mode':'balance_batch', 'zoom_range':(1.0, 1.0)}
     gen = ImageDataGenerator(**augment_params)
     gen.intensity_shift_range = (-0.1, 0.1)
 
