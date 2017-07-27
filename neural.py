@@ -1626,14 +1626,14 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
 
     elif model == '5P-dp':
         model += '-is{}-zm{}-tr{}-rr{}-fl{}-lr{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot, args.da_flip, args.lr)
-
+        dropout = args.dropout
         if args.lidp:
             model += 'lidp-{}'.format(args.dropout)
-            args.dropout = (0, args.dropout)
+            dropout = (0, args.dropout)
         else:
             model += 'dp-{}'.format(args.dropout)
 
-        network = convnet(input_shape, conv_layers=5, filters=64, dropout=args.dropout, fc_layers=1)
+        network = convnet(input_shape, conv_layers=5, filters=64, dropout=dropout, fc_layers=1)
         schedule=[args.epochs]
         train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
                         'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
