@@ -717,7 +717,6 @@ if __name__ == '__main__':
     factor = 1.4
     util.imwrite('or_{}'.format(fname), img[0])
 
-    #augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-15, 15), 'translation_range':(-0.1, 0.1), 'flip':True, 'intensity_shift_std':0.5, 'mode':'balance_batch', 'zoom_range':(1.0, 1.2)}
     augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-0, 0), 'translation_range':(-0.001, 0.001), 'flip':True, 'intensity_shift_std':0.0, 'mode':'balance_batch', 'zoom_range':(1.0, 1.0)}
     gen = ImageDataGenerator(**augment_params)
     gen.intensity_shift_range = (-0.1, 0.1)

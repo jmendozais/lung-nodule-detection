@@ -1629,7 +1629,7 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
 
         if args.lidp:
             model += 'lidp-{}'.format(args.dropout)
-            args.dropout = (0, arg.dropout)
+            args.dropout = (0, args.dropout)
         else:
             model += 'dp-{}'.format(args.dropout)
 

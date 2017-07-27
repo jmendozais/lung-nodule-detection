@@ -194,6 +194,7 @@ def model_selection(model_name, args):
     fold_idx = 0
     for tr, te in folds:
         model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
+        model.network.summary()
         model.name = model.name + '.fold-{}'.format(fold_idx + 1)
         if args.load_model:
             model.load('data/' + model.name)
