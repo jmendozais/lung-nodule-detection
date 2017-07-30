@@ -422,8 +422,9 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
         name='{}-{}'.format(name, time.clock())
 
     np.save(name + '.npy', ops)
-    print 'save fig'
+    print 'Saving to {}.pdf'.format(name)
     try: 
+        print 
         plt.savefig('{}.pdf'.format(name))
     except :
         print "Error saving froc image."
@@ -668,8 +669,11 @@ def join_frocs(listname, bpiname, outname, max_fppi):
 
     for i in range(len(froc_lines)):
         toks = froc_lines[i].strip().split(';')
+        print "loading {}".format(toks)
         frocs.append(np.load(toks[0]).T)
         names.append(toks[1])
+        print frocs[-1][:10]
+        print names[-1]
         if bpiname != None:
             toks = bpi_lines[i].strip().split(';')
             names[-1] += ', ABPI={:.2f}'.format(float(np.loadtxt(toks[0])))
@@ -677,7 +681,6 @@ def join_frocs(listname, bpiname, outname, max_fppi):
     util.save_froc(np.array(frocs), outname, names, fppi_max=max_fppi)
 
 def single_froc(modelname, legendname, max_fppi):
-    print '->>>>>>>>>>>>>>>>> data/' + modelname + '-sbf-0.7-aam-val-froc.npy'
     valname = 'data/' + modelname + '-sbf-0.7-aam-val-froc'
     froc = np.load(valname + '.npy').T
     util.save_froc(np.array([froc]), valname, np.array([legendname]), fppi_max=max_fppi)
