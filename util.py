@@ -727,7 +727,6 @@ if __name__ == '__main__':
     if args.froc == True:
         join_frocs(args.list, args.bpif, args.out, args.max)
     elif args.single_froc == True:
-        print '>>>>>>>>>>>>>>: ', args.model
         single_froc(args.model, args.model, args.max)
     elif args.abpi == True:
         plot_abpi(args.list, args.out, args.max)

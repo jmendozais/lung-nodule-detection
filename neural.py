@@ -436,7 +436,7 @@ default_augment_params = {'output_shape':(64, 64), 'ratio':1, 'batch_size':32, '
 default_preproc_params = {'zmuv':True}
 
 
-def convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1):
+def convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1, conv_layers=5):
     nb_filters = []
     for i in range(conv_layers):
         nb_filters.append((i+1) * filters)
@@ -1656,6 +1656,28 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
             model += '-dp-{}'.format(args.dropout)
 
         network = convnet(input_shape, conv_layers=5, filters=64, dropout=dropout, fc_layers=args.fc)
+        schedule=[args.epochs]
+        train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
+                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
+        augment_params = default_augment_params
+        augment_params['intensity_shift_std'] = args.da_is
+        augment_params['zoom_range'] = (1.0, args.da_zoom)
+        augment_params['translation_range'] = (args.da_tr, args.da_tr)
+        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        augment_params['flip'] = bool(args.da_flip)
+        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
+
+    elif model == '5P-conv':
+        model += '-is{}-zm{}-tr{}-rr{}-fl{}-lr{}-fc-{}-co-{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot, args.da_flip, args.lr, args.fc, args.conv)
+
+        dropout = args.dropout
+        if args.lidp:
+            model += '-lidp-{}'.format(args.dropout)
+            dropout = (0, args.dropout)
+        else:
+            model += '-dp-{}'.format(args.dropout)
+
+        network = convnet(input_shape, conv_layers=5, filters=64, dropout=dropout, fc_layers=args.fc, conv_layers=args.conv)
         schedule=[args.epochs]
         train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
                         'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}

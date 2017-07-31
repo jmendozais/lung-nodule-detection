@@ -476,10 +476,10 @@ methods=(
 )
 labels=(
 "No dropout"
-"Linear Inc. DP 0.025"
-"Linear Inc. DP 0.05"
-"Linear Inc. DP 0.075"
-"Linear Inc. DP 0.1"
+"Linear Inc. XP 0.025"
+"Linear Inc. XP 0.05"
+"Linear Inc. XP 0.075"
+"Linear Inc. XP 0.1"
 )
 froc '3-ldp-cmp' ${methods} ${labels} 
 }
@@ -491,6 +491,39 @@ start-liv minsky exp5fc "${THEANO_OPTS},device=cuda0 python lnd.py --model 5P-fc
 start-aqp salle exp5fc1 "${THEANO_OPTS},device=gpu0 python lnd.py --model 5P-fc --model-selection ${fixed_params} --fc 0"
 start-aqp salle exp5fc2 "${THEANO_OPTS},device=gpu1 python lnd.py --model 5P-fc --model-selection ${fixed_params} --fc 2"
 start-aqp salle exp5fc3 "${THEANO_OPTS},device=gpu2 python lnd.py --model 5P-fc --model-selection ${fixed_params} --fc 3"
+}
+
+function exp5fcdet {
+fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --roi-size 64 --lr 0.001 --epochs 100 --dropout 0.05 --lidp'
+start-liv minsky exp5fcdet "${THEANO_OPTS},device=cuda0 python lnd.py --model 5P-fc  --model-selection-detailed ${fixed_params} --fc 1"
+start-aqp salle exp5fc1det "${THEANO_OPTS},device=gpu0 python lnd.py --model 5P-fc --model-selection-detailed ${fixed_params} --fc 0"
+start-aqp salle exp5fc2det "${THEANO_OPTS},device=gpu1 python lnd.py --model 5P-fc --model-selection-detailed ${fixed_params} --fc 2"
+start-aqp salle exp5fc3det "${THEANO_OPTS},device=gpu2 python lnd.py --model 5P-fc --model-selection-detailed ${fixed_params} --fc 3"
+}
+
+function exp5fccmp {
+methods=(
+"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-0-lidp-0.05-sbf-0.7-aam-val"
+"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-1-lidp-0.05-sbf-0.7-aam-val"
+"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-2-lidp-0.05-sbf-0.7-aam-val"
+"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-3-lidp-0.05-sbf-0.7-aam-val"
+)
+
+labels=(
+"No FC layers"
+"1 FC layer"
+"2 FC layer"
+"3 FC layer"
+)
+froc '5-fc-cmp' ${methods} ${labels} 
+}
+
+function exp5conv {
+fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 1'
+start-liv minsky exp5conv "${THEANO_OPTS},device=cuda0 python lnd.py --model XP-conv  --model-selection ${fixed_params} --conv 4 --roi-size 32"
+start-aqp salle exp5conv1 "${THEANO_OPTS},device=gpu0 python lnd.py --model XP-conv --model-selection ${fixed_params} --conv 5 --roi-size 64"
+start-aqp salle exp5conv2 "${THEANO_OPTS},device=gpu1 python lnd.py --model XP-conv --model-selection ${fixed_params} --conv 6 --roi-size 128"
+start-aqp salle exp5conv3 "${THEANO_OPTS},device=gpu2 python lnd.py --model XP-conv --model-selection ${fixed_params} --conv 7 --roi-size 256"
 }
 
 if [ "$1" = "msel" ]; then
