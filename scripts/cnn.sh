@@ -520,10 +520,10 @@ froc '5-fc-cmp' ${methods} ${labels}
 
 function exp5conv {
 fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 1'
-start-liv minsky exp5conv "${THEANO_OPTS},device=cuda0 python lnd.py --model XP-conv  --model-selection ${fixed_params} --conv 4 --roi-size 32"
-start-aqp salle exp5conv1 "${THEANO_OPTS},device=gpu0 python lnd.py --model XP-conv --model-selection ${fixed_params} --conv 5 --roi-size 64"
-start-aqp salle exp5conv2 "${THEANO_OPTS},device=gpu1 python lnd.py --model XP-conv --model-selection ${fixed_params} --conv 6 --roi-size 128"
-start-aqp salle exp5conv3 "${THEANO_OPTS},device=gpu2 python lnd.py --model XP-conv --model-selection ${fixed_params} --conv 7 --roi-size 256"
+#start-liv minsky exp5conv "${THEANO_OPTS},device=cuda0 python lnd.py --model XP --model-selection ${fixed_params} --conv 4 --roi-size 32"
+start-aqp salle exp5conv1 "${THEANO_OPTS},device=gpu0 python lnd.py --model XP --model-selection ${fixed_params} --conv 5 --roi-size 64"
+start-aqp salle exp5conv2 "${THEANO_OPTS},device=gpu1 python lnd.py --model XP --model-selection ${fixed_params} --conv 6 --roi-size 128"
+start-aqp salle exp5conv3 "${THEANO_OPTS},device=gpu2 python lnd.py --model XP --model-selection ${fixed_params} --conv 7 --roi-size 256"
 }
 
 if [ "$1" = "msel" ]; then
