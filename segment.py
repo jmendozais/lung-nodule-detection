@@ -449,6 +449,8 @@ def segment_func(image, model_name, display=True):
         image[b1] = max_value
 
         util.imwrite_as_pdf('data/segmented', image)
+        print 'mask shape', mask.shape, mask.dtype
+        util.imwrite_as_pdf('data/mask', mask[0])
         util.imshow('Segment with model {}'.format(model_name), image)
     return mask
 

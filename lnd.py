@@ -176,35 +176,43 @@ def evaluate_model(model, real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, 
     return eval.froc(real_blobs_te, pred_blobs_te, probs_te)
 
 def model_selection(model_name, args):
+    # Load img, blobs and masks
     imgs, blobs, paths = lidc.load(pts=True, set_name=args.ds_tr)
     _, blobs_val,_  = lidc.load(pts=True, set_name=args.ds_val)
-
     pred_blobs = detect.read_blobs('data/{}-lidc-pred-blobs.pkl'.format(args.detector))
     masks = np.load('data/aam-lidc-pred-masks.npy')
-
     assert len(imgs) == len(masks) and len(pred_blobs) == len(masks)
     
+    # Load folds
     folds = util.model_selection_folds(imgs)
+
+    # Create rois
     rois = create_rois(imgs, masks, pred_blobs, args, real_blobs=blobs)
     rois_val = create_rois(imgs, masks, pred_blobs, args, real_blobs=blobs_val)
 
+    #  Set up CV
     frocs = []
     legends = ['Fold {}'.format(i + 1) for i in range(util.NUM_VAL_FOLDS)] 
-
     fold_idx = 0
+
     for tr, te in folds:
+        # Load and setup model
         model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
         model.network.summary()
         model.name = model.name + '.fold-{}'.format(fold_idx + 1)
         if args.load_model:
             model.load('data/' + model.name)
 
+        # Train/test model
         froc = evaluate_model(model, blobs[tr], pred_blobs[tr], rois[tr], blobs_val[te], pred_blobs[te], rois_val[te], args.load_model)
         frocs.append(froc)
 
+        # Record model results
         current_frocs = [eval.average_froc([froc_i]) for froc_i in frocs]
         util.save_froc(current_frocs, 'data/{}-{}-folds-froc'.format(model.name[:-7], args.detector), legends[:len(frocs)], with_std=False)
+
         model.save('data/' + model.name)
+
         fold_idx += 1
 
     legends = ['Val FROC (LIDC-IDRI)']
@@ -354,8 +362,7 @@ def classify(image, args):
     util.imwrite_with_blobs('data/classified', image[0], top_blobs)
     return blobs, probs, mask
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(prog='lnd.py')
+def add_feed_forward_convnet_args(parser):
     parser.add_argument('file', nargs='?', default=None, type=str)
     parser.add_argument('--save-blobs', help='Use the detector and segmentator to generate blobs', action='store_true')
     parser.add_argument('--model', help='Evaluate convnet.', default='none')
@@ -391,7 +398,11 @@ if __name__ == '__main__':
 
     parser.add_argument('--fc', help='Number of fully connected layers', default=1, type=int)
     parser.add_argument('--conv', help='Number of convolutional layers', default=1, type=int)
+    parser.add_argument('--filters', help='Number of convolutional layers', default=1, type=int)
 
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(prog='lnd.py')
+    add_feed_forward_convnet_args(parser)
     args = parser.parse_args() 
     print args
 
