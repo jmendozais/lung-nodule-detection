@@ -158,7 +158,7 @@ def save_rois(args):
         util.imwrite('data/jsrt140/roi{}n.jpg'.format(i), X_neg[i][0])
         np.save('data/jsrt140/roi{}n.npy'.format(i), X_neg[i])
 
-def evaluate_model(model, real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, pred_blobs_te, rois_te, load_model=True):
+def evaluate_model(model, real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, pred_blobs_te, rois_te, load_model=False):
     X_tr, Y_tr, X_te, Y_te = neural.create_train_test_sets(real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, pred_blobs_te, rois_te)
 
     if load_model == True:
@@ -265,9 +265,10 @@ def model_evaluation(model_name, args):
     froc = eval.average_froc([froc])
 
     legends = ['Test FROC (JSRT positives)']
-    util.save_froc([froc], 'data/{}-jsrt140p-froc'.format(model_name), legends, with_std=False)
+    util.save_froc([froc], 'data/{}-jsrt140p-froc'.format(model.name), legends, with_std=False)
 
 def model_evaluation2(model_name, args):
+    print "Model Evaluation Protocol 2"
     imgs, blobs= jsrt.load(set_name='jsrt140p')
     pred_blobs = detect.read_blobs('data/{}-jsrt140p-pred-blobs.pkl'.format(args.detector))
     masks = np.load('data/aam-jsrt140p-pred-masks.npy')
@@ -284,13 +285,13 @@ def model_evaluation2(model_name, args):
         frocs.append(froc)
 
         current_frocs = [eval.average_froc([froc_i]) for froc_i in frocs]
-        util.save_froc(current_frocs, 'data/{}-{}-pr2-folds'.format(model_name, args.detector), legends[:len(frocs)], with_std=False)
+        util.save_froc(current_frocs, 'data/{}-{}-pr2-folds'.format(model.name[:-7], args.detector), legends[:len(frocs)], with_std=False)
         model.save('data/' + model.name)
         fold_idx += 1
 
     froc = eval.average_froc(frocs)
     legends = ['Test FROC (JSRT positives)']
-    util.save_froc([froc], 'data/{}-{}-pr2'.format(model_name, args.detector), legends, with_std=True)
+    util.save_froc([froc], 'data/{}-{}-pr2'.format(model_name[:-7], args.detector), legends, with_std=True)
 
 def eval_trained_model(model_name, args):
     imgs, blobs = lidc.load()
@@ -372,6 +373,7 @@ def add_feed_forward_convnet_args(parser):
     parser.add_argument('--model-selection', help='Perform model selection protocol', action='store_true') 
     parser.add_argument('--model-selection-detailed', help='Perform model selection protocol', action='store_true') 
     parser.add_argument('--model-evaluation', help='Perform model evaluation protocol', action='store_true') 
+    parser.add_argument('--model-evaluation2', help='Perform model evaluation protocol', action='store_true') 
     parser.add_argument('--model-eval-jsrt', help='Perform model evaluation protocol', action='store_true') 
 
     # Model params

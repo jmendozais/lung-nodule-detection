@@ -543,22 +543,25 @@ froc '5-conv-cmp' ${methods} ${labels}
 
 function exp5fi {
 fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64'
-start-liv minsky exp5fi "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-selection ${fixed_params} --filters 80"
-start-aqp salle exp5fi1 "${THEANO_OPTS},device=gpu2 python lnd.py --model cnn --model-selection ${fixed_params} --filters 64"
-start-aqp salle exp5fi2 "sleep 7000; ${THEANO_OPTS},device=gpu1 python lnd.py --model cnn --model-selection ${fixed_params} --filters 48"
-start-liv prim exp5fi "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-selection ${fixed_params} --filters 32"
+#start-liv minsky exp5fi "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-selection ${fixed_params} --filters 80"
+#start-aqp salle exp5fi1 "${THEANO_OPTS},device=gpu2 python lnd.py --model cnn --model-selection ${fixed_params} --filters 64"
+#start-aqp salle exp5fi2 "sleep 7000; ${THEANO_OPTS},device=gpu1 python lnd.py --model cnn --model-selection ${fixed_params} --filters 48"
+#start-liv prim exp5fi "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-selection ${fixed_params} --filters 32"
+start-aqp salle exp5fi3 "${THEANO_OPTS},device=gpu1 python lnd.py --model cnn --model-selection ${fixed_params} --filters 96"
+start-aqp salle exp5fi4 "${THEANO_OPTS},device=gpu2 python lnd.py --model cnn --model-selection ${fixed_params} --filters 128"
+
 #fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 1'
 #start-aqp salle exp5conv3 "${THEANO_OPTS},device=gpu2 python lnd.py --model XP --model-selection ${fixed_params} --conv 7 --roi-size 256"
 }
 
-function sup {
+function sleval {
 #fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 1'
 fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64 --filter 64'
-#start-liv minsky exp5fi "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-evaluation ${fixed_params}"
-start-aqp salle exp5fi1 "${THEANO_OPTS},device=gpu0 python lnd.py --model cnn --model-evaluation2 ${fixed_params}"
-start-aqp salle exp5fi2 "${THEANO_OPTS},device=gpu1 python lnd.py --model cnn --model-evaluation ${fixed_params}"
-#start-liv prim exp5fi "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-selection ${fixed_params}"
-#start-aqp salle exp5conv3 "${THEANO_OPTS},device=gpu2 python lnd.py --model XP --model-selection ${fixed_params} --conv 7 --roi-size 256"
+start-liv minsky sleval "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-evaluation2 ${fixed_params}"
+start-liv prim sleval "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-evaluation ${fixed_params}"
+fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64 --filter 32'
+start-liv babbage sleval "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-evaluation2 ${fixed_params}"
+start-liv phong sleval "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-evaluation ${fixed_params}"
 }
 
 if [ "$1" = "msel" ]; then
