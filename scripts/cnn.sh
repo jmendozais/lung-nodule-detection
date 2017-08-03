@@ -554,6 +554,22 @@ start-aqp salle exp5fi4 "${THEANO_OPTS},device=gpu2 python lnd.py --model cnn --
 #start-aqp salle exp5conv3 "${THEANO_OPTS},device=gpu2 python lnd.py --model XP --model-selection ${fixed_params} --conv 7 --roi-size 256"
 }
 
+function exp5filcmp {
+methods=(
+"cnn-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-2-co-5-fil-32-lidp-0.05-sbf-0.7-aam-val"
+"cnn-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-2-co-5-fil-64-lidp-0.05-sbf-0.7-aam-val"
+"cnn-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-2-co-5-fil-96-lidp-0.05-sbf-0.7-aam-val"
+"cnn-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-2-co-5-fil-128-lidp-0.05-sbf-0.7-aam-val"
+)
+labels=(
+"Convnet(5, 32)"
+"Convnet(5, 64)"
+"Convnet(5, 96)"
+"Convnet(5, 128)"
+)
+froc '5-fil-cmp' ${methods} ${labels} 
+}
+
 function sleval {
 #fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 1'
 fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64 --filter 64'
@@ -562,6 +578,22 @@ start-liv prim sleval "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --m
 fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64 --filter 32'
 start-liv babbage sleval "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-evaluation2 ${fixed_params}"
 start-liv phong sleval "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-evaluation ${fixed_params}"
+}
+
+function fix {
+old_da='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1'
+new_da='--da-tr 0.5 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1'
+fixed_params='--lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64 --filters 64'
+
+# Best model with sbf 0.5
+start-liv minsky fix "${THEANO_OPTS},device=cuda0 python lnd.py --model fix --model-evaluation2 ${fixed_params} ${new_da} --detector sbf-0.5-aam"
+
+# Best model with old data aug
+start-aqp salle fix1 "${THEANO_OPTS},device=gpu1 python lnd.py --model fix --model-evaluation2 ${fixed_params} ${old_da}"
+
+# Best model with sbf 0.5 + old data aug
+start-aqp salle fix2 "${THEANO_OPTS},device=gpu2 python lnd.py --model fix --model-evaluation2 ${fixed_params} ${new_da} --detector sbf-0.5-aam"
+
 }
 
 if [ "$1" = "msel" ]; then
