@@ -291,7 +291,7 @@ def model_evaluation2(model_name, args):
 
     froc = eval.average_froc(frocs)
     legends = ['Test FROC (JSRT positives)']
-    util.save_froc([froc], 'data/{}-{}-pr2'.format(model_name[:-7], args.detector), legends, with_std=True)
+    util.save_froc([froc], 'data/{}-{}-pr2'.format(model.name[:-7], args.detector), legends, with_std=True)
 
 def save_performance_history(model_name, args, rois, folds):
     model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
