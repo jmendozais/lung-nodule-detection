@@ -311,16 +311,15 @@ class ActiveAppearanceModel(SegmentationModel):
         for img in aam_images[:10]:
             fr = self.fitter.fit_from_shape(img, self.mean_shape, gt_shape=img.landmarks[None].lms) 
             fitting_results.append(fr)
+
     def transform_one_image(self, image):
         print 'init ...',
         mask = np.zeros(shape=image.shape)
         image = Image(self.normalize(image))
         fr = self.fitter.fit_from_shape(image, self.mean_shape) 
         pred_landmarks = fr.final_shape.points
-
         begin = 0
         masks = []
-
         for i in range(0, len(self.num_landmarks_by_shape)):
             masks.append(self.create_mask_from_landmarks(pred_landmarks[begin:begin + self.num_landmarks_by_shape[i]]))
             mask = np.logical_or(mask, masks[-1])
@@ -426,7 +425,7 @@ def segment_datasets(model_name):
 def segment_func(image, model_name, display=True):
     print("Loading model ...")
     model = pickle.load(open('data/{}-jsrt140n-model.pkl'.format(model_name), 'rb'))
-    model.join_masks=True
+    model.join_masks = True
 
     print("Segment input ...")
     image = cv2.resize(image, SEGMENTATION_IMAGE_SHAPE, interpolation=cv2.INTER_CUBIC)

@@ -109,6 +109,10 @@ labels=('DoG' 'LoG' 'DoH' 'WMCI' 'SBF')
 froc-detect ${methods} ${labels}
 }
 
+function test {
+python detect.py ../dbs/jsrt-npy/JPCLN001.npy
+}
+
 # Main
 function help() # Show a list of functions
 {

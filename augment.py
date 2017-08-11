@@ -705,6 +705,34 @@ class DataGeneratorOnMemory:
     def __next__(self, *args, **kwargs):
         return self.next(*args, **kwargs)
 
+# default augmentation
+
+factor = 1.4
+shape = (64, 64)
+default_augment_params = {'output_shape': shape, 'ratio':1, 'batch_size':32, 'rotation_range':(-2, 2), 'translation_range':(-0.0, 0.0), 'flip':True, 'intensity_shift_std':0.2, 'mode':'balance_batch', 'zoom_range':(1.0, 1.0)}
+
+def balance_and_perturb(X, Y):
+    default_augment_params['output_shape'] = X[0][0].shape
+    gen = ImageDataGenerator(**default_augment_params)
+    gen.fit(X)
+    (X_pos, X_neg), (Y_pos, Y_neg) = util.split_data_pos_neg(X, Y)
+    X_pos_aug, Y_pos_aug = [], []
+
+    idx = np.random.randint(0, len(X_pos), len(X_neg))
+
+    for i in range(len(idx)):
+        X_pos_aug.append(gen.perturb(X_pos[idx[i]]))
+        Y_pos_aug.append(Y_pos[idx[i]])
+    
+    X_pos_aug = np.array(X_pos_aug)
+    X_aug = np.concatenate((X_pos_aug, X_neg))
+    Y_aug = np.concatenate((Y_pos_aug, Y_neg))
+
+    idx = np.array(range(len(Y_aug)))
+    np.random.shuffle(idx)
+
+    return X_aug[idx], Y_aug[idx]
+
 # Test
 if __name__ == '__main__':
     fname = 'grid2.jpg'
@@ -714,7 +742,6 @@ if __name__ == '__main__':
     print img.shape
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = np.array([img])
-    factor = 1.4
     util.imwrite('or_{}'.format(fname), img[0])
 
     augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-0, 0), 'translation_range':(-0.001, 0.001), 'flip':True, 'intensity_shift_std':0.0, 'mode':'balance_batch', 'zoom_range':(1.0, 1.0)}

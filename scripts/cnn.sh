@@ -580,20 +580,18 @@ start-liv babbage sleval "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn 
 start-liv phong sleval "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-evaluation ${fixed_params}"
 }
 
-function fix {
+function fixsel {
 old_da='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1'
 new_da='--da-tr 0.5 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1'
 fixed_params='--lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64 --filters 64'
-
 # Best model with sbf 0.5
-start-liv minsky fix "${THEANO_OPTS},device=cuda0 python lnd.py --model fix --model-evaluation2 ${fixed_params} ${new_da} --detector sbf-0.5-aam"
+start-aqp salle fixsel0 "${THEANO_OPTS},device=gpu0 python lnd.py --model fix --model-selection ${fixed_params} ${new_da} --detector sbf-0.5-aam"
 
 # Best model with old data aug
-start-aqp salle fix1 "${THEANO_OPTS},device=gpu1 python lnd.py --model fix --model-evaluation2 ${fixed_params} ${old_da}"
+start-aqp salle fixsel1 "${THEANO_OPTS},device=gpu1 python lnd.py --model fix --model-selection ${fixed_params} ${old_da}"
 
 # Best model with sbf 0.5 + old data aug
-start-aqp salle fix2 "${THEANO_OPTS},device=gpu2 python lnd.py --model fix --model-evaluation2 ${fixed_params} ${new_da} --detector sbf-0.5-aam"
-
+start-aqp salle fixsel2 "${THEANO_OPTS},device=gpu2 python lnd.py --model fix --model-selection ${fixed_params} ${new_da} --detector sbf-0.5-aam"
 }
 
 if [ "$1" = "msel" ]; then

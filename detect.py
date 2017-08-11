@@ -201,6 +201,7 @@ def wmci_proba(img, mask, threshold=0.5):
 def sbf(img, mask, threshold=0.5):
     min_distance = 7
     SBF_RANGE = (0, 1200)
+
     ans, rads = preprocess.sliding_band_filter(img); 
     print 'sbf stats min {}, max {}, mean {}, std {}'.format(ans.min(), ans.max(), ans.mean(), ans.std())
     coords = peak_local_max(ans, min_distance)
@@ -213,13 +214,15 @@ def sbf(img, mask, threshold=0.5):
         if ans[coord[0], coord[1]] >= threshold:
             blobs.append((coord[0], coord[1], rads[coord[0], coord[1]]))
 
+    print 'blobs limits {} {}'.format(np.max(blobs), np.min(blobs))
+
     blobs = np.array(blobs)
     blobs = filter_by_margin(filter_by_size(filter_by_masks(blobs, mask)), mask)
     for blob in blobs:
         proba.append(ans[blob[0], blob[1]])
 
-    #util.show_blobs('sbf blobs', img, blobs)
-    #print 'num blobs {}'.format(len(blobs))
+    util.imwrite_with_blobs('det-nms', ans, blobs)
+
     return blobs, ans, np.array(proba)
 
 ''' 
@@ -252,7 +255,6 @@ def copy_weights(from_network, to_network):
 
 def detect_with_network(network, imgs, masks, threshold=0.5, fold=-1):
     #imgs = np.array([[imgs[0]]])
-
     length = len(imgs)
     outs = network.network.predict(imgs)
     print('Prob map output {}'.format(outs.shape))
@@ -479,8 +481,8 @@ Detect function for LIDC-JSRT !
 '''
 
 def detect_blobs_(image, mask, threshold, method):
-    lce = preprocess.lce(image)
-    blobs, ci, proba = generic_detect_blobs(lce, mask, threshold, method)
+    #lce = preprocess.lce(image)
+    blobs, ci, proba = generic_detect_blobs(image, mask, threshold, method)
     return blobs, proba
 
 def detect_blobs(images, masks, threshold=0.5, real_blobs=None, method='wmci'):
@@ -550,6 +552,8 @@ Generic blob detection function function
 '''
 
 def generic_detect_blobs(img, lung_mask, threshold=0.5, method='wmci'):
+    print img.shape
+    #util.imwrite_as_pdf('det-input2', image)
     sampled, lce, norm = preprocess.preprocess_hardie(img, lung_mask)
     blobs = None
     probs = np.array([])
@@ -558,8 +562,9 @@ def generic_detect_blobs(img, lung_mask, threshold=0.5, method='wmci'):
     if method == 'wmci':
         blobs, ci, probs = wmci_probs(lce, lung_mask, threshold)
     elif method == 'sbf':
-        print lce.min(), lce.max(), lce.mean(), lce.std()
+        util.imwrite_as_pdf('det-lce', lce)
         blobs, ci, probs = sbf(lce, lung_mask, threshold)
+        util.imwrite_as_pdf('det-sbf', ci) 
     elif method == 'log':
         blobs, probs = log_(lce, lung_mask, threshold)
     elif method == 'dog':
@@ -600,8 +605,9 @@ def save_blobs(method, args):
 def detect_func(image, detector, segmentator, threshold):
     mask = segment_func(image, segmentator, display=False)
     blobs, probs = detect_blobs_(image, mask[0], threshold, detector)
-    image = cv2.resize(image, (512, 512), interpolation=cv2.INTER_CUBIC)
-    imwrite_with_blobs('data/detected', image, blobs)
+    print blobs
+    img = cv2.resize(image, (512, 512), interpolation=cv2.INTER_CUBIC)
+    imwrite_with_blobs('data/detected', img, blobs)
     return blobs, probs, mask
 
 if __name__ == '__main__':

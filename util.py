@@ -157,17 +157,17 @@ def imwrite_as_pdf(name, _img):
 '''
 blob: tuple or list with (x, y, radius) values of the blob
 '''
-def label_blob(img, blob, border='square', proba=-1, color=(255, 0, 0), margin=0):
+def label_blob(img, blob, border='square', proba=-1, color=(255, 0, 0), margin=0, width=1):
     if len(img.shape) == 2:
         img = cv2.cvtColor(img.copy(), cv2.COLOR_GRAY2BGR)
     if border == 'circle':
         ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
         img[ex, ey] = color 
     elif border == 'square':
-        for i in range(3):
+        for i in range(width):
             coord_x = np.array([blob[0]-blob[2]-margin+i, blob[0]-blob[2]-margin+i, blob[0]+blob[2]+margin+i, blob[0]+blob[2]+margin+i])
             coord_y = np.array([blob[1]-blob[2]-margin+i, blob[1]+blob[2]+margin+i, blob[1]+blob[2]+margin+i, blob[1]-blob[2]-margin+i])
-            ex, ey = draw.polygon_perimeter(coord_x, coord_y)
+            ex, ey = draw.polygon_perimeter(coord_x, coord_y, img.shape)
             img[ex, ey] = color 
     if proba != -1:
         cv2.putText(image,str(proba), (blob[0] + blob[2], blob[1] - blob[2]), cv2.FONT_HERSHEY_SIMPLEX, 2, color)
@@ -191,10 +191,8 @@ def show_blobs_with_proba(windowName, img, blobs, probs):
 def imwrite_with_blobs(fname, img, blobs):
     labeled = np.array(img).astype(np.float32)
     maxima = np.max(labeled)
-    print len(blobs)
-    print len(blobs[0])
+    print 'imwrite input shape {}'.format(img.shape)
     for blob in blobs:
-        print blob
         labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=5)
     imwrite_as_pdf(fname, labeled)
 
