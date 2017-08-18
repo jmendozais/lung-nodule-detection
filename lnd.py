@@ -217,7 +217,7 @@ def model_selection(model_name, args):
     average_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
     util.save_froc([average_froc], 'data/{}-{}-val-froc'.format(model.name[:-7], args.detector), legends, with_std=True)
 
-    save_performance_history(model_name, args, rois, folds)
+    save_performance_history(model_name, args, rois, blobs, pred_blobs, folds)
 
 def model_selection_unsup(model_name, args):
     imgs, blobs, paths = lidc.load(pts=True)
@@ -293,10 +293,9 @@ def model_evaluation2(model_name, args):
     legends = ['Test FROC (JSRT positives)']
     util.save_froc([froc], 'data/{}-{}-pr2'.format(model.name[:-7], args.detector), legends, with_std=True)
 
-def save_performance_history(model_name, args, rois, folds):
+def save_performance_history(model_name, args, rois, blobs, pred_blobs, folds):
     model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
     model_name = model.name
-
     epochs = model.training_params['nb_epoch']
 
     frocs = []
@@ -306,7 +305,7 @@ def save_performance_history(model_name, args, rois, folds):
         model.load('data/' + model_name + '.fold-{}'.format(fold_idx + 1))
         frocs.append([])
         epochs_set = list(range(1, epochs + 1, 2))
-        epochs_set.append(epochs)
+        #epochs_set.append(epochs)
 
         for epoch in epochs_set:
             weights_file_name = 'data/{}.weights.{:02d}.hdf5'.format(model.name, epoch)
@@ -321,6 +320,7 @@ def save_performance_history(model_name, args, rois, folds):
     legends = []
 
     i = 0
+    print("frocs shape {}".format(frocs.shape))
     for epoch in range(1, epochs + 1, 2):
         frocs_by_epoch = frocs[:,i]
         froc_history.append(eval.average_froc(np.array(frocs_by_epoch), np.linspace(0.0, 10.0, 101)))
@@ -342,7 +342,7 @@ def eval_trained_model(model_name, args):
 
     folds = util.model_selection_folds(imgs)
     rois = create_rois(imgs, masks, pred_blobs, args)
-    save_performance_history(model_name, args, rois, folds)
+    save_performance_history(model_name, args, rois, blobs, pred_blobs, folds)
     
 # TODO: name of model to load
 def classify(image, args):

@@ -644,7 +644,7 @@ def stratified_kfold_holdout(stratified_labels, n_folds, shuffle=True, random_st
     return tr_val_folds, tr, te
 
 def model_selection_folds(data, n_folds=NUM_VAL_FOLDS):
-    return KFold(n_splits=n_folds, shuffle=True, random_state=FOLDS_SEED).split(data)
+    return list(KFold(n_splits=n_folds, shuffle=True, random_state=FOLDS_SEED).split(data))
 
 def froc_folds(real_blobs, blobs, probs, folds):
     frocs = []
