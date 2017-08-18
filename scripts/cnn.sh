@@ -103,13 +103,13 @@ froc 'receptive-field-cmp' ${methods} ${labels}
 
 # space [0.03, 0.05, 0.08, 0.1]
 function exp3tr {
-da_params='--da-tr 0.01 --da-rot 0 --da-zoom 1 --da-is 0 --da-flip 1'
-start-liv phong exp3tr "THEANO_FLAGS=mode=FAST_RUN,device=cuda1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-da_params='--da-tr 0.02 --da-rot 0 --da-zoom 1 --da-is 0 --da-flip 1'
-start-liv bezier exp3tr "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 da_params='--da-tr 0.03 --da-rot 0 --da-zoom 1 --da-is 0 --da-flip 1'
+start-liv phong exp3tr "THEANO_FLAGS=mode=FAST_RUN,device=cuda1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+da_params='--da-tr 0.06 --da-rot 0 --da-zoom 1 --da-is 0 --da-flip 1'
+start-liv bezier exp3tr "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+da_params='--da-tr 0.09 --da-rot 0 --da-zoom 1 --da-is 0 --da-flip 1'
 start-liv prim exp3tr "THEANO_FLAGS=mode=FAST_RUN,device=cuda1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-da_params='--da-tr 0.04 --da-rot 0 --da-zoom 1 --da-is 0 --da-flip 1'
+da_params='--da-tr 0.12 --da-rot 0 --da-zoom 1 --da-is 0 --da-flip 1'
 start-liv babbage exp3tr "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 
 #da_params='--da-tr 0.01 --da-rot 0 --da-zoom 1 --da-is 0 --da-flip 1'
@@ -151,18 +151,19 @@ start-liv babbage exp3trdet "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=floa
 
 # space [3, 6, 9, 12, 15]
 function exp3rot {
-da_params='--da-tr 0 --da-rot 1 --da-zoom 1 --da-is 0 --da-flip 1'
-start-liv minsky exp3rot1 "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+#da_params='--da-tr 0 --da-rot 1 --da-zoom 1 --da-is 0 --da-flip 1'
+#start-liv minsky exp3rot1 "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 
-#da_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0 --da-flip 1'
-#start-aqp salle exp3rot1 "THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-#da_params='--da-tr 0 --da-rot 4 --da-zoom 1 --da-is 0 --da-flip 1'
-#start-aqp salle exp3rot2 "THEANO_FLAGS=mode=FAST_RUN,device=gpu3,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+da_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0 --da-flip 1'
+start-aqp salle exp3rot1 "THEANO_FLAGS=mode=FAST_RUN,device=gpu1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+da_params='--da-tr 0 --da-rot 4 --da-zoom 1 --da-is 0 --da-flip 1'
+start-aqp salle exp3rot2 "THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 #da_params='--da-tr 0 --da-rot 6 --da-zoom 1 --da-is 0 --da-flip 1'
-#start-aqp salle exp3rot3 "sleep 14000; THEANO_FLAGS=mode=FAST_RUN,device=gpu1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-#da_params='--da-tr 0 --da-rot 8 --da-zoom 1 --da-is 0 --da-flip 1'
+#start-aqp salle exp3rot3 "sTHEANO_FLAGS=mode=FAST_RUN,device=gpu3,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+
+da_params='--da-tr 0 --da-rot 8 --da-zoom 1 --da-is 0 --da-flip 1'
 #start-aqp salle exp3rot4 "sleep 14000; THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-#da_params='--da-tr 0 --da-rot 10 --da-zoom 1 --da-is 0 --da-flip 1'
+da_params='--da-tr 0 --da-rot 10 --da-zoom 1 --da-is 0 --da-flip 1'
 #start-aqp salle exp3rot5 "THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 }
 
@@ -588,10 +589,10 @@ fixed_params='--lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --ro
 start-aqp salle fixsel0 "${THEANO_OPTS},device=gpu0 python lnd.py --model fix --model-selection ${fixed_params} ${new_da} --detector sbf-0.5-aam"
 
 # Best model with old data aug
-start-aqp salle fixsel1 "${THEANO_OPTS},device=gpu1 python lnd.py --model fix --model-selection ${fixed_params} ${old_da}"
+#start-aqp salle fixsel1 "${THEANO_OPTS},device=gpu1 python lnd.py --model fix --model-selection ${fixed_params} ${old_da}"
 
 # Best model with sbf 0.5 + old data aug
-start-aqp salle fixsel2 "${THEANO_OPTS},device=gpu2 python lnd.py --model fix --model-selection ${fixed_params} ${new_da} --detector sbf-0.5-aam"
+#start-aqp salle fixsel2 "${THEANO_OPTS},device=gpu2 python lnd.py --model fix --model-selection ${fixed_params} ${new_da} --detector sbf-0.5-aam"
 }
 
 if [ "$1" = "msel" ]; then

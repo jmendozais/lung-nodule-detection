@@ -350,7 +350,7 @@ class ImageDataGenerator:
     def random_perturbation_transform(self, zoom_range, rotation_range, shear_range, translation_range, do_flip=True, allow_stretch=False):
         shift_x = self.rng.uniform(*translation_range)
         shift_y = self.rng.uniform(*translation_range)
-        translation = (shift_x, shift_y)
+        translation = (round(shift_x), round(shift_y))
 
         rotation = self.rng.uniform(*rotation_range)
         shear = self.rng.uniform(*shear_range)
@@ -375,6 +375,15 @@ class ImageDataGenerator:
             zoom_x = zoom_y = np.exp(self.rng.uniform(*log_zoom_range))
 
         # the range should be multiplicatively symmetric, so [1/1.1, 1.1] instead of [0.9, 1.1] makes more sense.
+
+        '''
+        print "tr {}".format(translation)
+        print "zoom x, y {}".format((zoom_x, zoom_y))
+        print "shear {}".format(shear)
+        print "rot {}".format(rotation)
+        print "flip {}".format(flip)
+        '''
+
         return self.build_augmentation_transform((zoom_x, zoom_y), rotation, shear, translation, flip)
 
     def fast_warp(self, img, tf, output_shape=(50, 50), mode='constant', order=3):
@@ -387,7 +396,7 @@ class ImageDataGenerator:
 
         shape = x[0].shape
         if self.translation_range[1]< 1.:
-            side = max(shape)
+            side = max(self.output_shape)
             self.translation_range = (self.translation_range[0] * side, self.translation_range[1] * side)
             self.translation_range = (math.ceil(self.translation_range[0]), math.ceil(self.translation_range[1]))
 
@@ -711,21 +720,28 @@ factor = 1.4
 shape = (64, 64)
 default_augment_params = {'output_shape': shape, 'ratio':1, 'batch_size':32, 'rotation_range':(-2, 2), 'translation_range':(-0.0, 0.0), 'flip':True, 'intensity_shift_std':0.2, 'mode':'balance_batch', 'zoom_range':(1.0, 1.0)}
 
-def balance_and_perturb(X, Y):
-    default_augment_params['output_shape'] = X[0][0].shape
+def get_default_generator(shape):
+    default_augment_params['output_shape'] = shape
     gen = ImageDataGenerator(**default_augment_params)
+    return gen
+ 
+def balance_and_perturb(X, Y, gen):
     gen.fit(X)
     (X_pos, X_neg), (Y_pos, Y_neg) = util.split_data_pos_neg(X, Y)
     X_pos_aug, Y_pos_aug = [], []
+    X_neg_pert = []
 
     idx = np.random.randint(0, len(X_pos), len(X_neg))
 
     for i in range(len(idx)):
         X_pos_aug.append(gen.perturb(X_pos[idx[i]]))
         Y_pos_aug.append(Y_pos[idx[i]])
+
+    for i in range(len(X_neg)):
+        X_neg_pert.append(gen.perturb(X_neg[i]))
     
     X_pos_aug = np.array(X_pos_aug)
-    X_aug = np.concatenate((X_pos_aug, X_neg))
+    X_aug = np.concatenate((X_pos_aug, X_neg_pert))
     Y_aug = np.concatenate((Y_pos_aug, Y_neg))
 
     idx = np.array(range(len(Y_aug)))
