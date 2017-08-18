@@ -297,15 +297,14 @@ def save_performance_history(model_name, args, rois, blobs, pred_blobs, folds):
     model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
     model_name = model.name
     epochs = model.training_params['nb_epoch']
-
     frocs = []
     legends = []
+
     fold_idx = 0
     for tr, te in folds:
         model.load('data/' + model_name + '.fold-{}'.format(fold_idx + 1))
         frocs.append([])
         epochs_set = list(range(1, epochs + 1, 2))
-        #epochs_set.append(epochs)
 
         for epoch in epochs_set:
             weights_file_name = 'data/{}.weights.{:02d}.hdf5'.format(model.name, epoch)
@@ -320,7 +319,7 @@ def save_performance_history(model_name, args, rois, blobs, pred_blobs, folds):
     legends = []
 
     i = 0
-    print("frocs shape {}".format(frocs.shape))
+    print "check -> frocs.shape {}".format(frocs.shape)
     for epoch in range(1, epochs + 1, 2):
         frocs_by_epoch = frocs[:,i]
         froc_history.append(eval.average_froc(np.array(frocs_by_epoch), np.linspace(0.0, 10.0, 101)))

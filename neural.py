@@ -1547,8 +1547,8 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
         augment_params = default_augment_params
         augment_params['intensity_shift_std'] = args.da_is
         augment_params['zoom_range'] = (1.0, args.da_zoom)
-        augment_params['translation_range'] = (args.da_tr, args.da_tr)
-        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        augment_params['translation_range'] = (-args.da_tr, args.da_tr)
+        augment_params['rotation_range'] = (-args.da_rot, args.da_rot)
         augment_params['flip'] = bool(args.da_flip)
         net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
 
@@ -1582,8 +1582,8 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
         augment_params = default_augment_params
         augment_params['intensity_shift_std'] = args.da_is
         augment_params['zoom_range'] = (1.0, args.da_zoom)
-        augment_params['translation_range'] = (args.da_tr, args.da_tr)
-        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        augment_params['translation_range'] = (-args.da_tr, args.da_tr)
+        augment_params['rotation_range'] = (-args.da_rot, args.da_rot)
         augment_params['flip'] = bool(args.da_flip)
         net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
 
@@ -1604,8 +1604,8 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
         augment_params = default_augment_params
         augment_params['intensity_shift_std'] = args.da_is
         augment_params['zoom_range'] = (1.0, args.da_zoom)
-        augment_params['translation_range'] = (args.da_tr, args.da_tr)
-        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        augment_params['translation_range'] = (-args.da_tr, args.da_tr)
+        augment_params['rotation_range'] = (-args.da_rot, args.da_rot)
         augment_params['flip'] = bool(args.da_flip)
         net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
 
@@ -1626,8 +1626,8 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
         augment_params = default_augment_params
         augment_params['intensity_shift_std'] = args.da_is
         augment_params['zoom_range'] = (1.0, args.da_zoom)
-        augment_params['translation_range'] = (args.da_tr, args.da_tr)
-        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        augment_params['translation_range'] = (-args.da_tr, args.da_tr)
+        augment_params['rotation_range'] = (-args.da_rot, args.da_rot)
         augment_params['flip'] = bool(args.da_flip)
         net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
  
@@ -1646,8 +1646,8 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
         augment_params = default_augment_params
         augment_params['intensity_shift_std'] = args.da_is
         augment_params['zoom_range'] = (1.0, args.da_zoom)
-        augment_params['translation_range'] = (args.da_tr, args.da_tr)
-        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        augment_params['translation_range'] = (-args.da_tr, args.da_tr)
+        augment_params['rotation_range'] = (-args.da_rot, args.da_rot)
         augment_params['flip'] = bool(args.da_flip)
         net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
  
@@ -1666,8 +1666,8 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
         augment_params = default_augment_params
         augment_params['intensity_shift_std'] = args.da_is
         augment_params['zoom_range'] = (1.0, args.da_zoom)
-        augment_params['translation_range'] = (args.da_tr, args.da_tr)
-        augment_params['rotation_range'] = (args.da_rot, args.da_rot)
+        augment_params['translation_range'] = (-args.da_tr, args.da_tr)
+        augment_params['rotation_range'] = (-args.da_rot, args.da_rot)
         augment_params['flip'] = bool(args.da_flip)
         net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
  
