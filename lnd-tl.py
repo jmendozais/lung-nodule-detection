@@ -62,8 +62,8 @@ def evaluate_classifier(clf, feats_tr, y_tr, real_blobs_te, pred_blobs_te, feats
     print "pre values ", np.mean(feats_tr, axis=0), np.std(feats_tr, axis=0), np.min(feats_tr), np.max(feats_tr)
     '''
 
-    #scaler = StandardScaler()
-    scaler = MinMaxScaler(feature_range=(-1, 1))
+    scaler = StandardScaler()
+    #scaler = MinMaxScaler(feature_range=(-1, 1))
     feats_tr = scaler.fit_transform(feats_tr)
     print "z-scaled ", np.mean(feats_tr, axis=0), np.std(feats_tr, axis=0), np.min(feats_tr), np.max(feats_tr)
 
@@ -231,12 +231,12 @@ def model_selection_with_convfeats(args):
 
         # Record model results
         current_frocs = [eval.average_froc([froc_i]) for froc_i in frocs]
-        util.save_froc(current_frocs, 'data/lsvm-C{}-{}-folds-froc'.format(args.svm_C, args.detector), legends[:len(frocs)], with_std=False)
+        util.save_froc(current_frocs, 'data/lsvm-z-C{}-{}-folds-froc'.format(args.svm_C, args.detector), legends[:len(frocs)], with_std=False)
         fold_idx += 1
 
     legends = ['Val FROC (LIDC-IDRI)']
     average_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
-    util.save_froc([average_froc], 'data/lsvm-C{}-{}-val-froc'.format(args.svm_C, args.detector), legends, with_std=True)
+    util.save_froc([average_froc], 'data/lsvm-z-C{}-{}-val-froc'.format(args.svm_C, args.detector), legends, with_std=True)
 
 def model_evaluation_with_convfeats(): 
     raise NotImplemented()
@@ -245,7 +245,7 @@ def model_evaluation2_with_convfeats():
     raise NotImplemented()
 
 def exp_convfeats(args):
-    C_set = np.logspace(-3, 4, 8)
+    C_set = np.logspace(-5, 2, 8)
     for i in range(len(C_set)):
         args.svm_C = C_set[i]
         model_selection_with_convfeats(args)

@@ -759,8 +759,7 @@ if __name__ == '__main__':
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = np.array([img])
     util.imwrite('or_{}'.format(fname), img[0])
-
-    augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-0, 0), 'translation_range':(-0.001, 0.001), 'flip':True, 'intensity_shift_std':0.0, 'mode':'balance_batch', 'zoom_range':(1.0, 1.0)}
+    augment_params = {'output_shape':(img.shape[1]*(1.0/factor), img.shape[1]*(1.0/factor)), 'ratio':1, 'batch_size':32, 'rotation_range':(-18, 18), 'translation_range':(-0.12, 0.12), 'flip':True, 'intensity_shift_std':0.2, 'mode':'balance_batch', 'zoom_range':(1.0, 1.25)}
     gen = ImageDataGenerator(**augment_params)
     gen.intensity_shift_range = (-0.1, 0.1)
 
