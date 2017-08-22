@@ -44,7 +44,7 @@ def preprocess_rois(rois, methods):
     return np.array(result)
 
 def create_rois(imgs, masks, blob_set, args, save=False, real_blobs=None, paths=None):
-    pad_size = 1.4
+    pad_size = 1.5
     dsize = (int(args.roi_size * pad_size), int(args.roi_size * pad_size))
 
     print 'Preprocess images: # images {}'.format(len(imgs))

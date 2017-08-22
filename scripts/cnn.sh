@@ -167,18 +167,6 @@ da_params='--da-tr 0 --da-rot 10 --da-zoom 1 --da-is 0 --da-flip 1'
 #start-aqp salle exp3rot5 "THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 }
 
-function exp3rotdet {
-#da_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0 --da-flip 1'
-#start-aqp salle exp3rotdet1 "THEANO_FLAGS=mode=FAST_RUN,device=gpu1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection-detailed --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-#da_params='--da-tr 0 --da-rot 4 --da-zoom 1 --da-is 0 --da-flip 1'
-#start-aqp salle exp3rotdet2 "THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection-detailed --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-
-da_params='--da-tr 0 --da-rot 6 --da-zoom 1 --da-is 0 --da-flip 1'
-start-aqp salle exp3rotdet3 "THEANO_FLAGS=mode=FAST_RUN,device=gpu1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection-detailed --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-da_params='--da-tr 0 --da-rot 8 --da-zoom 1 --da-is 0 --da-flip 1'
-start-aqp salle exp3rotdet4 "THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection-detailed --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-}
-
 function exp3rotcmp {
 #methods=(
 #'5P-da-is0.0-zm1.0-tr0.0-rr3-fl1-sbf-0.7-aam-val'
@@ -189,17 +177,17 @@ function exp3rotcmp {
 #)
 methods=(
 '5P-da-is0.0-zm1.0-tr0.0-rr0-fl1-lr0.001-sbf-0.7-aam-val'
-'5P-da-is0.0-zm1.0-tr0.0-rr2-fl1-lr0.001-sbf-0.7-aam-val'
-'5P-da-is0.0-zm1.0-tr0.0-rr4-fl1-lr0.001-sbf-0.7-aam-val'
 '5P-da-is0.0-zm1.0-tr0.0-rr6-fl1-lr0.001-sbf-0.7-aam-val'
-'5P-da-is0.0-zm1.0-tr0.0-rr8-fl1-lr0.001-sbf-0.7-aam-val'
+'5P-da-is0.0-zm1.0-tr0.0-rr12-fl1-lr0.001-sbf-0.7-aam-val'
+'5P-da-is0.0-zm1.0-tr0.0-rr18-fl1-lr0.001-sbf-0.7-aam-val'
+'5P-da-is0.0-zm1.0-tr0.0-rr24-fl1-lr0.001-sbf-0.7-aam-val'
 )
 labels=(
 'No rotation'
-'Rotation in [-2, 2)'
-'Rotation in [-4, 4)'
-'Rotation in [-6, 6)'
-'Rotation in [-8, 8)'
+'Rotation in [-6,6)'
+'Rotation in [-12,12)'
+'Rotation in [-18,18)'
+'Rotation in [-24,24)'
 )
 
 froc '3-rot-cmp' ${methods} ${labels} 
