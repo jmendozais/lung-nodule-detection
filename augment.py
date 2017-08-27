@@ -718,7 +718,7 @@ class DataGeneratorOnMemory:
 
 factor = 1.4
 shape = (64, 64)
-default_augment_params = {'output_shape': shape, 'ratio':1, 'batch_size':32, 'rotation_range':(-2, 2), 'translation_range':(-0.0, 0.0), 'flip':True, 'intensity_shift_std':0.2, 'mode':'balance_batch', 'zoom_range':(1.0, 1.0)}
+default_augment_params = {'output_shape': shape, 'ratio':1, 'batch_size':32, 'rotation_range':(-18, 18), 'translation_range':(-0.12, 0.12), 'flip':True, 'intensity_shift_std':0.2, 'mode':'balance_batch', 'zoom_range':(1.0, 1.25)}
 
 def get_default_generator(shape):
     default_augment_params['output_shape'] = shape

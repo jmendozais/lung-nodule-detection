@@ -436,14 +436,15 @@ default_augment_params = {'output_shape':(64, 64), 'ratio':1, 'batch_size':32, '
 default_preproc_params = {'zmuv':True}
 
 
-def convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1):
+def convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1, dense_num=512):
     nb_filters = []
     for i in range(conv_layers):
         nb_filters.append((i+1) * filters)
-    dense_neurons = 512
+    dense_num = 512
     dense_units = []
     for i in range(fc_layers):
-        dense_units.append(dense_neurons)
+        dense_units.append(dense_num)
+
     dp_list = []
     if isinstance(dropout, list):
         assert len(dropout) == conv_layers
@@ -451,7 +452,7 @@ def convnet(input_shape, conv_layers=5, filters=64, dropout=.0, fc_layers=1):
     elif isinstance(dropout, tuple):
         assert len(dropout) == 2
         for i in range(conv_layers):
-            dp_list.append(dropout[0] + i * dropout[1])
+            dp_list.append(max(dropout[0] + i * dropout[1], 0.0))
     else:
         for i in range(conv_layers):
             dp_list.append(dropout)
@@ -735,7 +736,7 @@ def create_train_test_sets(real_blobs_tr, pred_blobs_tr, feats_tr,
             X_train, y_train = classify.create_training_set_from_feature_set(real_blobs_tr, pred_blobs_tr, feats_tr, dataset_type, container=container, suffix='train')
         #X_train = X_train.astype('float32')
 
-    X_test, Y_test = None, None
+    X_test, y_test = None, None
     if feats_te is not None:
         X_test, y_test = [], []
         if streams != 'none':
@@ -753,12 +754,15 @@ def create_train_test_sets(real_blobs_tr, pred_blobs_tr, feats_tr,
                 X_test, y_test = classify.create_training_set_from_feature_set(real_blobs_te, pred_blobs_te, feats_te, dataset_type, container, 'test')
             #X_test = X_test.astype('float32')
 
+    Y_train, Y_test = None, None
     if detector:
         Y_train = to_two_class_probs(y_train)
-        Y_test = to_two_class_probs(y_test)
+        if feats_te is not None:
+            Y_test = to_two_class_probs(y_test)
     else:
         Y_train = np_utils.to_categorical(y_train, nb_classes)
-        Y_test = np_utils.to_categorical(y_test, nb_classes)
+        if feats_te is not None:
+            Y_test = np_utils.to_categorical(y_test, nb_classes)
 
     return X_train, Y_train, X_test, Y_test
 
@@ -1571,7 +1575,7 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
         dropout = args.dropout
         if args.lidp:
             model += 'lidp-{}'.format(args.dropout)
-            dropout = (0, args.dropout)
+            dropout = (args.dp_intercept, args.dropout)
         else:
             model += 'dp-{}'.format(args.dropout)
 
@@ -1587,56 +1591,12 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
         augment_params['flip'] = bool(args.da_flip)
         net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
 
-    elif model == '5P-fc':
-        model += '-is{}-zm{}-tr{}-rr{}-fl{}-lr{}-fc-{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot, args.da_flip, args.lr, args.fc)
-
+    elif model == 'convnet':
+        model += '-is{}-zm{}-tr{}-rr{}-fl{}-lr{}-co-{}-fil-{}-fc-{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot, args.da_flip, args.lr, args.conv, args.filters, args.fc)
         dropout = args.dropout
         if args.lidp:
             model += '-lidp-{}'.format(args.dropout)
-            dropout = (0, args.dropout)
-        else:
-            model += '-dp-{}'.format(args.dropout)
-
-        network = convnet(input_shape, conv_layers=5, filters=64, dropout=dropout, fc_layers=args.fc)
-        schedule=[args.epochs]
-        train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
-                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
-        augment_params = default_augment_params
-        augment_params['intensity_shift_std'] = args.da_is
-        augment_params['zoom_range'] = (1.0, args.da_zoom)
-        augment_params['translation_range'] = (-args.da_tr, args.da_tr)
-        augment_params['rotation_range'] = (-args.da_rot, args.da_rot)
-        augment_params['flip'] = bool(args.da_flip)
-        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
-
-    elif model == 'XP':
-        model += '-is{}-zm{}-tr{}-rr{}-fl{}-lr{}-fc-{}-co-{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot, args.da_flip, args.lr, args.fc, args.conv)
-
-        dropout = args.dropout
-        if args.lidp:
-            model += '-lidp-{}'.format(args.dropout)
-            dropout = (0, args.dropout)
-        else:
-            model += '-dp-{}'.format(args.dropout)
-
-        network = convnet(input_shape, conv_layers=args.conv, filters=64, dropout=dropout, fc_layers=args.fc)
-        schedule=[args.epochs]
-        train_params = {'schedule':schedule, 'nb_epoch':args.epochs, 'batch_size':32, 
-                        'lr':args.lr, 'momentum':0.9, 'nesterov':True, 'decay':0}
-        augment_params = default_augment_params
-        augment_params['intensity_shift_std'] = args.da_is
-        augment_params['zoom_range'] = (1.0, args.da_zoom)
-        augment_params['translation_range'] = (-args.da_tr, args.da_tr)
-        augment_params['rotation_range'] = (-args.da_rot, args.da_rot)
-        augment_params['flip'] = bool(args.da_flip)
-        net_model = NetModel(network, model, input_shape, train_params, augment_params, default_preproc_params)
- 
-    elif model == 'cnn':
-        model += '-is{}-zm{}-tr{}-rr{}-fl{}-lr{}-fc-{}-co-{}-fil-{}'.format(args.da_is, args.da_zoom, args.da_tr, args.da_rot, args.da_flip, args.lr, args.fc, args.conv, args.filters)
-        dropout = args.dropout
-        if args.lidp:
-            model += '-lidp-{}'.format(args.dropout)
-            dropout = (0, args.dropout)
+            dropout = (args.dp_intercept, args.dropout)
         else:
             model += '-dp-{}'.format(args.dropout)
         network = convnet(input_shape, conv_layers=args.conv, filters=args.filters, dropout=dropout, fc_layers=args.fc)

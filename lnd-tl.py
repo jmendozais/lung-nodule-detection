@@ -238,12 +238,6 @@ def model_selection_with_convfeats(args):
     average_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
     util.save_froc([average_froc], 'data/lsvm-z-C{}-{}-val-froc'.format(args.svm_C, args.detector), legends, with_std=True)
 
-def model_evaluation_with_convfeats(): 
-    raise NotImplemented()
-
-def model_evaluation2_with_convfeats(): 
-    raise NotImplemented()
-
 def exp_convfeats(args):
     C_set = np.logspace(-5, 2, 8)
     for i in range(len(C_set)):
@@ -258,19 +252,24 @@ def exp_eval_ots_lidc_jsrt(args):
     imgs_te, blobs_te = jsrt.load(set_name='jsrt140p')
     pred_blobs_te = detect.read_blobs('data/{}-jsrt140p-pred-blobs.pkl'.format(args.detector))
     masks_te = np.load('data/aam-jsrt140p-pred-masks.npy')
-    rois_tr = create_rois(imgs_tr, masks_tr, pred_blobs_tr, args)
-    rois_te = create_rois(imgs_te, masks_te, pred_blobs_te, args)
+    rois_tr = lnd.create_rois(imgs_tr, masks_tr, pred_blobs_tr, args)
+    rois_te = lnd.create_rois(imgs_te, masks_te, pred_blobs_te, args)
+
+    # Create rois dataset
+    rois_tr, Y_tr, _, _ = neural.create_train_test_sets(blobs_tr, pred_blobs_tr, rois_tr, None, None, None)
+    generator = augment.get_default_generator((args.roi_size, args.roi_size))
+    rois_tr, Y_tr = augment.balance_and_perturb(rois_tr, Y_tr, generator)
+    range_tr = np.max(rois_tr), np.min(rois_tr)
+    print "range {}".format(range_tr)
 
     # Extract features
     network = VGG16(mode='ots-feat')
-    feats_tr = extract_convfeats_from_rois(network, rois_tr)
-    feats_te = extract_convfeats_from_rois(network, rois_te)
+    feats_tr = extract_convfeats(network, rois_tr, range_tr)
+    feats_te = extract_convfeats(network, rois_te, range_tr)
     np.save('data/{}-lidc-feats.npy'.format(args.detector, fold_idx), feats_tr)
     np.save('data/{}-jsrt140p-feats.npy'.format(args.detector, fold_idx), feats_te)
 
     # Eval classifier
-    feats_tr, Y_tr, _, _ = neural.create_train_test_sets(blobs_tr, pred_blobs_tr, rois_tr, None, None, None)
-    feats_tr, Y_tr = augment.balance_and_perturb(X_tr, Y_tr)
     clf = LinearSVC(C=args.svm_C)
     froc = evaluate_classifier(clf, feats_tr, Y_tr, blobs_te, pred_blobs_te, feats_te)
 
@@ -281,24 +280,22 @@ def exp_eval_ots_jsrt_only(args):
     imgs, blobs= jsrt.load(set_name='jsrt140p')
     pred_blobs = detect.read_blobs('data/{}-jsrt140p-pred-blobs.pkl'.format(args.detector))
     masks = np.load('data/aam-jsrt140p-pred-masks.npy')
-    rois = create_rois(imgs, masks, pred_blobs, args)
+    rois = lnd.create_rois(imgs, masks, pred_blobs, args)
     folds = KFold(n_splits=5, shuffle=True, random_state=util.FOLDS_SEED).split(imgs)
-    #feats = extract_convfeats_from_rois(network, rois)
-    feats = extract_convfeats_from_rois(network, rois)
 
     fold_idx = 0
     frocs = []
     legends = ['Fold {}'.format(i + 1) for i in range(5)] 
     for tr, te in folds:
         # Eval classifier
-        feats_tr, Y_tr, _, _ = neural.create_train_test_sets(blobs_tr, pred_blobs_tr, feats[tr], 
-            None, None, None)
+        rois_tr, Y_tr, _, _ = neural.create_train_test_sets(blobs_tr, pred_blobs_tr, rois[tr], None, None, None)
+        generator = augment.get_default_generator((args.roi_size, args.roi_size))
+        rois_tr, Y_tr = augment.balance_and_perturb(rois_tr, Y_tr, generator)
 
-        feats_tr, Y_tr = augment.balance_and_perturb(feats_tr, Y_tr)
-
-        clf = LinearSVC(C=1.0)
-        froc = evaluate_classifier(clf, feats_tr, Y_tr, blobs[te], pred_blobs[te], feats[te])
+        clf = LinearSVC(C=0.0001)
+        froc = evaluate_classifier(clf, rois_tr, Y_tr, blobs[te], pred_blobs[te], feats[te])
         frocs.append(froc)
+        
         current_frocs = [eval.average_froc([froc_i]) for froc_i in frocs]
         util.save_froc(current_frocs, 'data/lsvm-{}-jsrtonly-folds'.format(args.detector), legends[:len(frocs)], with_std=False)
         fold_idx += 1
@@ -307,8 +304,11 @@ def exp_eval_ots_jsrt_only(args):
     legends = ['Test FROC (JSRT positives)']
     util.save_froc([froc], 'data/lsvm-{}-jsrtonly'.format(args.detector), legends, with_std=True)
 
-# Fine-tuning convnet
+def model_evaluation_with_convfeats(args): 
+    exp_eval_ots_lidc_jsrt(args)
+    exp_eval_ots_jsrt_only(args)
 
+# Fine-tuning convnet
 def model_selection_fclayers(model):
     for tr, te in folds:
         # Fix conv layers

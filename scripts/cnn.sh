@@ -198,16 +198,20 @@ froc '3-rot-cmp' ${methods} ${labels}
 
 # zoom [1.05, 1.1, 1.15, 1.2, 1.25]
 function exp3zoom {
-da_params='--da-tr 0 --da-rot 0 --da-zoom 1.05 --da-is 0 --da-flip 1'
+#da_params='--da-tr 0 --da-rot 0 --da-zoom 1.05 --da-is 0 --da-flip 1'
+#start-liv phong exp3zoom "THEANO_FLAGS=mode=FAST_RUN,device=cuda1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+#da_params='--da-tr 0 --da-rot 0 --da-zoom 1.1 --da-is 0 --da-flip 1'
+#start-liv minsky exp3zoom "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+#da_params='--da-tr 0 --da-rot 0 --da-zoom 1.15 --da-is 0 --da-flip 1'
+#start-liv bezier exp3zoom "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+#da_params='--da-tr 0 --da-rot 0 --da-zoom 1.2 --da-is 0 --da-flip 1'
+#start-liv prim exp3zoom "THEANO_FLAGS=mode=FAST_RUN,device=cuda1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+#da_params='--da-tr 0 --da-rot 0 --da-zoom 1.25 --da-is 0 --da-flip 1'
+#start-liv babbage exp3zoom "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+da_params='--da-tr 0 --da-rot 0 --da-zoom 1.3 --da-is 0 --da-flip 1'
 start-liv phong exp3zoom "THEANO_FLAGS=mode=FAST_RUN,device=cuda1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-da_params='--da-tr 0 --da-rot 0 --da-zoom 1.1 --da-is 0 --da-flip 1'
-start-liv minsky exp3zoom "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-da_params='--da-tr 0 --da-rot 0 --da-zoom 1.15 --da-is 0 --da-flip 1'
-start-liv bezier exp3zoom "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-da_params='--da-tr 0 --da-rot 0 --da-zoom 1.2 --da-is 0 --da-flip 1'
+da_params='--da-tr 0 --da-rot 0 --da-zoom 1.4 --da-is 0 --da-flip 1'
 start-liv prim exp3zoom "THEANO_FLAGS=mode=FAST_RUN,device=cuda1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
-da_params='--da-tr 0 --da-rot 0 --da-zoom 1.25 --da-is 0 --da-flip 1'
-start-liv babbage exp3zoom "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 }
 
 function exp3zoomdet {
@@ -231,6 +235,7 @@ methods=(
 '5P-da-is0.0-zm1.15-tr0.0-rr0-fl1-lr0.001-sbf-0.7-aam-val'
 '5P-da-is0.0-zm1.2-tr0.0-rr0-fl1-lr0.001-sbf-0.7-aam-val'
 '5P-da-is0.0-zm1.25-tr0.0-rr0-fl1-lr0.001-sbf-0.7-aam-val'
+'5P-da-is0.0-zm1.4-tr0.0-rr0-fl1-lr0.001-sbf-0.7-aam-val'
 )
 
 labels=(
@@ -240,6 +245,7 @@ labels=(
 'Scale factor in [1.0, 1.15)'
 'Scale factor in [1.0, 1.2)'
 'Scale factor in [1.0, 1.25)'
+'Scale factor in [1.0, 1.3)'
 )
 
 froc '3-zoom-cmp' ${methods} ${labels} 
@@ -399,11 +405,11 @@ start-liv minsky exp3fl "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,
 # Dropout
 function exp4fdp {
 fixed_params='--da-tr 0.12 --da-rot 18 --da-zoom 1.25 --da-is 0.2 --da-flip 1 --roi-size 64 --lr 0.001 --epochs 100'
-start-liv minsky exp4fdp1 "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.1"
-start-liv phong exp4fdp2 "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.15"
-start-aqp salle exp4fdp3 "THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.2"
-start-aqp salle exp4fdp4 "THEANO_FLAGS=mode=FAST_RUN,device=gpu1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.25"
-start-aqp salle exp4fdp5 "THEANO_FLAGS=mode=FAST_RUN,device=gpu0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.3"
+start-liv minsky exp4fdp "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.1"
+start-liv phong exp4fdp "THEANO_FLAGS=mode=FAST_RUN,device=cuda1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.15"
+start-liv prim exp4fdp "THEANO_FLAGS=mode=FAST_RUN,device=cuda1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.2"
+start-liv bezier exp4fdp "THEANO_FLAGS=mode=FAST_RUN,device=cuda1,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.25"
+start-liv babbage exp4fdp "THEANO_FLAGS=mode=FAST_RUN,device=cuda0,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.3"
 }
 
 function exp4fdpdet {
@@ -417,12 +423,12 @@ start-aqp salle exp4fdpdet5 "THEANO_FLAGS=mode=FAST_RUN,device=gpu0,floatX=float
 
 function exp4fdpcmp {
 methods=(
-"5P-da-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001dp-0.1-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001dp-0.15-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001dp-0.2-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001dp-0.25-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001dp-0.3-sbf-0.7-aam-val"
+"5P-da-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-sbf-0.7-aam-val"
+"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001dp-0.1-sbf-0.7-aam-val"
+"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001dp-0.15-sbf-0.7-aam-val"
+"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001dp-0.2-sbf-0.7-aam-val"
+"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001dp-0.25-sbf-0.7-aam-val"
+"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001dp-0.3-sbf-0.7-aam-val"
 )
 labels=(
 "No dropout"
@@ -438,19 +444,19 @@ froc '4-fdp-cmp' ${methods} ${labels}
 THEANO_OPTS="THEANO_FLAGS=mode=FAST_RUN,floatX=float32,optimizer_including=cudnn"
 function exp4ldp {
 fixed_params='--da-tr 0.12 --da-rot 18 --da-zoom 1.25 --da-is 0.2 --da-flip 1 --roi-size 64 --lr 0.001 --epochs 100'
-start-aqp salle exp4ldp1 "${THEANO_OPTS},device=gpu0 python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.025 --lidp"
-start-liv minsky exp4ldp "${THEANO_OPTS},device=cuda0 python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.05 --lidp"
-start-aqp salle exp4ldp2 "${THEANO_OPTS},device=gpu1 python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.075 --lidp"
-start-aqp salle exp4ldp3 "${THEANO_OPTS},device=gpu2 python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.1 --lidp"
+#start-aqp salle exp4ldp1 "${THEANO_OPTS},device=gpu0 python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.025 --lidp"
+start-liv phong exp4ldp "${THEANO_OPTS},device=cuda0 python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.05 --lidp"
+#start-aqp salle exp4ldp2 "${THEANO_OPTS},device=gpu1 python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.075 --lidp"
+#start-aqp salle exp4ldp3 "${THEANO_OPTS},device=gpu2 python lnd.py --model 5P-dp --model-selection ${fixed_params} --dropout 0.1 --lidp"
 }
 
 function exp4ldpcmp {
 methods=(
-"5P-da-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001lidp-0.025-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001lidp-0.05-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001lidp-0.075-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001lidp-0.1-sbf-0.7-aam-val"
+"5P-da-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-sbf-0.7-aam-val"
+"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.025-sbf-0.7-aam-val"
+"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.05-sbf-0.7-aam-val"
+"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.075-sbf-0.7-aam-val"
+"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.1-sbf-0.7-aam-val"
 )
 labels=(
 "No dropout"
@@ -463,46 +469,14 @@ froc '4-ldp-cmp' ${methods} ${labels}
 }
 THEANO_OPTS="THEANO_FLAGS=mode=FAST_RUN,floatX=float32,optimizer_including=cudnn"
 
-function exp5fc {
-fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --roi-size 64 --lr 0.001 --epochs 100 --dropout 0.05 --lidp'
-start-liv minsky exp5fc "${THEANO_OPTS},device=cuda0 python lnd.py --model 5P-fc  --model-selection ${fixed_params} --fc 1"
-start-aqp salle exp5fc1 "${THEANO_OPTS},device=gpu0 python lnd.py --model 5P-fc --model-selection ${fixed_params} --fc 0"
-start-aqp salle exp5fc2 "${THEANO_OPTS},device=gpu1 python lnd.py --model 5P-fc --model-selection ${fixed_params} --fc 2"
-start-aqp salle exp5fc3 "${THEANO_OPTS},device=gpu2 python lnd.py --model 5P-fc --model-selection ${fixed_params} --fc 3"
-}
 
-function exp5fcdet {
-fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --roi-size 64 --lr 0.001 --epochs 100 --dropout 0.05 --lidp'
-start-liv minsky exp5fcdet "${THEANO_OPTS},device=cuda0 python lnd.py --model 5P-fc  --model-selection-detailed ${fixed_params} --fc 1"
-start-aqp salle exp5fc1det "${THEANO_OPTS},device=gpu0 python lnd.py --model 5P-fc --model-selection-detailed ${fixed_params} --fc 0"
-start-aqp salle exp5fc2det "${THEANO_OPTS},device=gpu1 python lnd.py --model 5P-fc --model-selection-detailed ${fixed_params} --fc 2"
-start-aqp salle exp5fc3det "${THEANO_OPTS},device=gpu2 python lnd.py --model 5P-fc --model-selection-detailed ${fixed_params} --fc 3"
-}
-
-function exp5fccmp {
-methods=(
-"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-0-lidp-0.05-sbf-0.7-aam-val"
-"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-1-lidp-0.05-sbf-0.7-aam-val"
-"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-2-lidp-0.05-sbf-0.7-aam-val"
-"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-3-lidp-0.05-sbf-0.7-aam-val"
-)
-
-labels=(
-"No FC layers"
-"1 FC layer"
-"2 FC layer"
-"3 FC layer"
-)
-froc '5-fc-cmp' ${methods} ${labels} 
-}
-
+da_params='--da-tr 0.12 --da-rot 18 --da-zoom 1.25 --da-is 0.2 --da-flip 1'
 function exp5conv {
-#fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 1'
-fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2'
-start-liv minsky exp5convfc2 "${THEANO_OPTS},device=cuda0 python lnd.py --model XP --model-selection ${fixed_params} --conv 4 --roi-size 32"
-start-aqp salle exp5conv1fc2 "${THEANO_OPTS},device=gpu0 python lnd.py --model XP --model-selection ${fixed_params} --conv 5 --roi-size 64"
-start-aqp salle exp5conv2fc2 "${THEANO_OPTS},device=gpu1 python lnd.py --model XP --model-selection ${fixed_params} --conv 6 --roi-size 128"
-#start-aqp salle exp5conv3 "${THEANO_OPTS},device=gpu2 python lnd.py --model XP --model-selection ${fixed_params} --conv 7 --roi-size 256"
+fixed_params="${da_params} --lr 0.001 --epochs 100 --dropout 0.1 --lidp --fc 1"
+#start-liv phong exp5conv "${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --conv 5 --roi-size 64"
+#start-liv phong exp5conv1 "${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --dp-intercept 0.1 --conv 4 --roi-size 32"
+#start-liv bezier exp5conv1 "${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --dp-intercept -0.1 --conv 6 --roi-size 128"
+start-liv prim exp5conv1 "${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --dp-intercept -0.2 --conv 7 --roi-size 256"
 }
 
 function exp5convcmp {
@@ -520,13 +494,13 @@ froc '5-conv-cmp' ${methods} ${labels}
 }
 
 function exp5fi {
-fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64'
+fixed_params="${da_params} --lr 0.001 --epochs 100 --dropout 0.1 --lidp --fc 1 --conv 5 --roi-size 64"
 #start-liv minsky exp5fi "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-selection ${fixed_params} --filters 80"
 #start-aqp salle exp5fi1 "${THEANO_OPTS},device=gpu2 python lnd.py --model cnn --model-selection ${fixed_params} --filters 64"
 #start-aqp salle exp5fi2 "sleep 7000; ${THEANO_OPTS},device=gpu1 python lnd.py --model cnn --model-selection ${fixed_params} --filters 48"
-#start-liv prim exp5fi "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-selection ${fixed_params} --filters 32"
-start-aqp salle exp5fi3 "${THEANO_OPTS},device=gpu1 python lnd.py --model cnn --model-selection ${fixed_params} --filters 96"
-start-aqp salle exp5fi4 "${THEANO_OPTS},device=gpu2 python lnd.py --model cnn --model-selection ${fixed_params} --filters 128"
+start-aqp salle exp5fi1 "${THEANO_OPTS},device=gpu0 python lnd.py --model convnet --model-selection ${fixed_params} --filters 32"
+start-aqp salle exp5fi2 "${THEANO_OPTS},device=gpu1 python lnd.py --model convnet --model-selection ${fixed_params} --filters 96"
+start-aqp salle exp5fi3 "${THEANO_OPTS},device=gpu2 python lnd.py --model convnet --model-selection ${fixed_params} --filters 128"
 
 #fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 1'
 #start-aqp salle exp5conv3 "${THEANO_OPTS},device=gpu2 python lnd.py --model XP --model-selection ${fixed_params} --conv 7 --roi-size 256"
@@ -571,6 +545,41 @@ start-aqp salle fixsel0 "${THEANO_OPTS},device=gpu0 python lnd.py --model fix --
 # Best model with sbf 0.5 + old data aug
 #start-aqp salle fixsel2 "${THEANO_OPTS},device=gpu2 python lnd.py --model fix --model-selection ${fixed_params} ${new_da} --detector sbf-0.5-aam"
 }
+
+function exp5fc {
+fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --roi-size 64 --lr 0.001 --epochs 100 --dropout 0.05 --lidp'
+start-liv minsky exp5fc "${THEANO_OPTS},device=cuda0 python lnd.py --model 5P-fc  --model-selection ${fixed_params} --fc 1"
+start-aqp salle exp5fc1 "${THEANO_OPTS},device=gpu0 python lnd.py --model 5P-fc --model-selection ${fixed_params} --fc 0"
+start-aqp salle exp5fc2 "${THEANO_OPTS},device=gpu1 python lnd.py --model 5P-fc --model-selection ${fixed_params} --fc 2"
+start-aqp salle exp5fc3 "${THEANO_OPTS},device=gpu2 python lnd.py --model 5P-fc --model-selection ${fixed_params} --fc 3"
+}
+
+function exp5fcdet {
+fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --roi-size 64 --lr 0.001 --epochs 100 --dropout 0.05 --lidp'
+start-liv minsky exp5fcdet "${THEANO_OPTS},device=cuda0 python lnd.py --model 5P-fc  --model-selection-detailed ${fixed_params} --fc 1"
+start-aqp salle exp5fc1det "${THEANO_OPTS},device=gpu0 python lnd.py --model 5P-fc --model-selection-detailed ${fixed_params} --fc 0"
+start-aqp salle exp5fc2det "${THEANO_OPTS},device=gpu1 python lnd.py --model 5P-fc --model-selection-detailed ${fixed_params} --fc 2"
+start-aqp salle exp5fc3det "${THEANO_OPTS},device=gpu2 python lnd.py --model 5P-fc --model-selection-detailed ${fixed_params} --fc 3"
+}
+
+function exp5fccmp {
+methods=(
+"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-0-lidp-0.05-sbf-0.7-aam-val"
+"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-1-lidp-0.05-sbf-0.7-aam-val"
+"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-2-lidp-0.05-sbf-0.7-aam-val"
+"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-3-lidp-0.05-sbf-0.7-aam-val"
+)
+
+labels=(
+"No FC layers"
+"1 FC layer"
+"2 FC layer"
+"3 FC layer"
+)
+froc '5-fc-cmp' ${methods} ${labels} 
+}
+
+
 
 if [ "$1" = "msel" ]; then
     msel $2

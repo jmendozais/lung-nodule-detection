@@ -397,12 +397,13 @@ def add_feed_forward_convnet_args(parser):
     parser.add_argument('--da-is', help='Intesity shift data augmentation', default=0.5, type=float)
     parser.add_argument('--da-flip', help='Intesity shift data augmentation', default=1, type=int)
 
-    parser.add_argument('--dropout', help='fixed dp for conv layers, slope on variable dp', default=0.5, type=float)
+    parser.add_argument('--dropout', help='Fixed dp for conv layers or slope on variable dp', default=0.5, type=float)
+    parser.add_argument('--dp-intercept', help='Incercept on variable dp', default=0.0, type=float)
     parser.add_argument('--lidp', help='Linear increasing dropout', action='store_true')
 
+    parser.add_argument('--conv', help='Number of conv layers', default=5, type=int)
+    parser.add_argument('--filters', help='Number of filters on conv layers', default=64, type=int)
     parser.add_argument('--fc', help='Number of fully connected layers', default=1, type=int)
-    parser.add_argument('--conv', help='Number of convolutional layers', default=1, type=int)
-    parser.add_argument('--filters', help='Number of convolutional layers', default=1, type=int)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='lnd.py')
