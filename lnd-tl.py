@@ -211,7 +211,6 @@ def model_selection_with_convfeats(args):
     from sklearn.neighbors import KNeighborsClassifier
     for tr, te in folds:
         print "Load features fold {}".format(fold_idx)
-
         start = time.time()
         feats_tr, Y_tr = load_features('data/{}-f{}-lidc-feats'.format(args.detector, fold_idx))
         print 'tr time {}'.format(time.time() - start)
@@ -219,7 +218,6 @@ def model_selection_with_convfeats(args):
         start = time.time()
         feats_te = np.load('data/{}-f{}-te-lidc-feats.npy'.format(args.detector, fold_idx))
         print 'te time {}'.format(time.time() - start)
-
         print "-> tr {}, {}, te {}".format(feats_tr.shape, Y_tr.shape, feats_te.shape)
 
         # Train/test model
@@ -239,7 +237,7 @@ def model_selection_with_convfeats(args):
     util.save_froc([average_froc], 'data/lsvm-z-C{}-{}-val-froc'.format(args.svm_C, args.detector), legends, with_std=True)
 
 def exp_convfeats(args):
-    C_set = np.logspace(-5, 2, 8)
+    C_set = np.logspace(-6, 2, 9)
     for i in range(len(C_set)):
         args.svm_C = C_set[i]
         model_selection_with_convfeats(args)

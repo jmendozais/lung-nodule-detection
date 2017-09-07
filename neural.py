@@ -375,7 +375,9 @@ class NetModel:
         data_shape = (len(X_train[0]),) + self.generator.output_shape
 
         X_train, Y_train, X_test, Y_test = preprocess_dataset(self.preprocessor, X_train, Y_train, X_test, Y_test, streams)
+        gc.collect()
         self.generator.fit(X_train)
+        gc.collect()
 
         X_train, Y_train = util.split_data_pos_neg(X_train, Y_train)
         X_test, Y_test = util.split_data_pos_neg(X_test, Y_test)

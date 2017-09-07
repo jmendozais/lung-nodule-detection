@@ -95,7 +95,6 @@ def split_data_pos_neg(X, Y):
 
     return (X[:end_pos], X[end_pos:]), (Y[:end_pos], Y[end_pos:])
 
-
 def save_dataset(V_tr, pred_blobs_tr, blobs_tr, V_te, pred_blobs_te, blobs_te, name):
     np.save('{}-vtr.npy'.format(name), V_tr)
     np.save('{}-pbtr.npy'.format(name), pred_blobs_tr)
