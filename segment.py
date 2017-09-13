@@ -392,6 +392,7 @@ Functions for JSRT-LIDC
 def train(model_name):
     images, _ = jsrt.load(set_name='jsrt140n')
     landmarks = scr.load(set_name='jsrt140n')
+    # TODO: check the masks returned by join masks
     model = get_shape_model(model_name)
 
     print 'Training model ...' 

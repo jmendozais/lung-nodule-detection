@@ -469,9 +469,8 @@ labels=(
 froc '4-ldp-cmp' ${methods} ${labels} 
 }
 THEANO_OPTS="THEANO_FLAGS=mode=FAST_RUN,floatX=float32,optimizer_including=cudnn"
-
-
 da_params='--da-tr 0.12 --da-rot 18 --da-zoom 1.25 --da-is 0.2 --da-flip 1'
+fixed_params="${da_params} --lr 0.001 --epochs 120 --dropout 0.05 --lidp --fc 1"
 
 # TODO: sel epoch 140 for 6P
 function exp5conv {
@@ -485,9 +484,10 @@ start-liv minsky exp5conv "${THEANO_OPTS},device=cuda0 python lnd.py --model con
 function exp5convcmp {
 methods=(
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-4-fil-64-fc-1-lidp-0.05-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.05-sbf-0.7-aam-val"
+"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-5-fil-64-fc-1-lidp-0.05-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-64-fc-1-lidp-0.05-sbf-0.7-aam-val"
 )
+#"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.05-sbf-0.7-aam-val"
 labels=(
 "4 conv layer"
 "5 conv layer"
@@ -515,11 +515,13 @@ start-liv minsky exp5fi "${THEANO_OPTS},${MINSKYC},device=cuda0 python lnd.py --
 
 function exp5ficmp {
 methods=(
+"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-16-fc-1-lidp-0.05-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-24-fc-1-lidp-0.05-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-32-fc-1-lidp-0.05-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-64-fc-1-lidp-0.05-sbf-0.7-aam-val"
 )
 labels=(
+"Convnet(6, 16)"
 "Convnet(6, 24)"
 "Convnet(6, 32)"
 "Convnet(6, 64)"
@@ -529,37 +531,38 @@ froc '5-fil-cmp' ${methods} ${labels}
 
 function exp5fc {
 fixed_params="${da_params} --lr 0.001 --epochs 150 --dropout 0.05 --lidp --dp-intercept -0.1 --conv 6 --roi-size 128 --filters 32"
-start-liv phong exp5fc "${PHONGC},${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --fc 0"
+#start-liv phong exp5fc "${PHONGC},${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --fc 0"
 #start-liv bezier exp5fc "${BEZIERC},${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --fc 2"
-start-liv prim exp5fc "${PRIMC},${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --fc 3"
+echo "${PHONGC},${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --fc 0"
+echo "${BEZIERC},${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --fc 2"
+#start-liv prim exp5fc "${PRIMC},${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --fc 3"
 #start-liv prim exp5fc "${PRIMC},${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-selection ${fixed_params} --fc 3"
 }
 
 function exp5fccmp {
 methods=(
-"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-0-lidp-0.05-sbf-0.7-aam-val"
-"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-1-lidp-0.05-sbf-0.7-aam-val"
-"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-2-lidp-0.05-sbf-0.7-aam-val"
-"5P-fc-is0.2-zm1.0-tr0.0-rr2-fl1-lr0.001-fc-3-lidp-0.05-sbf-0.7-aam-val"
+"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-32-fc-0-lidp-0.05-sbf-0.7-aam-val"
+"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-32-fc-1-lidp-0.05-sbf-0.7-aam-val"
+"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-32-fc-3-lidp-0.05-sbf-0.7-aam-val"
 )
 
 labels=(
 "No FC layers"
 "1 FC layer"
-"2 FC layer"
 "3 FC layer"
 )
 froc '5-fc-cmp' ${methods} ${labels} 
 }
 
 function sleval {
-#fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 1'
-fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64 --filter 64'
-start-liv minsky sleval "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-evaluation2 ${fixed_params}"
-start-liv prim sleval "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-evaluation ${fixed_params}"
-fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64 --filter 32'
-start-liv babbage sleval "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-evaluation2 ${fixed_params}"
-start-liv phong sleval "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-evaluation ${fixed_params}"
+fixed_params="${da_params} --lr 0.001 --epochs 1 --dropout 0.05 --lidp --dp-intercept -0.1 --conv 6 --roi-size 128 --filters 32"
+echo "${PRIMC},${THEANO_OPTS},device=cuda1 python lnd.py --model convnet --model-evaluation ${fixed_params} --fc 1"
+
+#start-liv minsky sleval "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-evaluation2 ${fixed_params}"
+#start-liv prim sleval "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-evaluation ${fixed_params}"
+#fixed_params='--da-tr 0 --da-rot 2 --da-zoom 1 --da-is 0.2 --da-flip 1 --lr 0.001 --epochs 100 --dropout 0.05 --lidp --fc 2 --conv 5 --roi-size 64 --filter 32'
+#start-liv babbage sleval "${THEANO_OPTS},device=cuda0 python lnd.py --model cnn --model-evaluation2 ${fixed_params}"
+#start-liv phong sleval "${THEANO_OPTS},device=cuda1 python lnd.py --model cnn --model-evaluation ${fixed_params}"
 }
 
 

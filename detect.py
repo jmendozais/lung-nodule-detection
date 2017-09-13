@@ -578,6 +578,7 @@ def generic_detect_blobs(img, lung_mask, threshold=0.5, method='wmci'):
 def save_blobs(method, args):
     images, blobs = lidc.load()
     masks = np.load('data/aam-lidc-pred-masks.npy')
+    print 'masks shape {}'.format(masks.shape)
     pred_blobs, probs = detect_blobs(images, masks, args.threshold, real_blobs=blobs, method=method)
     write_blobs(pred_blobs, 'data/{}-{}-aam-lidc-pred-blobs.pkl'.format(method, args.threshold))
 

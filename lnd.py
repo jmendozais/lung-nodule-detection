@@ -248,7 +248,7 @@ def model_selection_unsup(model_name, args):
     average_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
     util.save_froc([average_froc], 'data/{}-{}-val-froc'.format(model_name, args.detector), legends, with_std=True)
 
-def model_evaluation(model_name, args):
+def model_evaluation_tr_lidc_te_jsrt(model_name, args):
     imgs_tr, blobs_tr = lidc.load()
     pred_blobs_tr = detect.read_blobs('data/{}-lidc-pred-blobs.pkl'.format(args.detector))
     masks_tr = np.load('data/aam-lidc-pred-masks.npy')
@@ -265,9 +265,9 @@ def model_evaluation(model_name, args):
     froc = eval.average_froc([froc])
 
     legends = ['Test FROC (JSRT positives)']
-    util.save_froc([froc], 'data/{}-jsrt140p-froc'.format(model.name), legends, with_std=False)
+    util.save_froc([froc], 'data/{}-lidc-jsrt-froc'.format(model.name), legends, with_std=False)
 
-def model_evaluation2(model_name, args):
+def model_evaluation_jsrt_only(model_name, args):
     print "Model Evaluation Protocol 2"
     imgs, blobs= jsrt.load(set_name='jsrt140p')
     pred_blobs = detect.read_blobs('data/{}-jsrt140p-pred-blobs.pkl'.format(args.detector))
@@ -280,18 +280,22 @@ def model_evaluation2(model_name, args):
     legends = ['Fold {}'.format(i + 1) for i in range(5)] 
     for tr, te in folds:
         model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
-        model.name = model.name + '.fold-{}'.format(fold_idx + 1)
+        model.name = model.name + '-lidc.fold-{}'.format(fold_idx + 1)
         froc = evaluate_model(model, blobs[tr], pred_blobs[tr], rois[tr], blobs[te], pred_blobs[te], rois[te])
         frocs.append(froc)
 
         current_frocs = [eval.average_froc([froc_i]) for froc_i in frocs]
-        util.save_froc(current_frocs, 'data/{}-{}-pr2-folds'.format(model.name[:-7], args.detector), legends[:len(frocs)], with_std=False)
+        util.save_froc(current_frocs, 'data/{}-{}-only-jsrt-folds'.format(model.name[:-7], args.detector), legends[:len(frocs)], with_std=False)
         model.save('data/' + model.name)
         fold_idx += 1
 
     froc = eval.average_froc(frocs)
     legends = ['Test FROC (JSRT positives)']
-    util.save_froc([froc], 'data/{}-{}-pr2'.format(model.name[:-7], args.detector), legends, with_std=True)
+    util.save_froc([froc], 'data/{}-{}-only-jsrt'.format(model.name[:-7], args.detector), legends, with_std=True)
+
+def model_evaluation(model_name, args):
+    model_evaluation_tr_lidc_te_jsrt(model_name, args)
+    model_evaluation_jsrt_only(model_name, args)
 
 def save_performance_history(model_name, args, rois, blobs, pred_blobs, folds):
     model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
