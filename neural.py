@@ -216,13 +216,13 @@ class StageScheduler(Callback):
         self.decay = decay
     
     def on_epoch_begin(self, epoch, logs={}):
-        print 'lr: {}'.format(self.model.optimizer.lr.get_value())
+        print 'lr: {}'.format(K.get_value(self.model.optimizer.lr))
 
     def on_epoch_end(self, epoch, logs={}):
         if self.idx < len(self.stages):
             if epoch + 1 == self.stages[self.idx]:
-                lr = self.model.optimizer.lr.get_value()
-                self.model.optimizer.lr.set_value(float(lr * self.decay))
+                lr = K.get_value(self.model.optimizer.lr)
+                K.set_value(self.model.optimizer.lr, float(lr * self.decay))
                 self.idx += 1
 
 class LossHistory(Callback):
