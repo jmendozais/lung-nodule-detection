@@ -10,8 +10,7 @@ import cv2
 from skimage import draw
 import csv
 
-import matplotlib
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
 
 import util
 import preprocess
@@ -483,8 +482,8 @@ def generate_npy_dataset():
             sizes.append(roi[2])
 
     sizes.sort()
-    plt.hist(np.array(sizes).ravel(), 60, range=(0, 60)); 
-    plt.show()
+    #plt.hist(np.array(sizes).ravel(), 60, range=(0, 60)); 
+    #plt.show()
 
     print 'average rad {}, median rad {}'.format(np.mean(sizes), sizes[int(len(sizes)/2)])
     print 'av min, av max, min, max {} {} {} {}'.format(np.mean(mins), np.mean(maxs), np.min(mins), np.max(maxs))

@@ -8,7 +8,6 @@ from scipy.stats import skew, kurtosis
 import skimage.feature as feature
 import mahotas
 #import overfeat
-import matplotlib.pyplot as plt
 
 import util
 

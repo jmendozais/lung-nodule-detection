@@ -236,7 +236,6 @@ class DataProvider:
 
         return img, lung_mask
 
-import matplotlib.pyplot as plt
 
 def subtlety_by_size():
     set_name = 'jsrt'
@@ -327,6 +326,8 @@ def test_show_blobs():
     import util
     import detect
     import preprocess
+    import matplotlib.pyplot as plt
+
     set_name = 'jsrt140'
     imgs, blobs = load(set_name=set_name)
     pred_blobs = detect.read_blobs('data/wmci-aam-jsrt140-blobs-gt.pkl')

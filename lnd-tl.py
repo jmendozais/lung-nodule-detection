@@ -10,7 +10,6 @@ from sklearn.model_selection import KFold
 from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-#import matplotlib.pyplot as plt
 
 import preprocess
 import detect

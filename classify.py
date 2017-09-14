@@ -13,8 +13,6 @@ from sklearn.metrics import confusion_matrix
 from sklearn.base import clone
 from sklearn.feature_selection import SelectPercentile, f_classif
 
-import matplotlib.pyplot as plt
-
 import model
 import util
 

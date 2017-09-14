@@ -27,7 +27,6 @@ from menpo.shape import *
 from menpofit.aam import HolisticAAM, PatchAAM
 from menpo.feature import *
 from menpofit.aam import LucasKanadeAAMFitter, WibergInverseCompositional
-from matplotlib import pyplot as plt
 
 '''
 Constants

@@ -19,8 +19,6 @@ import util
 import time
 import math
 
-import matplotlib.pyplot as plt
-
 def gaussian_noise(x, mean=0, std=0.1):	
     noise = np.random.normal(loc=mean, scale=std, size=x.shape)
     scale_factor = np.max(x)

@@ -7,7 +7,6 @@ from skimage.exposure import equalize_hist
 from skimage.restoration import denoise_nl_means
 from skimage import draw
 from sklearn.model_selection import KFold
-#import matplotlib.pyplot as plt
 
 import preprocess
 import detect
