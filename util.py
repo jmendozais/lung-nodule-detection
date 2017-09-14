@@ -7,6 +7,8 @@ import cv2
 import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
+from skimage.draw import circle_perimeter_aa
+from skimage.draw import line
 from sklearn import metrics
 from sklearn.cross_validation import StratifiedKFold
 from sklearn.model_selection import KFold
@@ -122,7 +124,6 @@ def imshow(windowName,  _img, wait=True, display_shape=(1024, 1024)):
     b = np.max(img)
     img = (img - a) / (b - a + EPS);
     print np.min(img), np.max(img)
-    
     img = cv2.resize(img, display_shape, interpolation=cv2.INTER_CUBIC)
     img = cv2.applyColorMap(img, cv2.COLORMAP_JET)
     print 'shape {}'.format(img.shape)
@@ -234,6 +235,40 @@ def imshow_with_mask(image, mask):
     image[boundaries] = max_value
     imshow('Image with mask', np.array(image))
 
+def show_landmarks(image, landmarks):
+    print "show landmarks"
+    max_value = np.max(image)
+    print image.shape, np.array(landmarks.shape)
+    for i in range(len(landmarks)):
+        for j in range(len(landmarks[i])):
+            #print landmark
+            a, b = int(landmarks[i][j][0]), int(landmarks[i][j][1])
+            c, d = int(landmarks[i][(j+1)%len(landmarks[i])][0]), int(landmarks[i][(j+1)%len(landmarks[i])][1])
+            print a, b, c, d
+            rr, cc, val = circle_perimeter_aa(a, b, 3)
+            image[rr, cc] = (1-val) * max_value
+            rr, cc = line(a, b, c, d)
+            image[rr, cc] = 0
+            
+    imshow('Image with mask', np.array(image))
+    
+def save_image_with_landmarks(path, image, landmarks):
+    print "show landmarks"
+    max_value = np.max(image)
+    print image.shape, np.array(landmarks.shape)
+    for i in range(len(landmarks)):
+        for j in range(len(landmarks[i])):
+            #print landmark
+            a, b = int(landmarks[i][j][0]), int(landmarks[i][j][1])
+            c, d = int(landmarks[i][(j+1)%len(landmarks[i])][0]), int(landmarks[i][(j+1)%len(landmarks[i])][1])
+            print a, b, c, d
+            rr, cc, val = circle_perimeter_aa(a, b, 3)
+            image[rr, cc] = (1-val) * max_value
+            rr, cc = line(a, b, c, d)
+            image[rr, cc] = 0
+            
+    imwrite_as_pdf(path, np.array(image))
+        
 def print_detection(path, blobs):
     print path,
     print len(blobs),

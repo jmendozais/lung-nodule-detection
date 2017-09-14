@@ -308,7 +308,7 @@ methods=(
 labels=(
 "No flip"
 "Flip"
-)
+)the 
 froc '3-flip-cmp' ${methods} ${labels} 
 }
 
@@ -519,7 +519,7 @@ methods=(
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-24-fc-1-lidp-0.05-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-32-fc-1-lidp-0.05-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-64-fc-1-lidp-0.05-sbf-0.7-aam-val"
-)
+)the 
 labels=(
 "Convnet(6, 16)"
 "Convnet(6, 24)"

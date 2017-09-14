@@ -260,12 +260,12 @@ def model_evaluation_tr_lidc_te_jsrt(model_name, args):
     rois_te = create_rois(imgs_te, masks_te, pred_blobs_te, args)
 
     model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
-    model.name += '-lidc'
+    model.name += '-{}-lidc'.format(args.detector)
     froc = evaluate_model(model, blobs_tr, pred_blobs_tr, rois_tr, blobs_te, pred_blobs_te, rois_te)
     froc = eval.average_froc([froc])
 
     legends = ['Test FROC (JSRT positives)']
-    util.save_froc([froc], 'data/{}-lidc-jsrt-froc'.format(model.name), legends, with_std=False)
+    util.save_froc([froc], 'data/{}-{}-lidc-jsrt-froc'.format(model.name, args.detector), legends, with_std=False)
 
 def model_evaluation_jsrt_only(model_name, args):
     print "Model Evaluation Protocol 2"
@@ -280,7 +280,7 @@ def model_evaluation_jsrt_only(model_name, args):
     legends = ['Fold {}'.format(i + 1) for i in range(5)] 
     for tr, te in folds:
         model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
-        model.name = model.name + '-lidc.fold-{}'.format(fold_idx + 1)
+        model.name = model.name + '-{}-lidc.fold-{}'.format(args.detector, fold_idx + 1)
         froc = evaluate_model(model, blobs[tr], pred_blobs[tr], rois[tr], blobs[te], pred_blobs[te], rois[te])
         frocs.append(froc)
 
