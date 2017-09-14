@@ -28,14 +28,15 @@ font = {
         'size'   : 15}
 matplotlib.rc('font', **font)
 
-# IPython config
+# 1. IPython config
 '''
 plt.switch_backend('agg')
 plt.ioff()
 '''
 
-# Latex text rendering config (only available for backends Agg, PS, PDF)
+# 2. Save PDF config
 plt.switch_backend('PDF')
+# Latex text rendering config (only available for backends Agg, PS, PDF)
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['text.latex.unicode'] = True
 
