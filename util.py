@@ -8,6 +8,7 @@ import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
 from skimage.draw import circle_perimeter_aa
+from skimage.draw import circle
 from skimage.draw import line
 from sklearn import metrics
 from sklearn.cross_validation import StratifiedKFold
@@ -253,7 +254,8 @@ def show_landmarks(image, landmarks):
             a, b = int(landmarks[i][j][0]), int(landmarks[i][j][1])
             c, d = int(landmarks[i][(j+1)%len(landmarks[i])][0]), int(landmarks[i][(j+1)%len(landmarks[i])][1])
             print a, b, c, d
-            rr, cc, val = circle_perimeter_aa(a, b, 3)
+            rr, cc, val = circle(a, b, 3)
+            #rr, cc, val = circle_perimeter_aa(a, b, 3)
             image[rr, cc] = (1-val) * max_value
             rr, cc = line(a, b, c, d)
             image[rr, cc] = 0
@@ -262,7 +264,7 @@ def show_landmarks(image, landmarks):
     
 def save_image_with_landmarks(path, image, landmarks):
     print "show landmarks"
-    max_value = np.max(image)
+    max_value, min_value = np.max(image), np.min(image)
     print image.shape, np.array(landmarks.shape)
     for i in range(len(landmarks)):
         for j in range(len(landmarks[i])):
@@ -270,10 +272,12 @@ def save_image_with_landmarks(path, image, landmarks):
             a, b = int(landmarks[i][j][0]), int(landmarks[i][j][1])
             c, d = int(landmarks[i][(j+1)%len(landmarks[i])][0]), int(landmarks[i][(j+1)%len(landmarks[i])][1])
             print a, b, c, d
-            rr, cc, val = circle_perimeter_aa(a, b, 3)
-            image[rr, cc] = (1-val) * max_value
+            rr, cc = circle(a, b, 4)
+            image[rr, cc] = min_value
+            #rr, cc, val = circle_perimeter_aa(a, b, 5)
+            #image[rr, cc] = (1-val) * max_value
             rr, cc = line(a, b, c, d)
-            image[rr, cc] = 0
+            image[rr, cc] = min_value
             
     imwrite_as_pdf(path, np.array(image))
         

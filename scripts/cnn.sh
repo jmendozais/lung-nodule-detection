@@ -543,12 +543,14 @@ function exp5fccmp {
 methods=(
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-32-fc-0-lidp-0.05-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-32-fc-1-lidp-0.05-sbf-0.7-aam-val"
+"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-32-fc-2-lidp-0.05-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-32-fc-3-lidp-0.05-sbf-0.7-aam-val"
 )
 
 labels=(
 "No FC layers"
 "1 FC layer"
+"2 FC layer"
 "3 FC layer"
 )
 froc '5-fc-cmp' ${methods} ${labels} 
