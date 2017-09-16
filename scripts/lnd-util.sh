@@ -26,10 +26,10 @@ touch ${tmp1}
 touch ${tmp2}
 
 for ((i=0; i <${#methods[@]}; ++i)); do
-    echo "data/${methods[i]}-froc.npy,${labels[i]}" >> ${tmp1}
-    echo "data/${methods[i]}-abpi.txt,${labels[i]}" >> ${tmp2}
+    echo "data/${methods[i]}-froc.npy;${labels[i]}" >> ${tmp1}
+    echo "data/${methods[i]}-abpi.txt;${labels[i]}" >> ${tmp2}
 done
-python util.py --froc --list ${tmp1} --bpif ${tmp2} --out data/cmp-froc --max 200
+python util.py --froc --list ${tmp1} --bpif ${tmp2} --out data/cmp-froc --max 100
 }
 
 function froc {

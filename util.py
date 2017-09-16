@@ -23,11 +23,9 @@ import os
 from preprocess import *
 
 # Custom plot options
-font = {
-#       'family' : 'normal',
-#       'weight' : 'bold',
-        'size'   : 15}
-matplotlib.rc('font', **font)
+font_normal = {'family': 'serif', 'serif': ['Computer Modern'], 'size':18}
+font_small = {'family': 'serif', 'serif': ['Computer Modern'], 'size':15}
+matplotlib.rc('font', **font_normal)
 
 # 1. IPython config
 '''
@@ -38,8 +36,10 @@ plt.ioff()
 # 2. Save PDF config
 plt.switch_backend('PDF')
 # Latex text rendering config (only available for backends Agg, PS, PDF)
+
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['text.latex.unicode'] = True
+
 
 import time
 import csv
@@ -380,7 +380,7 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
     plt.legend(legend, loc=4, numpoints=1, prop={'size':4})
 
     print("Saving at {}_sota.pdf".format(name))
-    plt.savefig('{}_sota.pdf'.format(name))
+    plt.savefig('{}_sota.pdf'.format(name), pad_inches=0.3)
     plt.clf()
 
 
@@ -416,10 +416,16 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
     legend = list(legend)
 
     # Size params
-    legend_size = 12
-    marker_size = 6
-    line_width = 2
-    num_fppi = 25
+    if size == 'small':
+        legend_size = 20
+        marker_size = 6
+        line_width = 2
+        num_fppi = 25
+    elif size == 'normal':
+        legend_size = 15
+        marker_size = 4
+        line_width = 1
+        num_fppi = 50
 
     print "save froc params {} {} {}, {}, {} {}".format(len(op_set), op_set[0].shape, op_set[0].dtype, name, len(legend), type(legend))
 
@@ -450,7 +456,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
             auc_ = auc(np.array(op_set[i]), range=(0.0, fppi_max))
             legend[i] = r'{}, AUC = {:.2f}'.format(legend[i], auc_)
 
-    x_ticks = np.linspace(0.0, fppi_max, 11)
+    x_ticks = np.linspace(0.0, fppi_max, 11).astype(np.int)
     y_ticks = np.linspace(0.0, 1.0, 11)
     plt.xticks(x_ticks, x_ticks)
     plt.yticks(y_ticks, y_ticks)
@@ -468,8 +474,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
     np.save(name + '.npy', ops)
     print 'Saving to {}.pdf'.format(name)
     try: 
-        print 
-        plt.savefig('{}.pdf'.format(name))
+        plt.savefig('{}.pdf'.format(name), bbox_inches='tight')
     except :
         print "Error saving froc image."
 
@@ -488,7 +493,7 @@ def save_auc(epochs, aucs, name):
     plt.plot(epochs, aucs)
     plt.xlabel('Epoch')
     plt.ylabel('AUC')
-    plt.savefig('{}.pdf'.format(name))
+    plt.savefig('{}.pdf'.format(name), pad_inches=0.3)
     plt.clf()
 
 def save_aucs(epochs, auc_history, name, legend):
@@ -500,7 +505,7 @@ def save_aucs(epochs, auc_history, name, legend):
 
     plt.xlabel('Epoch')
     plt.ylabel('AUC')
-    plt.savefig('{}.pdf'.format(name))
+    plt.savefig('{}.pdf'.format(name), pad_inches=0.3)
     np.savez('{}.npz'.format(name), np.array(epochs), np.array(auc_history), np.array(legend))
     plt.clf()
 
@@ -524,7 +529,7 @@ def save_grid(scores, name, labels, ranges, title):
     plt.yticks(np.arange(len(ranges[0])), np.round(ranges[0], 5))
     plt.title(title)
     name='{}_{}'.format(name, time.clock())
-    plt.savefig('{}_grid.jpg'.format(name))
+    plt.savefig('{}_grid.jpg'.format(name), pad_inches=0.3)
     plt.clf()
 
 def save_weights(weights, name):
@@ -725,7 +730,7 @@ def join_frocs(listname, bpiname, outname, max_fppi):
     util.save_froc(np.array(frocs), outname, names, fppi_max=max_fppi)
 
 def single_froc(modelname, legendname, max_fppi):
-    valname = 'data/' + modelname + '-sbf-0.7-aam-val-froc'
+    valname = 'data/' + modelname 
     froc = np.load(valname + '.npy').T
     util.save_froc(np.array([froc]), valname, np.array([legendname]), fppi_max=max_fppi)
 
@@ -749,7 +754,7 @@ def plot_abpi(listname, outname, maxy):
     plt.xlabel('Threshold')
     plt.ylabel('Average False Positive per Image')
     plt.xticks(index + bar_width / 2, names)
-    plt.savefig('{}.pdf'.format(outname))
+    plt.savefig('{}.pdf'.format(outname), pad_inches=0.3)
     plt.clf()
 
 
@@ -826,17 +831,19 @@ if __name__ == '__main__':
     parser.add_argument('--single-froc', action='store_true')
 
     parser.add_argument('--model', default=None, type=str)
-    #@parser.add_argument('--legend', default=None, type=str)
+    parser.add_argument('--legend', default=None, type=str)
     parser.add_argument('--test', action='store_true')
-
+        
     args = parser.parse_args()
-    
+
+    if args.legend == None:
+        args.legend = args.model
     if args.test == True:
         test()
     if args.froc == True:
         join_frocs(args.list, args.bpif, args.out, args.max)
     elif args.single_froc == True:
-        single_froc(args.model, args.model, args.max)
+        single_froc(args.model, args.legend, args.max)
     elif args.abpi == True:
         plot_abpi(args.list, args.out, args.max)
  
