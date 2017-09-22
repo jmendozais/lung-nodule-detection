@@ -131,13 +131,14 @@ methods=(
 '5P-da-is0.0-zm1.0-tr0.15-rr0-fl1-lr0.001-sbf-0.7-aam-val'
 '5P-da-is0.0-zm1.0-tr0.18-rr0-fl1-lr0.001-sbf-0.7-aam-val'
 )
+
 labels=(
 'No translation'
-'Translation factor in [-0.03, 0.03)'
-'Translation factor in [-0.06, 0.06)'
-'Translation factor in [-0.12, 0.12)'
-'Translation factor in [-0.15, 0.15)'
-'Translation factor in [-0.18, 0.18)'
+'$t \in [-0.03, 0.03)$'
+'$t \in [-0.06, 0.06)$'
+'$t \in [-0.12, 0.12)$'
+'$t \in [-0.15, 0.15)$'
+'$t \in [-0.18, 0.18)$'
 )
 froc '3-tr-cmp' ${methods} ${labels} 
 }
@@ -163,12 +164,12 @@ da_params='--da-tr 0 --da-rot 3 --da-zoom 1 --da-is 0 --da-flip 1'
 da_params='--da-tr 0 --da-rot 6 --da-zoom 1 --da-is 0 --da-flip 1'
 #start-aqp salle exp3rot2 "THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 da_params='--da-tr 0 --da-rot 9 --da-zoom 1 --da-is 0 --da-flip 1'
-start-aqp salle exp3rot3 "sTHEANO_FLAGS=mode=FAST_RUN,device=gpu3,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+#start-aqp salle exp3rot3 "sTHEANO_FLAGS=mode=FAST_RUN,device=gpu3,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 
 da_params='--da-tr 0 --da-rot 12 --da-zoom 1 --da-is 0 --da-flip 1'
 #start-aqp salle exp3rot4 "sleep 14000; THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 da_params='--da-tr 0 --da-rot 15 --da-zoom 1 --da-is 0 --da-flip 1'
-#start-aqp salle exp3rot5 "THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
+echo start-aqp salle exp3rot5 "THEANO_FLAGS=mode=FAST_RUN,device=gpu2,floatX=float32,optimizer_including=cudnn python lnd.py --model 5P-da --model-selection --roi-size 64 --lr 0.001 --epochs 70 --blob-rad 32 ${da_params}"
 }
 
 function exp3rotcmp {
@@ -182,16 +183,16 @@ function exp3rotcmp {
 methods=(
 '5P-da-is0.0-zm1.0-tr0.0-rr0-fl1-lr0.001-sbf-0.7-aam-val'
 '5P-da-is0.0-zm1.0-tr0.0-rr6-fl1-lr0.001-sbf-0.7-aam-val'
-'5P-da-is0.0-zm1.0-tr0.0-rr12-fl1-lr0.001-sbf-0.7-aam-val'
-'5P-da-is0.0-zm1.0-tr0.0-rr18-fl1-lr0.001-sbf-0.7-aam-val'
-'5P-da-is0.0-zm1.0-tr0.0-rr24-fl1-lr0.001-sbf-0.7-aam-val'
+'5P-da-is0.0-zm1.0-tr0.0-rr12-fl1-sbf-0.7-aam-val'
+'5P-da-is0.0-zm1.0-tr0.0-rr18-fl1-sbf-0.7-aam-val'
+'5P-da-is0.0-zm1.0-tr0.0-rr24-fl1-sbf-0.7-aam-val'
 )
 labels=(
 'No rotation'
-'Rotation in [-6,6)'
-'Rotation in [-12,12)'
-'Rotation in [-18,18)'
-'Rotation in [-24,24)'
+'$\theta \in [-6,6)$'
+'$\theta \in [-12,12)$'
+'$\theta \in [-18,18)$'
+'$\theta \in [-24,24)$'
 )
 
 froc '3-rot-cmp' ${methods} ${labels} 
@@ -241,12 +242,12 @@ methods=(
 
 labels=(
 'No scaling'
-'Scale factor in [1.0, 1.05)'
-'Scale factor in [1.0, 1.1)'
-'Scale factor in [1.0, 1.15)'
-'Scale factor in [1.0, 1.2)'
-'Scale factor in [1.0, 1.25)'
-'Scale factor in [1.0, 1.3)'
+'$s \in [1.0, 1.05)$'
+'$s \in [1.0, 1.1)$'
+'$s \in [1.0, 1.15)$'
+'$s \in [1.0, 1.2)$'
+'$s \in [1.0, 1.25)$'
+'$s \in [1.0, 1.3)$'
 )
 
 froc '3-zoom-cmp' ${methods} ${labels} 
@@ -289,12 +290,12 @@ methods=(
 '5P-da-is0.4-zm1.0-tr0.0-rr0-fl1-lr0.001-sbf-0.7-aam-val'
 '5P-da-is0.5-zm1.0-tr0.0-rr0-fl1-lr0.001-sbf-0.7-aam-val'
 )
-labels=("No intensity shift"
-"Intentity shift in $\sigma$ * [0.0, 0.1)"
-"Intensity shift in $\sigma$ * [0.0, 0.2)"
-"Intensity shift in $\sigma$ * [0.0, 0.3)"
-"Intensity shift in $\sigma$ * [0.0, 0.4)"
-"Intensity shift in $\sigma$ * [0.0, 0.5)"
+labels=('No intensity shift'
+'$v \in [-0.1*\sigma, 0.1*\sigma)$'
+'$v \in [-0.2*\sigma, 0.2*\sigma)$'
+'$v \in [-0.3*\sigma, 0.3*\sigma)$'
+'$v \in [-0.4*\sigma, 0.4*\sigma)$'
+'$v \in [-0.5*\sigma, 0.5*\sigma)$'
 )
 froc '3-int-cmp' ${methods} ${labels} 
 }
@@ -308,7 +309,7 @@ methods=(
 labels=(
 "No flip"
 "Flip"
-)the 
+)
 froc '3-flip-cmp' ${methods} ${labels} 
 }
 
@@ -372,12 +373,12 @@ methods=(
 "5P-da-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-sbf-0.7-aam-val"
 )
 labels=(
-"No Data Augmentation"
-"Data Augmentation F"
-"Data Augmentation F+I"
-"Data Augmentation F+I+R"
-"Data Augmentation F+I+R+T"
-"Data Augmentation F+I+R+T+S"
+"No D.A."
+"D.A. F"
+"D.A. F+I"
+"D.A. F+I+R"
+"D.A. F+I+R+T"
+"D.A. F+I+R+T+S"
 )
 froc '3-sch-cmp' ${methods} ${labels} 
 }

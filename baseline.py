@@ -40,7 +40,8 @@ sota_authors = [
     'Schilham et al.',
     'Shiraishi et al.',
     'Coppini et al.',
-    'Wei et al.'
+    'Wei et al.',
+    'Wang et al.'
 ]
 
 scale_factor = 0.9091
@@ -51,6 +52,7 @@ shiraishi = np.array([[4.2, 0.704 * scale_factor], [5, 0.701 * scale_factor]])
 schilham = np.array([[2, 0.51], [4, 0.67], [5.4, 0.73]])
 coppini = np.array([[4.3, 0.60], [7.6, 0.70], [10.2, 0.75]])
 wei = np.array([[5.4, 0.80]])
+wang = np.array([[1.0, 0.692 * scale_factor]])
 
 sota_ops = [
     chen,
@@ -58,7 +60,8 @@ sota_ops = [
     shiraishi,
     schilham,
     coppini,
-    wei
+    wei,
+    wang
 ]
 
 hardie = np.array([

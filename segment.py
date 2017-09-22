@@ -1,4 +1,4 @@
-import numpy as np
+
 from itertools import *
 from math import *
 import cv2

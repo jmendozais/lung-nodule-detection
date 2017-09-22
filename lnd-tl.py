@@ -26,10 +26,14 @@ from operator import itemgetter
 from menpo.image import Image
 
 from keras.applications import vgg16
+from keras.models import Model
 
-def VGG16(mode='ots-feat', filename=None):
+def VGG16(mode='ots-feat', pool_layer=5, filename=None):
     if mode == 'ots-feat':
         network = vgg16.VGG16(include_top=False)
+        network.summary()
+        network = Model(input=network.input, output=network.get_layer('block{}_pool'.format(pool_layer)).output)
+        network.summary()
     elif mode == 'ft-fc':
         network = vgg16.VGG16(classes=2)
         for i in range(len(network.layers-6)):
@@ -140,7 +144,7 @@ def extract_features_from_convnet(args): # Load img, blobs and masks
     rois = lnd.create_rois(imgs, masks, pred_blobs, args, real_blobs=blobs)
     
     # Load model
-    network = VGG16(mode='ots-feat')
+    network = VGG16(mode='ots-feat', pool_layer=args.pool_layer)
     network.summary()
 
     #  Set up CV
@@ -177,13 +181,13 @@ def extract_features_from_convnet(args): # Load img, blobs and masks
         print "Range {}".format(range_tr)
         print "Extract feats on balanced tr set"
         feats_tr = extract_convfeats(network, X_tr, range_tr)
-        save_features("data/{}-f{}-lidc-feats".format(args.detector, fold_idx), feats_tr, Y_tr) 
+        save_features("data/vgg16-{}-{}-f{}-lidc-feats".format(args.pool_layer, args.detector, fold_idx), feats_tr, Y_tr) 
         gc.collect()
 
         print "Extract feats on te set"
         feats_te = extract_convfeats_from_rois(network, rois[te], range_tr)
         print "Test feats to save shape {}".format(feats_te.shape)
-        np.save("data/{}-f{}-te-lidc-feats.npy".format(args.detector, fold_idx), feats_te)
+        np.save("data/vgg16-{}-{}-f{}-te-lidc-feats.npy".format(args.pool_layer, args.detector, fold_idx), feats_te)
         gc.collect()
 
         fold_idx += 1
@@ -260,19 +264,19 @@ def exp_eval_ots_lidc_jsrt(args):
     print "range {}".format(range_tr)
 
     # Extract features
-    network = VGG16(mode='ots-feat')
+    network = VGG16(mode='ots-feat', pool_layer=args.pool_layer)
     feats_tr = extract_convfeats(network, rois_tr, range_tr)
     feats_te = extract_convfeats(network, rois_te, range_tr)
     np.save('data/{}-lidc-feats.npy'.format(args.detector, fold_idx), feats_tr)
     np.save('data/{}-jsrt140p-feats.npy'.format(args.detector, fold_idx), feats_te)
 
     # Eval classifier
-    clf = LinearSVC(C=args.svm_C)
+    clf = LinearSVC(C=args.svm_c)
     froc = evaluate_classifier(clf, feats_tr, Y_tr, blobs_te, pred_blobs_te, feats_te)
 
 def exp_eval_ots_jsrt_only(args):
     # load LIDC & JSRT-positives data
-    network = VGG16(mode='ots-feat')
+    network = VGG16(mode='ots-feat', pool_layer=args.pool_layer)
     print "Model Evaluation Protocol 2"
     imgs, blobs= jsrt.load(set_name='jsrt140p')
     pred_blobs = detect.read_blobs('data/{}-jsrt140p-pred-blobs.pkl'.format(args.detector))
@@ -289,7 +293,7 @@ def exp_eval_ots_jsrt_only(args):
         generator = augment.get_default_generator((args.roi_size, args.roi_size))
         rois_tr, Y_tr = augment.balance_and_perturb(rois_tr, Y_tr, generator)
 
-        clf = LinearSVC(C=0.0001)
+        clf = LinearSVC(C=args.svm_c)
         froc = evaluate_classifier(clf, rois_tr, Y_tr, blobs[te], pred_blobs[te], feats[te])
         frocs.append(froc)
         
@@ -339,6 +343,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='lnd-tl.py')
     lnd.add_feed_forward_convnet_args(parser)
     parser.add_argument('--mode', help='ots-feat, ots-clf, ft-fc, ft-all, ots, ft', default='ots-feat')
+    parser.add_argument('--svm-c', help='C', default=0.00001)
+    parser.add_argument('--pool-layer', default=5, type=int)
     args = parser.parse_args() 
 
     print args

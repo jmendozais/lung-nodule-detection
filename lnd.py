@@ -391,21 +391,21 @@ def add_feed_forward_convnet_args(parser):
     parser.add_argument('--ds-val', help='Detector', default='lidc-idri-npy-r1-r2')
     parser.add_argument('--fppi', help='False positives per image', default=4)
     
-    # Network params
+    # Network params: Default Convnet(6, 32, 1)
     parser.add_argument('--lr', help='Learning rate', default=0.001, type=float)
     parser.add_argument('--epochs', help='Number of epochs', default=70, type=int)
-    parser.add_argument('--da-rot', help='Rotation range in data augmentation', default=5, type=int)
-    parser.add_argument('--da-tr', help='Translation range in data augmentation', default=0.05, type=float)
-    parser.add_argument('--da-zoom', help='Zoom upper bound data augmentation', default=1.2, type=float)
-    parser.add_argument('--da-is', help='Intesity shift data augmentation', default=0.5, type=float)
-    parser.add_argument('--da-flip', help='Intesity shift data augmentation', default=1, type=int)
+    parser.add_argument('--da-rot', help='Rotation range in data augmentation', default=18, type=int)
+    parser.add_argument('--da-tr', help='Translation range in data augmentation', default=0.12, type=float)
+    parser.add_argument('--da-zoom', help='Zoom upper bound data augmentation', default=1.25, type=float)
+    parser.add_argument('--da-is', help='Intesity shift data augmentation', default=0.2, type=float)
+    parser.add_argument('--da-flip', help='Flip data augmentation', default=1, type=int)
 
-    parser.add_argument('--dropout', help='Fixed dp for conv layers or slope on variable dp', default=0.5, type=float)
-    parser.add_argument('--dp-intercept', help='Incercept on variable dp', default=0.0, type=float)
+    parser.add_argument('--dropout', help='Fixed dp for conv layers or slope on variable dp', default=0.05, type=float)
+    parser.add_argument('--dp-intercept', help='Incercept on variable dp', default=-0.1, type=float)
     parser.add_argument('--lidp', help='Linear increasing dropout', action='store_true')
 
-    parser.add_argument('--conv', help='Number of conv layers', default=5, type=int)
-    parser.add_argument('--filters', help='Number of filters on conv layers', default=64, type=int)
+    parser.add_argument('--conv', help='Number of conv layers', default=6, type=int)
+    parser.add_argument('--filters', help='Number of filters on conv layers', default=32, type=int)
     parser.add_argument('--fc', help='Number of fully connected layers', default=1, type=int)
 
 if __name__ == '__main__':

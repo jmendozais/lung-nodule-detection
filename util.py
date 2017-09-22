@@ -18,13 +18,14 @@ from skimage.segmentation import find_boundaries
 from scipy.interpolate import interp1d
 
 import argparse
+import baseline
 import os
 
 from preprocess import *
 
 # Custom plot options
 font_normal = {'family': 'serif', 'serif': ['Computer Modern'], 'size':18}
-font_small = {'family': 'serif', 'serif': ['Computer Modern'], 'size':15}
+font_small = {'family': 'serif', 'serif': ['Computer Modern'], 'size':24}
 matplotlib.rc('font', **font_normal)
 
 # 1. IPython config
@@ -343,47 +344,6 @@ def show_blob(path, img, blob):
 
     imshow(path, img_roi)
 
-def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, unique=True, with_std=False, fppi_max=10.0):
-    ax = plt.gca()
-    ax.grid(True)
-
-    line_format = ['b.-', 'g.-', 'r.-', 'c.-', 'm.-', 'y.-', 'k.-', 
-                                 'b.--', 'g.--', 'r.--', 'c.--', 'm.--', 'y.--', 'k.--',
-                                 'b.-.', 'g.-.', 'r.-.', 'c.-.', 'm.-.', 'y.-.', 'k.-.',
-                                 'b.:', 'g.:', 'r.:', 'c.:', 'm.:', 'y.:', 'k.:']
-
-    idx = 0
-    legend = []
-
-    markers = ['o', 's', '8', 'v', 'p', '*', 'h', 'H', 'D', 'd', '^', '<', '>']
-
-    for i in range(len(scatter_ops)):
-        ops = scatter_ops[i].T
-        plt.plot(ops[0], ops[1], '{}{}'.format(line_format[idx%28][0], markers[idx%13]), markersize=5, markeredgewidth=1)
-        idx += 1
-        legend.append(scatter_legend[i])
-
-    for i in range(len(froc_ops)):
-        ops = np.array(froc_ops[i]).T
-        plt.plot(ops[0], ops[1] * 0.9091, line_format[i%28], marker='x')
-        idx += 1
-        legend.append(froc_legend[i])
-
-    x_ticks = np.linspace(0.0, fppi_max, 11)
-    y_ticks = np.linspace(0.0, 1.0, 11)
-    plt.xticks(x_ticks, x_ticks)
-    plt.yticks(y_ticks, y_ticks)
-    plt.xlim([0, fppi_max])
-    plt.ylim([0, 1.00])
-    plt.ylabel('Sensitivity')
-    plt.xlabel('Average FPs per Image')
-    plt.legend(legend, loc=4, numpoints=1, prop={'size':4})
-
-    print("Saving at {}_sota.pdf".format(name))
-    plt.savefig('{}_sota.pdf'.format(name), pad_inches=0.3)
-    plt.clf()
-
-
 def subsample_operating_points(ops, num_fppi):
     print np.min(ops[0]), np.max(ops[0]), num_fppi
     fppi_range = np.linspace(np.min(ops[0]), np.max(ops[0]), num_fppi)
@@ -396,9 +356,87 @@ def subsample_operating_points(ops, num_fppi):
         f2 = interp1d(ops[0], ops[2], kind='cubic', fill_value=0.0, bounds_error=False)
         err = f2(fppi_range)
         return (fppi_range, sen, err)
-    
 
-def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True, fppi_max=10.0, with_auc=True, size='normal'):
+def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, unique=True, with_std=False, use_markers=True, fppi_max=10.0, with_auc=False, size='normal'):
+    if froc_legend != None:
+        assert len(froc_legend) == len(froc_ops)
+    legend = list(froc_legend)
+
+    # Size params
+    if size == 'small':
+        legend_size = 20
+        marker_size = 6
+        line_width = 2
+        num_fppi = 25
+
+    elif size == 'normal':
+        legend_size = 15
+        marker_size = 4
+        line_width = 1
+        num_fppi = 50
+
+    print "save froc params {} {} {}, {}, {} {}".format(len(froc_ops), froc_ops[0].shape, froc_ops[0].dtype, name, len(legend), type(legend))
+
+    ax = plt.gca()
+    ax.grid(True)
+
+    line_format = [
+        'k.-', 'm.-', 'b.-', 'c.-', 'g.-', 'y.-', 'r.-', 
+        'k.--', 'm.--', 'b.--', 'c.--', 'g.--', 'y.--', 'r.--', 
+        'k.-.', 'm.-.', 'b.-.', 'c.-.', 'g.-.', 'y.-.', 'r.-.', 
+        'k.:', 'm.:', 'b.:', 'c.:', 'g.:', 'y.:', 'r.:']
+
+    if use_markers == True:
+        markers = ['o', 's', '8', 'v', 'p', '*', 'h', 'H', 'D', 'd', '^', '<', '>']
+    else:
+        markers = '.............'
+        
+    for i in range(len(froc_ops)):
+        ops = np.array(froc_ops[i]).T
+        sops = subsample_operating_points(ops, num_fppi)
+        if with_std and len(sops) > 2:
+            plt.plot(sops[0], sops[1], line_format[i%28], marker=markers[i%13], markersize=marker_size, fillstyle='none', linewidth=line_width, mew=line_width)
+            plt.fill_between(sops[0], sops[1] - sops[2], sops[1] + sops[2], facecolor=line_format[i%13][0], alpha=0.3)  
+        else:
+            plt.plot(sops[0], sops[1], line_format[i%28], marker=markers[i%13], markersize=marker_size, fillstyle='none', linewidth=line_width, mew=line_width)
+
+        if legend != None and with_auc:
+            auc_ = auc(np.array(froc_ops[i]), range=(0.0, fppi_max))
+            legend[i] = r'{}, AUC = {:.2f}'.format(legend[i], auc_)
+
+    idx = len(froc_ops);
+    for i in range(len(scatter_ops)):
+        ops = scatter_ops[i].T
+        plt.plot(ops[0], ops[1], '{}{}'.format(line_format[idx%28][0], markers[idx%13]), markersize=5, markeredgewidth=1)
+        idx += 1
+        legend.append(scatter_legend[i])
+
+    x_ticks = np.linspace(0.0, fppi_max, 11).astype(np.int)
+    y_ticks = np.linspace(0.0, 1.0, 11)
+    plt.xticks(x_ticks, x_ticks)
+    plt.yticks(y_ticks, y_ticks)
+    plt.xlim([0, fppi_max])
+    plt.ylim([0, 1.00])
+    plt.xlabel('Average FPs per Image')
+    plt.ylabel('Sensitivity')
+
+    if legend != None:
+        plt.legend(legend, loc=4, prop={'size':legend_size}, numpoints=1)
+
+    if not unique:
+        name='{}-{}'.format(name, time.clock())
+
+    np.save(name + '.npy', ops)
+    print 'Saving to {}.pdf'.format(name)
+    try: 
+        plt.savefig('{}.pdf'.format(name), bbox_inches='tight')
+    except :
+        print "Error saving froc image."
+
+    plt.clf()
+
+
+def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True, fppi_max=10.0, with_auc=True, size='small'):
     """ Save the plot of the FROC curves in a pdf file and the interpolated operating points (n, 3, 101) for the 'n' FROC curves in a numpy array file.
 
     Parameters
@@ -417,11 +455,14 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
 
     # Size params
     if size == 'small':
-        legend_size = 20
+        matplotlib.rc('font', **font_small)
+        legend_size = 15
         marker_size = 6
         line_width = 2
         num_fppi = 25
+
     elif size == 'normal':
+        matplotlib.rc('font', **font_normal)
         legend_size = 15
         marker_size = 4
         line_width = 1
@@ -472,6 +513,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
         name='{}-{}'.format(name, time.clock())
 
     np.save(name + '.npy', ops)
+    np.save(name + '-legend.npy', legend)
     print 'Saving to {}.pdf'.format(name)
     try: 
         plt.savefig('{}.pdf'.format(name), bbox_inches='tight')
@@ -819,6 +861,16 @@ def test():
     plt.savefig('test.pdf')
     plt.clf()
 
+def compare(args):
+    valname = 'data/' + args.model
+    froc = np.load(valname + '.npy')
+    print froc[1].max()
+    froc[1] = froc[1] * 0.9090
+    print froc[1].max()
+    froc = froc.T
+
+    save_froc_mixed([froc], [args.legend], baseline.sota_ops, baseline.sota_authors, valname + '_sota')
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='util.py')
     parser.add_argument('file', nargs='?', default=os.getcwd())
@@ -829,7 +881,7 @@ if __name__ == '__main__':
     parser.add_argument('--froc', action='store_true')
     parser.add_argument('--abpi', action='store_true')
     parser.add_argument('--single-froc', action='store_true')
-
+    parser.add_argument('--compare', action='store_true')
     parser.add_argument('--model', default=None, type=str)
     parser.add_argument('--legend', default=None, type=str)
     parser.add_argument('--test', action='store_true')
@@ -838,6 +890,7 @@ if __name__ == '__main__':
 
     if args.legend == None:
         args.legend = args.model
+
     if args.test == True:
         test()
     if args.froc == True:
@@ -846,6 +899,8 @@ if __name__ == '__main__':
         single_froc(args.model, args.legend, args.max)
     elif args.abpi == True:
         plot_abpi(args.list, args.out, args.max)
+    elif args.compare == True:
+        compare(args)
  
     '''
     import jsrt
