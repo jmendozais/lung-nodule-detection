@@ -375,7 +375,6 @@ def preprocess_with_method(method, **kwargs):
         return wmci(**kwargs)
     elif method == 'lce':
         return lce(**kwargs)
-
     elif method == 'norm':
         return normalize(**kwargs)
     elif method == 'norm3':

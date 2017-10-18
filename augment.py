@@ -404,10 +404,9 @@ class ImageDataGenerator:
             shear_range=(0., 0.), translation_range=self.translation_range, 
             do_flip=self.flip)
         tform_augment = tform_ucenter + tform_augment + tform_center
-
         intensity_shift = np.random.uniform(*self.intensity_shift_range)
-
         new_x = np.full(shape=(x.shape[0], self.output_shape[0], self.output_shape[1]), dtype=np.float32, fill_value=0)
+
         for i in range(x.shape[0]):
             new_x[i] = self.fast_warp(x[i], tform_centering + tform_augment, output_shape=self.output_shape, mode='constant').astype('float32')
             new_x[i] += intensity_shift
@@ -416,16 +415,7 @@ class ImageDataGenerator:
             if self.gn_std != .0:
                 new_x[i] += gaussian_noise(new_x[i], self.gn_mean, self.gn_std)
 
-        '''
-        tmp = np.random.randint(10000)
-        for i in range(len(new_x)):
-            util.imwrite('aug_trfs_{}_{}.jpg'.format(tmp, i), new_x[i])
-            print 'aug {} {} : {} {}'.format(tmp, i, np.min(new_x[i]), np.max(new_x[i]))
-        '''
-        
-        #print("ptb pars {}".format((self.translation_range, self.zoom_range, self.rotation_range, self.flip, self.intensity_shift_range, self.gs_sigma, self.gn_std)))
-         
-        return np.array(new_x)
+        return new_x
 
     def centering_crop(self, X):
         assert len(X) > 0

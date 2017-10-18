@@ -4,7 +4,7 @@ import numpy as np
 import numpy.linalg as la
 from skimage import draw
 import cv2
-import matplotlib
+import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
 from skimage.draw import circle_perimeter_aa
@@ -26,7 +26,7 @@ from preprocess import *
 # Custom plot options
 font_normal = {'family': 'serif', 'serif': ['Computer Modern'], 'size':18}
 font_small = {'family': 'serif', 'serif': ['Computer Modern'], 'size':24}
-matplotlib.rc('font', **font_normal)
+mpl.rc('font', **font_normal)
 
 # 1. IPython config
 '''
@@ -38,9 +38,8 @@ plt.ioff()
 plt.switch_backend('PDF')
 # Latex text rendering config (only available for backends Agg, PS, PDF)
 
-matplotlib.rcParams['text.usetex'] = True
-matplotlib.rcParams['text.latex.unicode'] = True
-
+mpl.rcParams['text.usetex'] = True
+mpl.rcParams['text.latex.unicode'] = True
 
 import time
 import csv
@@ -183,13 +182,12 @@ def label_blob(img, blob, border='square', proba=-1, color=(255, 0, 0), margin=0
         cv2.putText(image,str(proba), (blob[0] + blob[2], blob[1] - blob[2]), cv2.FONT_HERSHEY_SIMPLEX, 2, color)
     return img
 
-def show_blobs(windowName, img, blobs):
+def show_blobs(windowName, img, blobs, probs):
     labeled = np.array(img).astype(np.float32)
     maxima = np.max(labeled)
-    for blob in blobs:
-        labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=-5)
+    for i in range(len(blobs)):
+        labeled = label_blob(labeled, blobs[i], probs[i], color=(maxima, 0, 0), margin=-5)
     imshow(windowName, labeled)
-
 
 def show_blobs_with_proba(windowName, img, blobs, probs):
     labeled = np.array(img).astype(np.float32)
@@ -198,12 +196,15 @@ def show_blobs_with_proba(windowName, img, blobs, probs):
         labeled = label_blob(labeled, blobs[i], color=(maxima, 0, 0), margin=-5, border='square', proba=probs[i])
     imshow(windowName, labeled)
 
-def imwrite_with_blobs(fname, img, blobs):
+def imwrite_with_blobs(fname, img, blobs, probs):
     labeled = np.array(img).astype(np.float32)
     maxima = np.max(labeled)
-    print 'imwrite input shape {}'.format(img.shape)
-    for blob in blobs:
-        labeled = label_blob(labeled, blob, color=(maxima, 0, 0), margin=5)
+    norm = mpl.colors.Normalize(vmin=0, vmax=1)
+    m = cm.ScalarMappable(norm=norm, cmap=mpl.cm.coolwarm)
+    for i in range(len(blobs)):
+        print probs[i]
+        value=probs[i][1]
+        labeled = label_blob(labeled, blobs[i], color=m.to_rgba(value)[:3], margin=5)
     imwrite_as_pdf(fname, labeled)
 
 def show_blobs_real_predicted(img, idx, res1, res2):
@@ -255,10 +256,10 @@ def show_landmarks(image, landmarks):
             a, b = int(landmarks[i][j][0]), int(landmarks[i][j][1])
             c, d = int(landmarks[i][(j+1)%len(landmarks[i])][0]), int(landmarks[i][(j+1)%len(landmarks[i])][1])
             print a, b, c, d
-            rr, cc, val = circle(a, b, 3)
+            rr, cc = circle(a, b, 3)
             #rr, cc, val = circle_perimeter_aa(a, b, 3)
-            image[rr, cc] = (1-val) * max_value
-            rr, cc = line(a, b, c, d)
+            #image[rr, cc] = (1-val) * max_value
+            #rr, cc = line(a, b, c, d)
             image[rr, cc] = 0
             
     imshow('Image with mask', np.array(image))
@@ -455,14 +456,14 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
 
     # Size params
     if size == 'small':
-        matplotlib.rc('font', **font_small)
+        mpl.rc('font', **font_small)
         legend_size = 15
         marker_size = 6
         line_width = 2
         num_fppi = 25
 
     elif size == 'normal':
-        matplotlib.rc('font', **font_normal)
+        mpl.rc('font', **font_normal)
         legend_size = 15
         marker_size = 4
         line_width = 1
@@ -512,7 +513,7 @@ def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_marker
     if not unique:
         name='{}-{}'.format(name, time.clock())
 
-    np.save(name + '.npy', ops)
+    np.save(name + '.npy', op_set)
     np.save(name + '-legend.npy', legend)
     print 'Saving to {}.pdf'.format(name)
     try: 
@@ -771,11 +772,6 @@ def join_frocs(listname, bpiname, outname, max_fppi):
         
     util.save_froc(np.array(frocs), outname, names, fppi_max=max_fppi)
 
-def single_froc(modelname, legendname, max_fppi):
-    valname = 'data/' + modelname 
-    froc = np.load(valname + '.npy').T
-    util.save_froc(np.array([froc]), valname, np.array([legendname]), fppi_max=max_fppi)
-
 def plot_abpi(listname, outname, maxy):
     f = open(listname, 'r')
     abpi = []
@@ -868,8 +864,17 @@ def compare(args):
     froc[1] = froc[1] * 0.9090
     print froc[1].max()
     froc = froc.T
-
     save_froc_mixed([froc], [args.legend], baseline.sota_ops, baseline.sota_authors, valname + '_sota')
+
+def single_froc(modelname, legendname, max_fppi):
+    valname = 'data/' + modelname 
+    froc = np.load(valname + '.npy').T
+    util.save_froc(np.array([froc]), valname, np.array([legendname]), fppi_max=max_fppi)
+
+def select_froc(args):
+    frocs = np.load('data/' + args.model + '.npy')
+    print args.model, frocs.shape
+    save_froc([frocs[args.epochs/2]], 'data/' + args.out, [args.out])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='util.py')
@@ -878,9 +883,11 @@ if __name__ == '__main__':
     parser.add_argument('--bpif', default=None, type=str)
     parser.add_argument('--out', default=None, type=str)
     parser.add_argument('--max', default=10.0, type=int)
+    parser.add_argument('--epochs', default=10.0, type=int)
     parser.add_argument('--froc', action='store_true')
     parser.add_argument('--abpi', action='store_true')
     parser.add_argument('--single-froc', action='store_true')
+    parser.add_argument('--select-froc', action='store_true')
     parser.add_argument('--compare', action='store_true')
     parser.add_argument('--model', default=None, type=str)
     parser.add_argument('--legend', default=None, type=str)
@@ -897,6 +904,8 @@ if __name__ == '__main__':
         join_frocs(args.list, args.bpif, args.out, args.max)
     elif args.single_froc == True:
         single_froc(args.model, args.legend, args.max)
+    elif args.select_froc == True:
+        select_froc(args)
     elif args.abpi == True:
         plot_abpi(args.list, args.out, args.max)
     elif args.compare == True:

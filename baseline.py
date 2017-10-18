@@ -15,14 +15,8 @@ from sklearn import ensemble
 from sklearn.metrics import auc
 import matplotlib.pyplot as plt
 
-from jsrt import DataProvider
-import model
-import eval
-import util
 import sys
 import argparse
-
-import jsrt
 
 step = 10
 fppi_range = np.linspace(0.0, 10.0, 101)
@@ -98,8 +92,8 @@ vde = vde.T
 op_set = [hardie, horvath, vde]
 legend = ['Hardie', 'Horvath', 'VDE']
 
-if __name__ == '__main__':
-    util.save_froc(op_set, 'baselines', legend)
+#if __name__ == '__main__':
+#    util.save_froc(op_set, 'baselines', legend)
 
 
 

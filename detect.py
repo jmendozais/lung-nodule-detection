@@ -562,9 +562,9 @@ def generic_detect_blobs(img, lung_mask, threshold=0.5, method='wmci'):
     if method == 'wmci':
         blobs, ci, probs = wmci_probs(lce, lung_mask, threshold)
     elif method == 'sbf':
-        util.imwrite_as_pdf('det-lce', lce)
+        #util.imwrite_as_pdf('det-lce', lce)
         blobs, ci, probs = sbf(lce, lung_mask, threshold)
-        util.imwrite_as_pdf('det-sbf', ci) 
+        #util.imwrite_as_pdf('det-sbf', ci) 
     elif method == 'log':
         blobs, probs = log_(lce, lung_mask, threshold)
     elif method == 'dog':

@@ -177,7 +177,11 @@ def evaluate_model(model, real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, 
 def model_selection(model_name, args):
     # Load img, blobs and masks
     imgs, blobs, paths = lidc.load(pts=True, set_name=args.ds_tr)
-    _, blobs_val,_  = lidc.load(pts=True, set_name=args.ds_val)
+    if args.ds_tr != args.ds_val:
+        _, blobs_val,_  = lidc.load(pts=True, set_name=args.ds_val)
+    else:
+        blobs_val = blobs
+
     pred_blobs = detect.read_blobs('data/{}-lidc-pred-blobs.pkl'.format(args.detector))
     masks = np.load('data/aam-lidc-pred-masks.npy')
     assert len(imgs) == len(masks) and len(pred_blobs) == len(masks)
@@ -200,6 +204,7 @@ def model_selection(model_name, args):
         model.network.summary()
         model.name = model.name + '.fold-{}'.format(fold_idx + 1)
         if args.load_model:
+            print "Loading model: data/{}".format(model.name)
             model.load('data/' + model.name)
 
         # Train/test model
@@ -216,7 +221,7 @@ def model_selection(model_name, args):
     average_froc = eval.average_froc(frocs, np.linspace(0.0, 10.0, 101))
     util.save_froc([average_froc], 'data/{}-{}-val-froc'.format(model.name[:-7], args.detector), legends, with_std=True)
 
-    save_performance_history(model_name, args, rois, blobs, pred_blobs, folds)
+    #save_performance_history(model_name, args, rois, blobs, pred_blobs, folds)
 
 def model_selection_unsup(model_name, args):
     imgs, blobs, paths = lidc.load(pts=True)
@@ -268,7 +273,7 @@ def model_evaluation_tr_lidc_te_jsrt(model_name, args):
 
 def model_evaluation_jsrt_only(model_name, args):
     print "Model Evaluation Protocol 2"
-    imgs, blobs= jsrt.load(set_name='jsrt140p')
+    imgs, blobs = jsrt.load(set_name='jsrt140p')
     pred_blobs = detect.read_blobs('data/{}-jsrt140p-pred-blobs.pkl'.format(args.detector))
     masks = np.load('data/aam-jsrt140p-pred-masks.npy')
     rois = create_rois(imgs, masks, pred_blobs, args)
@@ -292,9 +297,57 @@ def model_evaluation_jsrt_only(model_name, args):
     legends = ['Test FROC (JSRT positives)']
     util.save_froc([froc], 'data/{}-{}-only-jsrt'.format(model.name[:-7], args.detector), legends, with_std=True)
 
+def model_output(model_name, args):
+    print "Model Outputs"
+    imgs, blobs = jsrt.load(set_name='jsrt140p')
+    pred_blobs = detect.read_blobs('data/{}-jsrt140p-pred-blobs.pkl'.format(args.detector))
+    masks = np.load('data/aam-jsrt140p-pred-masks.npy')
+    rois = create_rois(imgs, masks, pred_blobs, args)
+    folds = KFold(n_splits=5, shuffle=True, random_state=util.FOLDS_SEED).split(imgs)
+
+    fold_idx = 0
+    frocs = []
+    legends = ['Fold {}'.format(i + 1) for i in range(5)] 
+    for tr, te in folds:
+        model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
+        model.name = model.name + '-{}-lidc.fold-{}'.format(args.detector, fold_idx + 1)
+        model.network.load_weights('data/{}_weights.h5'.format(model.name))
+        if not hasattr(model.preprocessor, 'zmuv_mean'):
+            model.preprocessor.fit(X_tr, Y_tr)
+
+        print "Predict ..." 
+        _, probs_te = neural.predict_proba(model, pred_blobs[te], rois[te])
+
+        print "Save ..." 
+        eval.save_outputs(imgs[te], blobs[te], pred_blobs[te], probs_te, rois[te])
+
 def model_evaluation(model_name, args):
     model_evaluation_tr_lidc_te_jsrt(model_name, args)
     model_evaluation_jsrt_only(model_name, args)
+
+def visual_results_jsrt_only(model_name, args):
+    print "Visual results for model {} JSRT only".format(model_name)
+    imgs, blobs = jsrt.load(set_name='jsrt140p')
+    pred_blobs = detect.read_blobs('data/{}-jsrt140p-pred-blobs.pkl'.format(args.detector))
+    masks = np.load('data/aam-jsrt140p-pred-masks.npy')
+    rois = create_rois(imgs, masks, pred_blobs, args)
+    folds = KFold(n_splits=5, shuffle=True, random_state=util.FOLDS_SEED).split(imgs)
+    fold_idx = 0
+    for tr, te in folds:
+        model.load('data/' + model.name + '.fold-{}'.format(fold_idx + 1))
+        model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
+        X_tr, Y_tr, X_te, Y_te = neural.create_train_test_sets(real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, pred_blobs_te, rois_te)
+
+        print 'load weights {}'.format(model.name)
+        model.network.load_weights('data/{}_weights.h5'.format(model.name))
+        # FIX: remove and add zmuv mean and zmuv std no Preprocessor augment.py
+        if not hasattr(model.preprocessor, 'zmuv_mean'):
+            model.preprocessor.fit(X_tr, Y_tr)
+
+        model.save('data/' + model.name)
+        pred_blobs_te, probs_te = neural.predict_proba(model, pred_blobs_te, rois_te)
+        util.save_rois_with_probs(rois_te, probs_te)
+        fold_idx += 1
 
 def save_performance_history(model_name, args, rois, blobs, pred_blobs, folds):
     model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
@@ -379,6 +432,7 @@ def add_feed_forward_convnet_args(parser):
     parser.add_argument('--model-selection-detailed', help='Perform model selection protocol', action='store_true') 
     parser.add_argument('--model-evaluation', help='Perform model evaluation protocol', action='store_true') 
     parser.add_argument('--model-evaluation2', help='Perform model evaluation protocol', action='store_true') 
+    parser.add_argument('--model-output', help='Perform model evaluation protocol', action='store_true') 
     parser.add_argument('--model-eval-jsrt', help='Perform model evaluation protocol', action='store_true') 
 
     # Model params
@@ -421,6 +475,8 @@ if __name__ == '__main__':
         eval_trained_model(args.model, args)
     elif args.model_selection:
         model_selection(args.model, args)
+    elif args.model_output:
+        model_output(args.model, args)
     elif args.model_evaluation:
         model_evaluation(args.model, args)
     elif args.model_evaluation2:

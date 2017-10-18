@@ -188,36 +188,20 @@ def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random):
     
     return np.array(roi_set)
 
-''' 
-ISSUE: We cant compare a multi-object FROC curve and a single-object one straighforwardly
-'''
-
-def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False, verbose=True, distance=31.43):
-    img_set = []
-    if data != None:
-        for i in range(len(data)):
-            img, lung_mask = data.get(i)
-            sampled, lce, norm = preprocess(img, lung_mask)
-            img_set.append(np.array([lce]))
-    img_set = np.array(img_set)
-
+# TODO: remove "def froc" unused parts.
+def save_outputs(imgs, real, pred, probs, rois, distance=31.43):
     n = len(real)       
     p = 0
 
     entries = []
-    if jsrt_idx != None: 
-        entries = np.full((0,6), fill_value=0, dtype=float)
-    else: 
-        entries = np.full((0,5), fill_value=0, dtype=float)
-    
     pred_blob_idx = 0
     
     num_imgs_with_nods = len(real)
     blob_rads = []
+    roi_idxs = []
     for i in range(n):
-        # Remove
-        if data != None:
-            util.show_blobs_real_predicted(img_set[i][0], jsrt_idx[i], real[i], pred[i])
+        # Write imgs with blobs
+        util.imwrite_with_blobs(imgs[i], pred[i], probs[i])
 
         if len(real[i]) == 0:
             num_imgs_with_nods -= 1
@@ -234,12 +218,11 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
             entry.append(np.full((probs[i].shape), fill_value=p, dtype=np.float))
             entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
             entry.append(np.arange(pred_blob_idx, pred_blob_idx + len(pred[i]), dtype=np.float))
-            if jsrt_idx != None:
-                entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
 
             entries = np.append(entries, np.array(entry).T, axis=0)
             p += 1
             blob_rads.append(real[i][j][2]/2)
+            roi_idxs.append((i, j))
 
         pred_blob_idx += len(pred[i])
     
@@ -286,6 +269,118 @@ def froc(real, pred, probs, rois=None, data=None, jsrt_idx=None, save_rois=False
             if entries[i][1] < threshold and not seen_blob[blob_idx]:
                 seen_blob[blob_idx] = True
                 tp += 1
+                j, k = roi_idxs[blob_idx]
+                util.imwrite("data/{:.5f}-tp-rois-{}-{}.jpg".format(entries[i][0], j, k), rois[j][k])
+            else:
+                fppi[img_idx] += 1
+                util.imwrite("data/{:.5f}-fp-rois-{}-{}.jpg".format(entries[i][0], j, k), rois[j][k])
+
+    froc.append([np.sum(fppi)/num_imgs_with_nods, tp / p])
+    froc.append([1000.0, tp / p])
+    targets = [2., 4., 10.]
+    ops = []
+    for i in range(len(targets)):
+        best_op = froc[0]
+        for op in froc:
+            if abs(op[0] - targets[i] + 0.5) <= 0.5:
+                best_op = op
+        ops.append(best_op)
+    ops.append(froc[-1])
+
+    print "fppi operating point: {}".format(ops)
+    print "mean fppi {}, tp {}, p {}".format(np.sum(fppi)/num_imgs_with_nods, tp, p)
+
+    return np.array(froc)   
+
+def froc(real, pred, probs, rois=None, imgs=None, jsrt_idx=None, verbose=True, distance=31.43):
+    n = len(real)       
+    p = 0
+
+    entries = []
+    if jsrt_idx != None: 
+        entries = np.full((0,6), fill_value=0, dtype=float)
+    else: 
+        entries = np.full((0,5), fill_value=0, dtype=float)
+    
+    pred_blob_idx = 0
+    
+    num_imgs_with_nods = len(real)
+    blob_rads = []
+    roi_idxs = []
+    for i in range(n):
+        # Remove
+        if imgs != None:
+            util.show_blobs_real_predicted(img_set[i][0], jsrt_idx[i], real[i], pred[i])
+
+        if len(real[i]) == 0:
+            num_imgs_with_nods -= 1
+
+        for j in range(len(real[i])):
+            if len(pred[i]) > 0:
+                dist = np.linalg.norm(pred[i][:,:2] - real[i][j][:2], axis=1)
+            else:
+                dist = np.array([])
+
+            entry = []
+            entry.append(probs[i])
+            entry.append(dist)
+            entry.append(np.full((probs[i].shape), fill_value=p, dtype=np.float))
+            entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
+            entry.append(np.arange(pred_blob_idx, pred_blob_idx + len(pred[i]), dtype=np.float))
+            if jsrt_idx != None:
+                entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
+
+            entries = np.append(entries, np.array(entry).T, axis=0)
+            p += 1
+            blob_rads.append(real[i][j][2]/2)
+            roi_idxs.append((i, j))
+
+        pred_blob_idx += len(pred[i])
+    
+    def compare_entries(a, b):
+        if a[0] == b[0]:
+            if a[1] == b[1]:
+                return 0
+            elif a[1] < b[1]:
+                return -1
+            else:
+                return 1
+        elif a[0] < b[0]:
+            return 1
+        else:
+            return -1
+
+    entries = sorted(entries, cmp=compare_entries)
+    entries = np.array(entries)
+
+    tp = 0.0
+    fppi = np.full((n,), fill_value=0, dtype=np.float)
+    seen_blob = np.full((p,), fill_value=False, dtype=np.bool)
+    seen_pred_blob = np.full((pred_blob_idx,), fill_value=False, dtype=np.bool)
+
+    froc = []
+    f_prev = -1.0
+    
+    for i in range(entries.shape[0]):
+        blob_idx = int(entries[i][2])
+        img_idx = int(entries[i][3])
+        pred_blob_idx = int(entries[i][4])
+
+        if entries[i][0] != f_prev:
+            froc.append([np.sum(fppi)/num_imgs_with_nods, tp / p])
+            f_prev = entries[i][0]
+
+        if not seen_pred_blob[pred_blob_idx]:
+            seen_pred_blob[pred_blob_idx] = True
+
+            threshold = distance
+            if distance == 'rad':
+                threshold = blob_rads[blob_idx]
+
+            if entries[i][1] < threshold and not seen_blob[blob_idx]:
+                seen_blob[blob_idx] = True
+                tp += 1
+                j, k = roi_idxs[blob_idx]
             else:
                 fppi[img_idx] += 1
 

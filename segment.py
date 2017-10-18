@@ -1,6 +1,7 @@
 
 from itertools import *
 from math import *
+import numpy as np
 import cv2
 import argparse
 import os
@@ -247,12 +248,13 @@ Lung segmentation based on Active Appearance Models
 
 class ActiveAppearanceModel(SegmentationModel):
 
-    def __init__(self, join_masks=True):
+    def __init__(self, join_masks=True, scales=[15, 23]):
         self.mean_shape = None 
         self.image_shape = None
         self.fitter = None
         self.num_landmarks_by_shape = None
         self.join_masks = join_masks
+        self.scales = scales
 
     def normalize(self, image):
         mean = np.mean(image)
@@ -290,7 +292,7 @@ class ActiveAppearanceModel(SegmentationModel):
             self.num_landmarks_by_shape.append(len(landmarks[i][0]))
         
         aam_images = self.prepare_data_for_aam(images, landmarks)
-        aam = PatchAAM(aam_images, group=None, patch_shape=[(15, 15), (23, 23)],
+        aam = PatchAAM(aam_images, group=None, patch_shape=[(self.scales[0], self.scales[0]), (self.scales[1], self.scales[1])],
                          diagonal=150, scales=(0.5, 1.0), holistic_features=fast_dsift,
                          max_shape_components=20, max_appearance_components=150,
                          verbose=True)
@@ -475,8 +477,8 @@ def iou(mask1, mask2):
     union = np.sum(union)
     return intersection*1.0/union
                 
-def eval_by_IOU(model_name, set_name, images_tr, landmarks_tr, images_te, masks_te):
-    model = get_shape_model(model_name, join_masks=False)
+def eval_by_IOU(model_name, set_name, images_tr, landmarks_tr, images_te, masks_te, scales=[10, 15]):
+    model = get_shape_model(model_name, join_masks=False, scales=scales)
 
     print 'Training model ...' 
     model.fit(images_tr, landmarks_tr)
@@ -496,7 +498,7 @@ def eval_by_IOU(model_name, set_name, images_tr, landmarks_tr, images_te, masks_
         ious.append((iou_l + iou_r)/2.0)
     return ious
 
-def eval(model_name):
+def eval(model_name, args):
     images_tr, _ = jsrt.load(set_name='jsrt_od')
     landmarks_tr = scr.load(set_name='jsrt_od')
     masks_tr = jsrt.masks(set_name='jsrt_od', join_masks=False)
@@ -504,8 +506,9 @@ def eval(model_name):
     landmarks_te = scr.load(set_name='jsrt_ev')
     masks_te = jsrt.masks(set_name='jsrt_ev', join_masks=False)
     
-    ious_ev = eval_by_IOU(model_name, 'jsrt_od', images_tr, landmarks_tr, images_te, masks_te)
-    ious_od = eval_by_IOU(model_name, 'jsrt_ev', images_te, landmarks_te, images_tr, masks_tr)
+    scales = [args.scale1, args.scale2]
+    ious_ev = eval_by_IOU(model_name, 'jsrt_od', images_tr, landmarks_tr, images_te, masks_te, scales=scales)
+    ious_od = eval_by_IOU(model_name, 'jsrt_ev', images_te, landmarks_te, images_tr, masks_tr, scales=scales)
 
     ious = ious_ev + ious_od
     ious.sort()
@@ -516,8 +519,7 @@ def eval(model_name):
     q3 = med + q1
     results = np.array([ious.mean(), ious.std(), ious.min(), ious[q1], ious[med], ious[q3], ious.max()])
     results = np.round(results, decimals=3)
-    print results
-    np.savetxt(model_name + '_eval.txt', results)
+    np.savetxt('{}_sc_{}_{}_eval.txt'.format(model_name, args.scale1, args.scale2), results)
                 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='segment.py')
@@ -527,6 +529,8 @@ if __name__ == '__main__':
     parser.add_argument('--segment', action='store_true')
     parser.add_argument('--method', default='aam')
     parser.add_argument('--eval', action='store_true')
+    parser.add_argument('--scale1', default=10, type=int)
+    parser.add_argument('--scale2', default=15, type=int)
 
     args = parser.parse_args()
     
@@ -535,7 +539,7 @@ if __name__ == '__main__':
     if args.segment:
         segment_datasets(args.method)
     if args.eval:
-        eval(args.method)
+        eval(args.method, args)
     if args.train_jsrt:
         train_with_model(args.method)
     elif args.file != os.getcwd():

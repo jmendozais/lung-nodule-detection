@@ -98,12 +98,12 @@ def scale_vgg(image):
 
 def extract_convfeats(network, X, intensity_range):
     # Scale image
-    X_scaled = []
+    input_shape = (3, 224, 224)
+    print "shape {} {}".format(len(X), input_shape)
+    X_scaled = np.zeros(shape=(len(X),) + input_shape)
     for i in range(len(X)):
-        x = scale_vgg(X[i])
-        X_scaled.append(x)
-    X_scaled = np.array(X_scaled)
-    
+        X_scaled[i] = scale_vgg(X[i])
+
     # Imagenet preproc 
     X_scaled -= intensity_range[0]
     gc.collect()
@@ -189,7 +189,6 @@ def extract_features_from_convnet(args): # Load img, blobs and masks
         print "Test feats to save shape {}".format(feats_te.shape)
         np.save("data/vgg16-{}-{}-f{}-te-lidc-feats.npy".format(args.pool_layer, args.detector, fold_idx), feats_te)
         gc.collect()
-
         fold_idx += 1
 
 def model_selection_with_convfeats(args):
@@ -212,6 +211,7 @@ def model_selection_with_convfeats(args):
 
     import time
     from sklearn.neighbors import KNeighborsClassifier
+
     for tr, te in folds:
         print "Load features fold {}".format(fold_idx)
         start = time.time()
@@ -356,7 +356,6 @@ if __name__ == '__main__':
         if args.mode == 'ots-feat':
             extract_features_from_convnet(args)
         elif args.mode == 'ots-clf':
-            args.svm_C = 1.0
             model_selection_with_convfeats(args)
         elif args.mode == 'ft-fc':
             model_selection_ft_fc(args)
@@ -364,16 +363,15 @@ if __name__ == '__main__':
             model_selection_ft_all(args)
         elif args.mode == 'exp-convfeats':
             exp_convfeats(args)
+        else:
+            raise Exception("undefined mode : " + args.mode)
     elif args.model_evaluation:
         if args.mode == 'ots':
             model_evaluation_with_convfeats(args)
         elif args.mode =='ft':
             model_evaluation_finetuning(args)
-    elif args.model_evaluation2:
-        if args.mode == 'ots':
-            model_evaluation2_with_convfeats(args)
-        elif args.mode =='ft':
-            model_evaluation2_finetuning(args)
+        else:
+            raise Exception("undefined mode : " + args.mode)
     elif args.save_rois:
         save_rois(args)
     else:

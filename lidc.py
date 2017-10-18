@@ -58,6 +58,8 @@ def lidc_nod_id(case_id, roi_id):
 
     if not roi_id in SIZE_BY_NOD.keys():
         print '\n\n Key not found in nodule-size csv file: {}!\n\n'.format(roi_id)
+    else:
+        print "SIZE_BY_NOD[{}] = {}".format(roi_id, SIZE_BY_NOD[roi_id])
 
     return roi_id
 
@@ -106,6 +108,7 @@ def read_rois(path):
     return result, ids, num_reads
 
 def is_valid_dcm(dcm):
+
     orientation = None
     if [0x0020, 0x0020] in dcm:
         orientation = dcm[0x0020, 0x0020]
@@ -370,6 +373,7 @@ def generate_npy_dataset():
     small_or_nn = small_or_non_nod_cases()
     lidc_rois = []
     lidc_subts = []
+    lidc_raw_sizes = []
     for i in range(len(paths_and_rois_)):
         dcm_path, roi_ids, roi_coords, roi_subts = paths_and_rois_[i]
 
@@ -398,17 +402,26 @@ def generate_npy_dataset():
 
         rois = []
         subts = []
+        raw_sizes = []
+
         for j in range(len(roi_ids)):
+            print "\n{"
             key = lidc_nod_id(case_id, roi_ids[j])
-            print 'Nod ID: {}'.format(key)
+            print 'NODULE ID: {} -> size {}'.format(key, size_map[key])
             size = 15
             if key in size_map.keys():
                 size = int(float(size_map[key]) * 1.0 /pixel_spacing)
+
             rois.append(np.append(roi_coords[j], size))
             subts.append(roi_subts[j])
+            raw_sizes.append(round(float(size_map[key])))
+            print "}\n"
 
         rois = np.array(rois)
         subts = np.array(subts)
+        raw_sizes = np.array(raw_sizes)
+
+        print "raw sizes {}".format(raw_sizes)
 
         '''
         tmp = img
@@ -470,21 +483,21 @@ def generate_npy_dataset():
 
         #np.save('{}/{}2.npy'.format(LIDC_NPY_PATH, case_id), img)
         #np.save('{}/{}-rois2.npy'.format(LIDC_NPY_PATH, case_id), resized_rois)
-        np.save('{}/{}-subts.npy'.format(LIDC_NPY_PATH, case_id), np.array(subts))
+        #np.save('{}/{}-subts.npy'.format(LIDC_NPY_PATH, case_id), np.array(subts))
          
         lidc_rois.append(resized_rois)
         lidc_subts.append(subts)
+        lidc_raw_sizes.append(raw_sizes)
         print resized_rois
 
     sizes = []
     for rpi in lidc_rois:
         for roi in rpi:
             sizes.append(roi[2])
-
     sizes.sort()
-    #plt.hist(np.array(sizes).ravel(), 60, range=(0, 60)); 
-    #plt.show()
 
+    tabs = subtlety_by_size(lidc_subts, lidc_raw_sizes)
+    print tabs
     print 'average rad {}, median rad {}'.format(np.mean(sizes), sizes[int(len(sizes)/2)])
     print 'av min, av max, min, max {} {} {} {}'.format(np.mean(mins), np.mean(maxs), np.min(mins), np.max(maxs))
     print 'multi {}, single {}, no nods {}, total rois {}'.format(multiple_nodules, single_nodule, no_nodules, roi_counter)
@@ -528,24 +541,20 @@ def load(set_name='lidc-idri-npy-r1-r2', pts=False, subt=False):
 
     return tuple(result)
 
-'''
-def subtlety_by_size():
-    imgs, blobs, paths, subts = load(pts=True, subt=True)
-    sizes = [0, 10, 15, 20, 25, 30, 60]
-    num_itv = len(sizes) - 1
+def subtlety_by_size(subs, sizes):
+    size_bounds = [0, 10, 15, 20, 25, 30, 60]
+    num_itv = len(size_bounds) - 1
     num_subs = 5
     
     tab = np.zeros(shape=(6, 7))
-    for i in range(len(paths)):
-        if subs[i] == 0:
-            continue
-
-        diams[i] *= (PIXEL_SPACING * 4)
-        col = 0
-        for k in range(num_itv):
-            if diams[i] > sizes[k] and diams[i] <= sizes[k + 1]:
-                col = k
-        tab[subs[i] - 1][col] += 1
+    for i in range(len(subs)):
+        for j in range(len(subs[i])):
+            print subs[i]
+            col = 0
+            for k in range(num_itv):
+                if sizes[i][j] > size_bounds[k] and sizes[i][j] <= size_bounds[k + 1]:
+                    col = k
+            tab[subs[i][j] - 1][col] += 1
 
     for i in range(num_subs):
         tab[i][num_itv] = np.sum(tab[i,:])
@@ -554,7 +563,7 @@ def subtlety_by_size():
         tab[num_subs][i] = np.sum(tab[:,i])
 
     tab[num_subs][num_itv] = np.sum(tab[:num_subs,:num_itv])
-'''
+    return tab
 
 if __name__ == '__main__':
     #plt.switch_backend('Qt4Agg')
