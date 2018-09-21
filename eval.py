@@ -86,7 +86,7 @@ def _get_paths(results_path):
 
     return paths
 
-def evaluate(real, predicted, data=None, sample=False):
+def evaluate(real, predicted, data=None, sample=False, criteria='25mm'):
     assert len(real) == len(predicted)
     num_imgs = len(real)
     sensitivity = 0
@@ -189,19 +189,38 @@ def extract_random_rois(data, dsize, rois_by_image=1000, rng=np.random):
     return np.array(roi_set)
 
 # TODO: remove "def froc" unused parts.
-def save_outputs(imgs, real, pred, probs, rois, distance=31.43):
+
+'''
+Hardie et al. used 
+22 mm (31,43 px) to evaluate WMCI
+22 mm (31,42 px) adjancent rejection rule
+25 mm (35,71 px) for CAD evaluation
+'''
+def save_outputs(imgs, real, pred, probs, rois, index, distance=31.43):
     n = len(real)       
     p = 0
+    side = rois[0][0][0].shape[0]
+    side = int(side/1.5)
+    offset = int((rois[0][0][0].shape[0] - side)/2)
 
-    entries = []
+    entries = np.full((0,6), fill_value=0, dtype=float)
     pred_blob_idx = 0
     
     num_imgs_with_nods = len(real)
     blob_rads = []
-    roi_idxs = []
     for i in range(n):
-        # Write imgs with blobs
-        util.imwrite_with_blobs(imgs[i], pred[i], probs[i])
+        print "Image {}".format(index[i]), imgs[i].shape, len(real[i]), len(pred[i]), len(probs[i]), len(rois[i])
+        top = []
+        for j in range(len(probs[i])):
+            top.append([probs[i][j], j])
+        top = list(reversed(sorted(top, key=itemgetter(0))))
+
+        NUM_BPI = 4
+        top = np.array(top)[:NUM_BPI]
+        top = top.T[1].astype(np.int)
+        util.imwrite_with_blobs("data/out_{}".format(index[i]), imgs[i][0], pred[i][top], probs[i][top])
+
+        util.imwrite_with_blobs("data/gt_{}".format(index[i]), imgs[i][0], real[i], [1.0])
 
         if len(real[i]) == 0:
             num_imgs_with_nods -= 1
@@ -213,16 +232,16 @@ def save_outputs(imgs, real, pred, probs, rois, distance=31.43):
                 dist = np.array([])
 
             entry = []
-            entry.append(probs[i])
-            entry.append(dist)
-            entry.append(np.full((probs[i].shape), fill_value=p, dtype=np.float))
-            entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
-            entry.append(np.arange(pred_blob_idx, pred_blob_idx + len(pred[i]), dtype=np.float))
+            entry.append(probs[i]) # 0: probs
+            entry.append(dist) # 1: dist
+            entry.append(np.full((probs[i].shape), fill_value=p, dtype=np.float)) # 2: real blob index
+            entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float)) #3: image idx
+            entry.append(np.arange(pred_blob_idx, pred_blob_idx + len(pred[i]), dtype=np.float)) # 4: pred blob index
+            entry.append(np.arange(0, len(pred[i]), dtype=np.float)) # 5: blob pos in image
 
             entries = np.append(entries, np.array(entry).T, axis=0)
             p += 1
             blob_rads.append(real[i][j][2]/2)
-            roi_idxs.append((i, j))
 
         pred_blob_idx += len(pred[i])
     
@@ -238,6 +257,10 @@ def save_outputs(imgs, real, pred, probs, rois, distance=31.43):
             return 1
         else:
             return -1
+
+    #print "entries"
+    #for entry in entries:
+    #    print int(entry[3]), int(entry[5])
 
     entries = sorted(entries, cmp=compare_entries)
     entries = np.array(entries)
@@ -269,11 +292,14 @@ def save_outputs(imgs, real, pred, probs, rois, distance=31.43):
             if entries[i][1] < threshold and not seen_blob[blob_idx]:
                 seen_blob[blob_idx] = True
                 tp += 1
-                j, k = roi_idxs[blob_idx]
-                util.imwrite("data/{:.5f}-tp-rois-{}-{}.jpg".format(entries[i][0], j, k), rois[j][k])
+                j, k = int(entries[i][3]), int(entries[i][5])
+                roi = rois[j][k][0][offset:offset+side, offset:offset+side]
+                util.imwrite_as_pdf("data/{:.8f}-tp-rois-{}-{}".format(entries[i][0], index[j], k), roi)
             else:
                 fppi[img_idx] += 1
-                util.imwrite("data/{:.5f}-fp-rois-{}-{}.jpg".format(entries[i][0], j, k), rois[j][k])
+                j, k = int(entries[i][3]), int(entries[i][5])
+                roi = rois[j][k][0][offset:offset+side, offset:offset+side]
+                util.imwrite_as_pdf("data/{:.8f}-fp-rois-{}-{}".format(entries[i][0], index[j], k), roi)
 
     froc.append([np.sum(fppi)/num_imgs_with_nods, tp / p])
     froc.append([1000.0, tp / p])
@@ -306,7 +332,6 @@ def froc(real, pred, probs, rois=None, imgs=None, jsrt_idx=None, verbose=True, d
     
     num_imgs_with_nods = len(real)
     blob_rads = []
-    roi_idxs = []
     for i in range(n):
         # Remove
         if imgs != None:
@@ -333,7 +358,6 @@ def froc(real, pred, probs, rois=None, imgs=None, jsrt_idx=None, verbose=True, d
             entries = np.append(entries, np.array(entry).T, axis=0)
             p += 1
             blob_rads.append(real[i][j][2]/2)
-            roi_idxs.append((i, j))
 
         pred_blob_idx += len(pred[i])
     
@@ -380,7 +404,6 @@ def froc(real, pred, probs, rois=None, imgs=None, jsrt_idx=None, verbose=True, d
             if entries[i][1] < threshold and not seen_blob[blob_idx]:
                 seen_blob[blob_idx] = True
                 tp += 1
-                j, k = roi_idxs[blob_idx]
             else:
                 fppi[img_idx] += 1
 
@@ -401,6 +424,118 @@ def froc(real, pred, probs, rois=None, imgs=None, jsrt_idx=None, verbose=True, d
         print "mean fppi {}, tp {}, p {}".format(np.sum(fppi)/num_imgs_with_nods, tp, p)
 
     return np.array(froc)   
+
+def detection_by_distance(real, pred, probs, rois=None, imgs=None, jsrt_idx=None, verbose=True, distance=31.43):
+    n = len(real)       
+    p = 0
+
+    entries = []
+    if jsrt_idx != None: 
+        entries = np.full((0,6), fill_value=0, dtype=float)
+    else: 
+        entries = np.full((0,5), fill_value=0, dtype=float)
+    
+    pred_blob_idx = 0
+    
+    num_imgs_with_nods = len(real)
+    blob_rads = []
+    for i in range(n):
+        # Remove
+        if imgs != None:
+            util.show_blobs_real_predicted(img_set[i][0], jsrt_idx[i], real[i], pred[i])
+
+        if len(real[i]) == 0:
+            num_imgs_with_nods -= 1
+
+        for j in range(len(real[i])):
+            if len(pred[i]) > 0:
+                dist = np.linalg.norm(pred[i][:,:2] - real[i][j][:2], axis=1)
+            else:
+                dist = np.array([])
+
+            entry = []
+            entry.append(probs[i])
+            entry.append(dist)
+            entry.append(np.full((probs[i].shape), fill_value=p, dtype=np.float))
+            entry.append(np.full((probs[i].shape), fill_value=i, dtype=np.float))
+            entry.append(np.arange(pred_blob_idx, pred_blob_idx + len(pred[i]), dtype=np.float))
+            if jsrt_idx != None:
+                entry.append(np.full((probs[i].shape), fill_value=jsrt_idx[i], dtype=np.float))
+
+            entries = np.append(entries, np.array(entry).T, axis=0)
+            p += 1
+            blob_rads.append(real[i][j][2]/2)
+
+        pred_blob_idx += len(pred[i])
+    
+    def compare_entries(a, b):
+        if a[0] == b[0]:
+            if a[1] == b[1]:
+                return 0
+            elif a[1] < b[1]:
+                return -1
+            else:
+                return 1
+        elif a[0] < b[0]:
+            return 1
+        else:
+            return -1
+
+    entries = sorted(entries, cmp=compare_entries)
+    entries = np.array(entries)
+
+    tp = 0.0
+    fppi = np.full((n,), fill_value=0, dtype=np.float)
+    seen_blob = np.full((p,), fill_value=False, dtype=np.bool)
+    seen_pred_blob = np.full((pred_blob_idx,), fill_value=False, dtype=np.bool)
+
+    froc = []
+    f_prev = -1.0
+    
+    for i in range(entries.shape[0]):
+        blob_idx = int(entries[i][2])
+        img_idx = int(entries[i][3])
+        pred_blob_idx = int(entries[i][4])
+
+        if entries[i][0] != f_prev:
+            froc.append([np.sum(fppi)/num_imgs_with_nods, tp / p])
+            f_prev = entries[i][0]
+
+        if not seen_pred_blob[pred_blob_idx]:
+            seen_pred_blob[pred_blob_idx] = True
+
+            threshold = distance
+            if distance == 'rad':
+                threshold = blob_rads[blob_idx]
+
+            if entries[i][1] < threshold and not seen_blob[blob_idx]:
+                seen_blob[blob_idx] = True
+                tp += 1
+            else:
+                fppi[img_idx] += 1
+
+    froc.append([np.sum(fppi)/num_imgs_with_nods, tp / p])
+    froc.append([1000.0, tp / p])
+    targets = [2., 4., 10.]
+    ops = []
+    for i in range(len(targets)):
+        best_op = froc[0]
+        for op in froc:
+            if abs(op[0] - targets[i] + 0.5) <= 0.5:
+                best_op = op
+        ops.append(best_op)
+    ops.append(froc[-1])
+
+    if verbose:
+        print "fppi operating point: {}".format(ops)
+        print "mean fppi {}, tp {}, p {}".format(np.sum(fppi)/num_imgs_with_nods, tp, p)
+
+    return np.array(froc)   
+
+
+
+
+
 
 def froc_stratified(real, pred, probs, kind, num_frocs):
     n = len(real)       

@@ -395,7 +395,7 @@ methods=(
 "5P-da-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-sbf-0.7-aam-val"
 "5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.075-sbf-0.7-aam-val"
 "5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.1-sbf-0.7-aam-val"
-"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.125-sbf-0.7-aam-val"
+"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-5-fil-64-fc-1-lidp-0.125-sbf-0.7-aam-val"
 "5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.15-sbf-0.7-aam-val"
 "5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.175-sbf-0.7-aam-val"
 )
@@ -425,9 +425,8 @@ function exp5convcmp {
 methods=(
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-4-fil-64-fc-1-lidp-0.125-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-5-fil-64-fc-1-lidp-0.125-sbf-0.7-aam-val"
-"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-64-fc-1-lidp-0.05-sbf-0.7-aam-val"
+"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-64-fc-1-lidp-0.125-sbf-0.7-aam-val"
 )
-#"5P-dp-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001lidp-0.05-sbf-0.7-aam-val"
 labels=(
 "4 conv layer"
 "5 conv layer"
@@ -453,7 +452,7 @@ methods=(
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-16-fc-1-lidp-0.125-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-32-fc-1-lidp-0.125-sbf-0.7-aam-val"
 "convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-48-fc-1-lidp-0.125-sbf-0.7-aam-val"
-"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-64-fc-1-lidp-0.05-sbf-0.7-aam-val"
+"convnet-is0.2-zm1.25-tr0.12-rr18-fl1-lr0.001-co-6-fil-64-fc-1-lidp-0.125-sbf-0.7-aam-val"
 )
 labels=(
 "Convnet(6, 16)"

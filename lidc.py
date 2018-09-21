@@ -565,9 +565,24 @@ def subtlety_by_size(subs, sizes):
     tab[num_subs][num_itv] = np.sum(tab[:num_subs,:num_itv])
     return tab
 
+def save_samples_by_subt():
+    imgs, blobs, subt = load(subt=True)
+    count = [0, 0, 0, 0, 0, 0]
+    for i in range(len(blobs)):
+        for j in range(len(blobs[i])): 
+            blob = (blobs[i][j][0], blobs[i][j][1], 32)
+            print blob
+            roi = util.extract_roi(imgs[i][0], blob, dsize=(128, 128))
+            sub = int(subt[i][j])
+            if count[sub] < 5:
+                print('data/lidc_sub_{}_i_{}'.format(sub, count[sub]))
+                count[sub] += 1
+                util.imwrite_as_pdf('data/lidc_sub_{}_i_{}'.format(sub, count[sub]), roi)
+
 if __name__ == '__main__':
     #plt.switch_backend('Qt4Agg')
     #plt.ion()
-    generate_npy_dataset()
+    save_samples_by_subt()
+    #generate_npy_dataset()
     #res = size_by_case_and_noid_map()
     #load()

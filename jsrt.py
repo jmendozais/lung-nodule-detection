@@ -303,14 +303,15 @@ def save_samples_by_subt():
             continue
         idxs_by_sub[subs[i] - 1].append(i)
     for i in range(5):
-        print len(idxs_by_sub[i])
-        idx = np.random.randint(0, len(idxs_by_sub[i]))
-        idx = idxs_by_sub[i][idx]
-        img = np.load(paths[idx])
-        print img.shape
-        blob = (4*loc[idx][0], 4*loc[idx][1], 4*diams[idx])
-        roi = util.extract_roi(img, blob, dsize=(128, 128))
-        util.imwrite_as_pdf('data/sub_{}'.format(i + 1, idx), roi)
+        for j in range(5):
+            print len(idxs_by_sub[i])
+            idx = np.random.randint(0, len(idxs_by_sub[i]))
+            idx = idxs_by_sub[i][idx]
+            img = np.load(paths[idx])
+            print img.shape
+            blob = (4*loc[idx][0], 4*loc[idx][1], 4*diams[idx])
+            roi = util.extract_roi(img, blob, dsize=(128, 128))
+            util.imwrite_as_pdf('data/sub_{}_i_{}'.format(i + 1, j), roi)
 
     # Overlaped sample
     overlapped = ['LN060','LN065','LN105','LN108','LN112','LN113','LN115','LN126','LN130','LN133','LN136','LN149','LN151','LN152']

@@ -171,7 +171,7 @@ def evaluate_model(model, real_blobs_tr, pred_blobs_tr, rois_tr, real_blobs_te, 
 
     model.save('data/' + model.name)
 
-    pred_blobs_te, probs_te = neural.predict_proba(model, pred_blobs_te, rois_te)
+    pred_blobs_te, probs_te, _ = neural.predict_proba(model, pred_blobs_te, rois_te)
     return eval.froc(real_blobs_te, pred_blobs_te, probs_te)
 
 def model_selection(model_name, args):
@@ -308,7 +308,10 @@ def model_output(model_name, args):
     fold_idx = 0
     frocs = []
     legends = ['Fold {}'.format(i + 1) for i in range(5)] 
+
+    index = np.array(range(len(imgs)))
     for tr, te in folds:
+        X_tr, Y_tr, _, _ = neural.create_train_test_sets(blobs[tr], pred_blobs[tr], rois[tr], blobs[te], pred_blobs[te], rois[te])
         model = neural.create_network(model_name, args, (1, args.roi_size, args.roi_size)) 
         model.name = model.name + '-{}-lidc.fold-{}'.format(args.detector, fold_idx + 1)
         model.network.load_weights('data/{}_weights.h5'.format(model.name))
@@ -316,10 +319,10 @@ def model_output(model_name, args):
             model.preprocessor.fit(X_tr, Y_tr)
 
         print "Predict ..." 
-        _, probs_te = neural.predict_proba(model, pred_blobs[te], rois[te])
+        pred_blobs_te, probs_te, rois_te = neural.predict_proba(model, pred_blobs[te], rois[te])
 
         print "Save ..." 
-        eval.save_outputs(imgs[te], blobs[te], pred_blobs[te], probs_te, rois[te])
+        eval.save_outputs(imgs[te], blobs[te], pred_blobs_te, probs_te, rois_te, index[te])
 
 def model_evaluation(model_name, args):
     model_evaluation_tr_lidc_te_jsrt(model_name, args)
@@ -466,7 +469,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='lnd.py')
     add_feed_forward_convnet_args(parser)
     args = parser.parse_args() 
-    print args
 
     if args.file:
         image = np.load(args.file).astype('float32')

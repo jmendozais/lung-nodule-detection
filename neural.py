@@ -5,7 +5,11 @@ import pickle
 import numpy as np
 np.random.seed(1000000007) # for reproducibility
 
-import theano
+import util
+import classify
+from augment import *
+from resnet import resnet_cifar10 as resnet
+
 import keras
 import gc
 
@@ -22,10 +26,6 @@ from keras.utils import np_utils, generic_utils
 from keras.regularizers import l1_l2
 from six.moves import range
 from sklearn.externals import joblib
-import util
-import classify
-from augment import *
-from resnet import resnet_cifar10 as resnet
 
 # Layers
 from keras.engine import Layer
@@ -60,10 +60,12 @@ def print_trainable_state(layers):
             print("Layer {} - {} trainable {} weight sample {}".format(k, layers[k].name, layers[k].trainable, layers[k].get_weights()[0][0][0][0][0]))
     print("")
 
+'''
 def get_activations(model, layer, X_batch):
     get_activations = theano.function([model.layers[0].input], model.layers[layer].get_output(train=False), allow_input_downcast=True)
     activations = get_activations(X_batch) # same result as above
     return activations
+'''
 
 def get_optimizer(config):
     if 'opt' in config:
@@ -774,8 +776,7 @@ Predict
 
 def adjacency_rule(blobs, probs):
     MAX_DIST2 = 987.755
-    filtered_blobs = []
-    filtered_probs = []
+    index = []
     for j in range(len(blobs)):
         valid = True
         for k in range(len(blobs)):
@@ -783,32 +784,24 @@ def adjacency_rule(blobs, probs):
             if dist2 < MAX_DIST2 and probs[j] + util.EPS < probs[k]:
                 valid = False
                 break
-
         if valid:
-            filtered_blobs.append(blobs[j])
-            filtered_probs.append(probs[j])
-    return np.array(filtered_blobs), np.array(filtered_probs)
-
-def _predict_proba_one(network, blobs, rois):
-    probs = network.predict_proba(rois, self.streams != 'none')
-    probs = np.max(probs.T[1:], axis=0)
-    blobs = np.array(blobs)
-
-    blobs, probs = adjacency_rule(blobs, probs)
-    return blobs, probs
+            index.append(j)
+    return index
 
 def predict_proba(network, blob_set, roi_set):
     data_blobs = []
     data_probs = []
+    data_rois = []
 
     for i in range(len(roi_set)):
         probs = network.predict_proba(roi_set[i])
         probs = np.max(probs.T[1:], axis=0)
-        blobs, probs = adjacency_rule(blob_set[i], probs)
+        index = adjacency_rule(blob_set[i], probs)
 
-        data_blobs.append(blobs) 
-        data_probs.append(probs)
-    return np.array(data_blobs), np.array(data_probs)
+        data_blobs.append(blob_set[i][index]) 
+        data_probs.append(probs[index])
+        data_rois.append(roi_set[i][index])
+    return np.array(data_blobs), np.array(data_probs), np.array(data_rois)
 
 '''
 Create network
@@ -1639,6 +1632,25 @@ def create_network(model, args, input_shape=(1, 32, 32), streams=-1, detector=Fa
 
     return net_model
  
-''' .... '''
+if __name__ == '__main__':
+    models = []
+    models.append(['4, 64, 1', convnet((1, 32, 32), conv_layers=4, filters=64, dropout=0.0, fc_layers=1)])
+    models.append(['5, 64, 1', convnet((1, 64, 64), conv_layers=5, filters=64, dropout=0.0, fc_layers=1)])
+    models.append(['6, 64, 1', convnet((1, 128, 128), conv_layers=6, filters=64, dropout=0.0, fc_layers=1)])
+    models.append(['7, 64, 1', convnet((1, 256, 256), conv_layers=7, filters=64, dropout=0.0, fc_layers=1)])
+
+    models.append(['6, 16, 1', convnet((1, 64, 64), conv_layers=6, filters=16, dropout=0.0, fc_layers=1)])
+    models.append(['6, 32, 1', convnet((1, 64, 64), conv_layers=6, filters=32, dropout=0.0, fc_layers=1)])
+    models.append(['6, 64, 1', convnet((1, 64, 64), conv_layers=6, filters=64, dropout=0.0, fc_layers=1)])
+    models.append(['6, 96, 1', convnet((1, 64, 64), conv_layers=6, filters=96, dropout=0.0, fc_layers=1)])
+
+    models.append(['6, 32, 0', convnet((1, 64, 64), conv_layers=6, filters=32, dropout=0.0, fc_layers=0)])
+    models.append(['6, 32, 1', convnet((1, 64, 64), conv_layers=6, filters=32, dropout=0.0, fc_layers=1)])
+    models.append(['6, 32, 2', convnet((1, 64, 64), conv_layers=6, filters=32, dropout=0.0, fc_layers=2)])
+    models.append(['6, 32, 3', convnet((1, 64, 64), conv_layers=6, filters=32, dropout=0.0, fc_layers=3)])
+
+    for model in models:
+        print model[0]
+        model[1].summary()
 
 

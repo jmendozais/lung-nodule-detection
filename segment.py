@@ -247,7 +247,6 @@ Lung segmentation based on Active Appearance Models
 '''
 
 class ActiveAppearanceModel(SegmentationModel):
-
     def __init__(self, join_masks=True, scales=[15, 23]):
         self.mean_shape = None 
         self.image_shape = None

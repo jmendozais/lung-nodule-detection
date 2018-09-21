@@ -575,6 +575,15 @@ def generic_detect_blobs(img, lung_mask, threshold=0.5, method='wmci'):
         raise Exception("Undefined detection method")
     return blobs, ci, probs
 
+def detection_vs_distance(method, args):
+    images, blobs = lidc.load()
+    masks = np.load('data/aam-lidc-pred-masks.npy')
+    pred_blobs, probs = detect_blobs(images, masks, args.threshold, real_blobs=blobs, method=method)
+    write_blobs(pred_blobs, 'data/{}-{}-aam-lidc-pred-blobs.pkl'.format(method, args.threshold))
+
+    froc = eval.froc(blobs, pred_blobs, probs, distance='rad')
+    froc = eval.average_froc([froc], DETECTOR_FPPI_RANGE)
+
 def save_blobs(method, args):
     images, blobs = lidc.load()
     masks = np.load('data/aam-lidc-pred-masks.npy')
@@ -606,7 +615,6 @@ def save_blobs(method, args):
 def detect_func(image, detector, segmentator, threshold):
     mask = segment_func(image, segmentator, display=False)
     blobs, probs = detect_blobs_(image, mask[0], threshold, detector)
-    print blobs
     img = cv2.resize(image, (512, 512), interpolation=cv2.INTER_CUBIC)
     imwrite_with_blobs('data/detected', img, blobs)
     return blobs, probs, mask
@@ -614,7 +622,7 @@ def detect_func(image, detector, segmentator, threshold):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='detect.py')
     parser.add_argument('file', nargs='?', default=None, type=str)
-    parser.add_argument('--save-blobs', help='Use the detector and segmentator to generate blobs', action='store_true')
+    parser.add_argument('---blobs', help='Use the detector and segmentator to generate blobs', action='store_true')
     parser.add_argument('--detector', help='Method used to extract candidates', type=str, default='sbf')
     parser.add_argument('--threshold', help='threshold', default=0.5, type=float)
     parser.add_argument('--segmentator', help='Method used to segment lung area used on candidate filtering', type=str, default='aam')

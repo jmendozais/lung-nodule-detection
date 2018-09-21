@@ -3,7 +3,7 @@ from random import *
 import numpy as np
 import numpy.linalg as la
 from skimage import draw
-import cv2
+import tensorflow as tf
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
@@ -160,7 +160,7 @@ def imwrite_as_pdf(name, _img):
         img[:,:,0] = img[:,:,2]
         img[:,:,2] = tmp
     
-    print img.shape, np.min(img), np.max(img)
+    #print img.shape, np.min(img), np.max(img)
     io.imsave(name + '.pdf', img)
 
 '''
@@ -173,7 +173,7 @@ def label_blob(img, blob, border='square', proba=-1, color=(255, 0, 0), margin=0
         ex, ey = draw.circle_perimeter(blob[0], blob[1], blob[2] + margin)
         img[ex, ey] = color 
     elif border == 'square':
-        for i in range(width):
+        for i in range(-width/2, width/2):
             coord_x = np.array([blob[0]-blob[2]-margin+i, blob[0]-blob[2]-margin+i, blob[0]+blob[2]+margin+i, blob[0]+blob[2]+margin+i])
             coord_y = np.array([blob[1]-blob[2]-margin+i, blob[1]+blob[2]+margin+i, blob[1]+blob[2]+margin+i, blob[1]-blob[2]-margin+i])
             ex, ey = draw.polygon_perimeter(coord_x, coord_y, img.shape)
@@ -197,14 +197,20 @@ def show_blobs_with_proba(windowName, img, blobs, probs):
     imshow(windowName, labeled)
 
 def imwrite_with_blobs(fname, img, blobs, probs):
+    #print "write with blobs shape {} min {} max {}".format(img.shape, np.min(img), np.max(img))
+    mini, maxi = np.min(img), np.max(img)
     labeled = np.array(img).astype(np.float32)
     maxima = np.max(labeled)
     norm = mpl.colors.Normalize(vmin=0, vmax=1)
-    m = cm.ScalarMappable(norm=norm, cmap=mpl.cm.coolwarm)
+    m = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.coolwarm)
     for i in range(len(blobs)):
-        print probs[i]
-        value=probs[i][1]
-        labeled = label_blob(labeled, blobs[i], color=m.to_rgba(value)[:3], margin=5)
+        value =  (1.0 - (0.8 + (probs[i]*100) * 0.2))
+        #print "probs {}, value {}".format(probs[i], value)
+        color = m.to_rgba(value)[:3]
+        #print "value {}, rgba {}".format(value, color)
+        color = tuple([mini + (maxi - mini) * ch for ch in color])
+        #print "value {}, rgba {}".format(value, color)
+        labeled = label_blob(labeled, blobs[i], color=color, margin=5, width=4)
     imwrite_as_pdf(fname, labeled)
 
 def show_blobs_real_predicted(img, idx, res1, res2):
@@ -346,10 +352,15 @@ def show_blob(path, img, blob):
     imshow(path, img_roi)
 
 def subsample_operating_points(ops, num_fppi):
-    print np.min(ops[0]), np.max(ops[0]), num_fppi
     fppi_range = np.linspace(np.min(ops[0]), np.max(ops[0]), num_fppi)
     f1 = interp1d(ops[0], ops[1], kind='cubic', fill_value=0.0, bounds_error=False)
+    ip = np.array([1.19, 2.0, 4.0, 4.3, 5.0, 5.4])
     sen = f1(fppi_range)
+    rip = f1(ip)
+    print "IP ", ip
+    for i in range(len(rip)):
+        print "{:.9f}".format(rip[i]),
+        
 
     if len(ops) == 2:
         return (fppi_range, sen)
@@ -435,7 +446,6 @@ def save_froc_mixed(froc_ops, froc_legend, scatter_ops, scatter_legend, name, un
         print "Error saving froc image."
 
     plt.clf()
-
 
 def save_froc(op_set, name, legend=None, unique=True, with_std=False, use_markers=True, fppi_max=10.0, with_auc=True, size='small'):
     """ Save the plot of the FROC curves in a pdf file and the interpolated operating points (n, 3, 101) for the 'n' FROC curves in a numpy array file.
