@@ -22,8 +22,10 @@ url="http://dx.doi.org/10.1007/978-3-319-52277-7_15"
 - LIDC-IDRI: https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI (Images and annotations)
 - SCR: https://www.isi.uu.nl/Research/Databases/SCR/
 
-2. Train and evaluate the segmentation model with the script segment.py
+2. Prepare LIDC-IDRI dataset with the script lidc.py
 
-3. Get nodule candidates for evaluation with the script detect.py
+3. Train and evaluate the segmentation model with the script segment.py
 
-4. Train and evaluate the convnet to classify candidates with lnd.py
+4. Get nodule candidates for evaluation with the script detect.py
+
+5. Train and evaluate the convnet to classify candidates with lnd.py
