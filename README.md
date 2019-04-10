@@ -15,4 +15,15 @@ url="http://dx.doi.org/10.1007/978-3-319-52277-7_15"
 }
 ```
 
+## How to run the project
 
+1. Download the datasets
+- JSRT: http://db.jsrt.or.jp/eng.php
+- LIDC-IDRI: https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI (Images and annotations)
+- SCR: https://www.isi.uu.nl/Research/Databases/SCR/
+
+2. Train and evaluate the segmentation model with the script segment.py
+
+3. Get nodule candidates for evaluation with the script detect.py
+
+4. Train and evaluate the convnet to classify candidates with lnd.py
